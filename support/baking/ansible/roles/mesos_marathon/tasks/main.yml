@@ -1,0 +1,10 @@
+# Marathon
+---
+- name: check if marathon is present
+  stat: path=/usr/bin/marathon
+  register: result
+- name: installing marathon
+  yum: pkg=marathon state=present
+  when: result.stat.exists == false
+- name: start marathon
+  service: name=marathon state=started enabled=yes

@@ -1,0 +1,18 @@
+# Security group
+ansible-playbook -vvvv -i ec2.py 1_create_sg.yml
+
+# EC2 instances
+ansible-playbook -vvvv -i ec2.py 2_create_cluster.yml
+
+# Packages
+ansible-playbook -vvvv -i ec2.py 3_install_cluster_master.yml
+ansible-playbook -vvvv -i ec2.py 3_install_cluster_node.yml
+ansible-playbook -vvvv -i ec2.py 3_install_cluster_elk.yml
+
+# Tunnels
+ssh -i ~/.ssh/bdkd-sirca.pem root@54.79.116.145 -L 5050:127.0.0.1:5050 # mesos
+ssh -i ~/.ssh/bdkd-sirca.pem root@54.79.116.145 -L 8080:127.0.0.1:8080 # marathon
+ssh -i ~/.ssh/bdkd-sirca.pem root@54.79.116.145 -L 4400:127.0.0.1:4400 # chronos
+ssh -i ~/.ssh/bdkd-sirca.pem root@54.66.143.37 -L 8081:127.0.0.1:8081 # elk
+# Mesos UI
+On browser open: http://localhost:5050

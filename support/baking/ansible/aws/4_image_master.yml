@@ -1,0 +1,20 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - vars/global_vars.yml
+  tasks:
+    - name: get instance id
+      command: "aws ec2 describe-instances 
+               --filters Name=tag:Name,Values={{ instance_name_master }} Name=instance-state-code,Values=16
+               --query 'Reservations[0].Instances[0].InstanceId' --output text"
+      register: ec2
+
+    - name: create ami
+      ec2_ami:
+        instance_id: "{{ ec2.stdout }}"
+        region: "{{ region }}"
+        wait: yes
+        name: "{{ ami_master }}"
+      when: ec2.stdout!="None"

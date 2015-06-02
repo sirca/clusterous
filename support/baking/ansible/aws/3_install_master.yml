@@ -1,0 +1,12 @@
+---
+- hosts: tag_Name_bdkd_cluster_master
+  user: root
+  sudo: yes
+  vars_files:
+    - vars/global_vars.yml
+  roles:
+    - roles/mesos_master
+    - roles/mesos_marathon
+    - roles/mesos_chronos
+    - roles/mesos_dns
+    - roles/docker

@@ -1,0 +1,45 @@
+---
+- hosts: tag_Name_cluster_testcluster_elk
+  user: root
+  sudo: yes
+  vars_files:
+    - vars/global_vars.yml
+  tasks:
+    # HOSTNAMES
+    - lineinfile: dest=/etc/hosts line="{{ private_ip_elk }} elk"
+  
+    # ELASTICSEARCH
+    - name: check if elasticsearch is running
+      shell: curl -I http://elk:9200/
+      register: result
+      ignore_errors: True
+    - name: elasticsearch start
+      shell: "nohup /usr/share/elasticsearch/bin/elasticsearch &"
+      when: result|failed
+
+    # KIBANA
+    - name: check if kibana is running
+      shell: curl -I http://elk:5601/
+      register: result
+      ignore_errors: True
+    - name: kibana start
+      shell: service kibana start
+      when: result|failed
+
+    # NGINX
+    - name: check if nginx is running
+      shell: curl -I http://elk:8081/
+      register: result
+      ignore_errors: True
+    - name: nginx start
+      service: name=nginx state=started enabled=yes
+      when: result|failed
+
+    # LOGSTASH
+    - name: check if logstash is running
+      shell: netstat -aln |grep 5514|grep LISTEN
+      register: result
+      ignore_errors: True
+    - name: logstash start
+      shell: "nohup /etc/init.d/logstash start&"
+      when: result.stdout.find('5514') == -1

@@ -1,0 +1,82 @@
+# Create instances
+# cd /Users/lolo/virtualenvs/bdkd/bdkd/cluster/techdemo/ansible/gce
+ansible-playbook -vvvv -i gce.py 1_create_master.yml
+ansible-playbook -vvvv -i gce.py 1_create_node.yml
+
+# Install packages
+ansible-playbook -vvvv -i gce.py 2_install_master.yml
+ansible-playbook -vvvv -i gce.py 2_install_node.yml
+
+# SSH
+ssh -i ~/.ssh/google_compute_engine 130.211.248.237
+
+# AMI
+# make snapshot of disk
+# create disk from snapshot
+# use that disk for ami
+# finally use that ami for new instances
+ansible-playbook -vvvv -i gce.py 3_image_master.yml
+ansible-playbook -vvvv -i gce.py 3_image_node.yml
+
+# Cluster
+ansible-playbook -vvvv -i gce.py 4_gce_cluster.yml
+
+# -- Spark
+ansible-playbook -vv -i ec2.py playbook_cluster_spark_master.yml
+ansible-playbook -vv -i ec2.py playbook_cluster_spark_node.yml
+
+# Docker build image
+ansible-playbook -vv -i ec2.py \
+ -e docker_file_dir=/home/docker/redis \
+ -e docker_image_name=bdkd.tmp_redis_v1 \
+  playbook_docker_build.yml
+
+# Local ip as master into hosts
+echo `ifconfig | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p'` master >>/etc/hosts
+
+# Delete AMIs
+ansible-playbook -i hosts 3_ami_delete.yml
+
+# Create AMIs
+ansible-playbook -i hosts 3_ami_master.yml
+ansible-playbook -i hosts 3_ami_node.yml
+ansible-playbook -i hosts 3_ami_logging.yml
+
+# Create Cluster
+ansible-playbook -i hosts 4_ec2_cluster.yml
+ansible-playbook -i hosts 4_ec2_cluster_logging.yml
+
+# Attach volume
+ansible-playbook -i hosts 4_ec2_volume.yml
+
+# Config
+ansible-playbook -i ec2.py 5_cfg_master.yml
+ansible-playbook -i ec2.py 5_cfg_node.yml
+ansible-playbook -i ec2.py 5_cfg_logging.yml
+
+# ELK
+ansible-playbook -i ec2.py 5_cfg_master_elk.yml
+ansible-playbook -i ec2.py 5_cfg_node_elk.yml
+
+# Get master ip
+ansible-playbook -i hosts 6_info_cluster.yml
+
+# Upload data
+ansible-playbook -vv -i ec2.py --extra-vars '{"cp_from":"../ansible", "cp_to":"/home/data"}' 7_put_data.yml
+
+# Download data
+# Code
+ansible-playbook -i ec2.py --extra-vars '{"cp_from":"/home/data/code", "cp_to":"./tmp/"}' 7_get_data.yml
+# Results
+ansible-playbook -i ec2.py --extra-vars '{"cp_from":"/home/data/code/results_test_FBINJ.csv", "cp_to":"./tmp/"}' 7_get_data.yml
+
+# Tunnels
+ssh -i ~/.ssh/bdkd-sirca.pem root@52.64.98.205 -L 5050:127.0.0.1:5050 # mesos
+ssh -i ~/.ssh/bdkd-sirca.pem root@52.64.98.205 -L 8080:127.0.0.1:8080 # marathon
+ssh -i ~/.ssh/bdkd-sirca.pem root@52.64.92.147 -L 4400:127.0.0.1:4400 # chronos
+ssh -i ~/.ssh/bdkd-sirca.pem root@52.64.82.195 -L 8081:127.0.0.1:8081 # kibana
+ssh -i ~/.ssh/bdkd-sirca.pem root@54.66.162.0 -L 8888:127.0.0.1:8888 # ipython
+
+# Mesos UI
+On browser open: http://localhost:5050
+

@@ -1,0 +1,10 @@
+input {
+  syslog {
+    type => syslog
+    port => 5514
+  }
+}
+output {
+  elasticsearch { host => localhost }
+  stdout { codec => rubydebug }
+}

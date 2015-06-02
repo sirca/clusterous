@@ -1,0 +1,9 @@
+---
+- hosts: tag_Name_bdkd_cluster_node
+  user: root
+  sudo: yes
+  vars_files:
+    - vars/global_vars.yml
+  roles:
+    - roles/mesos_slave
+    - roles/docker

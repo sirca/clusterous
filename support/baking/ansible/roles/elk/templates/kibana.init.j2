@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Set defaults.
+exec="/opt/kibana/bin/kibana"
+log="/var/log/kibana.log"
+prog="kibana"
+pid_file="/var/run/${prog}.pid"
+lock_file="/var/lock/subsys/$prog"
+kibana_user="root"
+
+# Execute init.d functions
+. /etc/rc.d/init.d/functions
+
+case "$1" in
+    start)
+        echo "Starting Kibana..."
+        $exec 1>$log 2>&1 &
+        echo $! > $pid_file
+        echo "Kibana started with pid $!"
+        ;;
+    stop)
+        echo -n "Stopping Kibana: "
+        su $kibana_user -c "kill `cat $pid_file`"
+        retval=$?
+        [ $retval -eq 0 ] && rm -f $lock_file
+        echo "OK"
+        ;;
+    status)
+        status -p $pid_file kibana
+        exit $?
+        ;;
+    *)
+        echo "Usage: `basename $0` start|stop|status"
+        exit 1
+esac
+
+exit 0

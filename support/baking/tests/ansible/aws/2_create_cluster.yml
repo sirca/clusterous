@@ -1,0 +1,85 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - vars/global_vars.yml
+  tasks:
+    # MASTER
+    - name: Master
+      local_action:
+        module: ec2
+        region: "{{ region }}"
+        key_name: "{{ keypair }}"
+        instance_type: "{{ instance_type_master }}"
+        image: "{{ ami_master }}"
+        vpc_subnet_id: "{{ vpc_subnet_id }}"
+        assign_public_ip: true
+        private_ip: "{{ private_ip_master }}"
+        wait: yes
+        group: "{{ security_group_name }}"
+        instance_tags:
+          Name: "{{ instance_name_master }}"
+          group: "{{ instance_name_master }}"
+          Billing: "{{ billing_tag }}"
+        exact_count: 1
+        count_tag:
+          Name: "{{ instance_name_master }}"
+          group: "{{ instance_name_master }}"
+      register: ec2
+
+    - name: Wait for ssh to come up
+      wait_for: host={{ item.public_dns_name }} port=22 delay=60 timeout=320 state=started
+      with_items: ec2.instances
+
+    # ELK
+    - name: ELK
+      local_action:
+        module: ec2
+        region: "{{ region }}"
+        key_name: "{{ keypair }}"
+        instance_type: "{{ instance_type_elk }}"
+        image: "{{ ami_elk }}"
+        vpc_subnet_id: "{{ vpc_subnet_id }}"
+        assign_public_ip: true
+        private_ip: "{{ private_ip_elk }}"
+        wait: yes
+        group: "{{ security_group_name }}"
+        instance_tags:
+          Name: "{{ instance_name_elk }}"
+          group: "{{ instance_name_elk }}"
+          Billing: "{{ billing_tag }}"
+        exact_count: 1
+        count_tag:
+          Name: "{{ instance_name_elk }}"
+          group: "{{ instance_name_elk }}"
+      register: ec2
+
+    - name: Wait for ssh to come up
+      wait_for: host={{ item.public_dns_name }} port=22 delay=60 timeout=320 state=started
+      with_items: ec2.instances
+
+    # NODES
+    - name: Nodes
+      local_action:
+        module: ec2
+        region: "{{ region }}"
+        key_name: "{{ keypair }}"
+        instance_type: "{{ instance_type_node }}"
+        image: "{{ ami_node }}"
+        vpc_subnet_id: "{{ vpc_subnet_id }}"
+        wait: yes
+        group: "{{ security_group_name }}"
+        instance_tags:
+          Name: "{{ instance_name_node }}"
+          group: "{{ instance_name_node }}"
+          Billing: "{{ billing_tag }}"
+        exact_count: "{{ nodes }}"
+        count_tag:
+          Name: "{{ instance_name_node }}"
+          group: "{{ instance_name_node }}"
+      register: ec2
+
+    - name: Wait for ssh to come up
+      wait_for: host={{ item.public_dns_name }} port=22 delay=60 timeout=320 state=started
+      with_items: ec2.instances
