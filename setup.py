@@ -5,7 +5,9 @@ extra = {'scripts': ['bin/clusterous']}
 
 setup(name='clusterous',
       version='0.1.0',
-      package_dir={'': 'clusterous'},
-      packages=find_packages(),
-      **extra)
+      #package_dir={'': '.'},
+      packages=['.'],
+      install_requires=['pyyaml'],
+      **extra
+      )
 

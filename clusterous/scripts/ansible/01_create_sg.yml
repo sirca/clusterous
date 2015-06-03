@@ -1,0 +1,33 @@
+
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:  
+    - name: create security group
+      local_action:  
+        module: ec2_group    
+        name: "{{ security_group_name }}"
+        description: "Security group for {{ cluster_name }}"
+        region: "{{ region }}"
+        vpc_id: "{{ vpc_id }}"
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            from_port: 80
+            to_port: 80
+            cidr_ip: 0.0.0.0/0
+          - proto: all
+            group_name: "{{ security_group_name }}"
+      register: aws_sg
+
+    - name: Tag the security group with a name
+      local_action:  
+        module: ec2_tag    
+        resource: "{{ aws_sg.group_id }}"
+        region: "{{ region }}"
+        state: present
+        tags:
+          Name: "{{ security_group_name }}"

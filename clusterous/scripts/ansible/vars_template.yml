@@ -1,0 +1,22 @@
+# Variables supplied to ansible scripts
+# Note that four curly braces are reduced to two curly braces
+# by Python's string.format(). Two curly braces are necessary
+# for Ansible's Jinja templates
+# TODO: use proper Jinja templates instead
+
+AWS_KEY: {access_key_id}
+AWS_SECRET: {secret_access_key}
+region: {region}
+keypair: {key_pair}
+vpc_id: {vpc_id}
+vpc_subnet_id: {vpc_subnet_id}
+
+cluster_name: {cluster_name}
+security_group_name: "{{{{ cluster_name }}}}-sg"
+
+controller_ami_id: {controller_ami_id}
+controller_instance_name: {controller_instance_name}
+controller_instance_type: {controller_instance_type}
+
+node_ami_id: {node_ami_id}
+

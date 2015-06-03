@@ -1,0 +1,24 @@
+---
+- hosts: "tag_Name_{{ cluster_master_instance_name }}"
+  user: root
+  sudo: yes
+  tasks:
+      # Host names
+      - lineinfile: dest=/etc/hosts line="{{ master_private_ip }} master" owner=root group=root mode=0644
+
+      # Docker private registry
+      - name: docker private registry
+        shell: docker run -d 
+          -e SETTINGS_FLAVOR=s3 
+          -e AWS_BUCKET=bdkd-docker-registry 
+          -e STORAGE_PATH=/dev 
+          -e AWS_KEY={{ AWS_KEY }} 
+          -e AWS_SECRET={{ AWS_SECRET }} 
+          -p 5000:5000 registry
+          
+      # Mount volume
+      - name: format ebs
+        shell: mkfs -t ext4 /dev/xvdf
+      - name: mount volume /home/data
+        shell: mount /dev/xvdf /home/data
+

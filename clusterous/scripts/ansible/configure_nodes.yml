@@ -1,0 +1,18 @@
+---
+- hosts: "tag_Name_{{ cluster_node_instance_name }}"
+  user: root
+  sudo: yes
+  tasks:
+      # Host names
+      - lineinfile: dest=/etc/hosts line="{{ master_private_ip }} master" owner=root group=root mode=0644
+
+      # NFS
+      - lineinfile: dest=/etc/fstab regexp="^master:/home/data" line="master:/home/data  /home/data  ndf defaults  0 0" owner=root group=root mode=0644
+      
+      # Mount volume
+      - command: df
+        register: df
+      - name: mount volume /home/data
+        shell: mount -t nfs master:/home/data /home/data/
+        when: df.stdout.find('/home/data') == -1
+

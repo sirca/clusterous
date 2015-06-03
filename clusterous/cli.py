@@ -27,11 +27,9 @@ class CLIParser(object):
 
         args = parser.parse_args(argv)
 
-        print args
         if args.subcmd == 'start':
             app = clusterous.Clusterous()
-
-            #print 'Starting cluster!'
+            app.start_cluster(args)
 
 
 def main(argv=None):
