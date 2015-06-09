@@ -19,8 +19,3 @@ controller_instance_name: {controller_instance_name}
 controller_instance_type: {controller_instance_type}
 
 node_ami_id: {node_ami_id}
-
-
-# AWS S3 bucket for private docker registry
-registry_s3_bucket: "bdkd-docker-registry"
-registry_s3_path: "/dev"
