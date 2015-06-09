@@ -33,7 +33,7 @@
     - name: start mesos-dns
       shell: "nohup /opt/mesos-dns/mesos-dns -v=1 -config=/opt/mesos-dns/config.json&
         sleep 2;"
-      when: result.stdout.find('mesos-dns') == -1
+      when: result.stdout.find('config.json') == -1
 
     # ELK
     - name: check if rsyslog is forwarding to logstash

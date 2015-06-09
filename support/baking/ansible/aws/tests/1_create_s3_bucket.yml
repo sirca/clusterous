@@ -1,0 +1,11 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - vars/global_vars.yml
+  tasks:  
+    - name: s3 bucket for private docker registry
+      s3: bucket={{ AWS_BUCKET }} mode=create
+      register: result
+      ignore_errors: True
