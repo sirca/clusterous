@@ -8,8 +8,8 @@
       - name: docker private registry
         shell: docker run -d 
           -e SETTINGS_FLAVOR=s3 
-          -e AWS_BUCKET=bdkd-docker-registry 
-          -e STORAGE_PATH=/dev 
+          -e AWS_BUCKET="{{ registry_s3_bucket }}" 
+          -e STORAGE_PATH="{{ registry_s3_path }}"
           -e AWS_KEY={{ AWS_KEY }} 
           -e AWS_SECRET={{ AWS_SECRET }} 
           -p 5000:5000 registry
@@ -19,4 +19,3 @@
         shell: mkfs -t ext4 /dev/xvdf
       - name: mount volume /home/data
         shell: mount /dev/xvdf /home/data
-

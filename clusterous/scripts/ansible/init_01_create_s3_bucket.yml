@@ -1,0 +1,9 @@
+---  
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:  
+    - name: s3 bucket for private docker registry
+      s3: bucket={{ registry_s3_bucket }} mode=create
+      register: result
+      ignore_errors: True

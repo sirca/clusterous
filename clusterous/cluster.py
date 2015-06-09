@@ -64,6 +64,8 @@ class AWSCluster(Cluster):
                 'controller_instance_type': defaults.controller_instance_type,
                 'node_name': defaults.node_name_format.format(self._cluster_name),
                 'node_ami_id': defaults.node_ami_id,
+                'registry_s3_bucket': defaults.registry_s3_bucket,
+                'registry_s3_path': defaults.registry_s3_path,
                 }
 
     def _make_vars_file(self, vars_dict):
@@ -88,10 +90,12 @@ class AWSCluster(Cluster):
         
         AnsibleHelper.run_playbook(get_script('ansible/init_01_create_sg.yml'),
                                    vars_file.name, self._config['key_file'])
+
+        AnsibleHelper.run_playbook(get_script('ansible/init_01_create_s3_bucket.yml'),
+                                   vars_file.name, self._config['key_file'])
         
         AnsibleHelper.run_playbook(get_script('ansible/init_02_create_controller.yml'),
                                    vars_file.name, self._config['key_file'])
-        # TODO: create S3 bucket for docker registry
 
         vars_file.close()
 

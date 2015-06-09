@@ -13,6 +13,9 @@ security_group_name_format = '{0}-sg'
 controller_name_format = '{0}_controller'
 controller_instance_type = 't2.small'
 node_name_format = '{0}_node'
+registry_s3_bucket = 'bdkd-docker-registry'
+registry_s3_path = '/dev'
+
 
 def get_script(filename):
     """
