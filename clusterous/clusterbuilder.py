@@ -4,7 +4,11 @@ class ClusterBuilder(object):
     """
     Base class for all cluster builders
     """
-    pass
+    def start_cluster(self):
+        """
+        Calls cluster object to launch cluster controller and all cluster nodes
+        """
+        pass
 
 class DefaultClusterBuilder(ClusterBuilder):
     """
@@ -23,6 +27,7 @@ class DefaultClusterBuilder(ClusterBuilder):
             return False
         
         self._cluster.init_cluster(self._profile['cluster_name'])
+        self._cluster.launch_nodes(self._profile['num_instances'], self._profile['instance_type'])
         
 
 

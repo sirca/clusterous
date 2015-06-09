@@ -3,7 +3,7 @@ import os
 import sys
 
 import defaults
-from cluster import Cluster
+import cluster
 import clusterbuilder
 
 class ParseError(Exception):
@@ -47,11 +47,16 @@ class Clusterous(object):
         profile_contents = yaml.load(stream)[0]
         stream.close()
 
-        # TODO: determine application name from profile file, and send to 
-        # appropriate Cluster Builder if necessary
 
         # Init Cluster object
-        cl = Cluster(self._config)
+        if 'AWS' in self._config:
+            cl = cluster.AWSCluster(self._config['AWS'])
+        else:
+            raise ValueError('Unknown cloud type')
+
+
+        # TODO: determine plugin name from profile file, and send to 
+        # appropriate Cluster Builder if necessary
 
         # Create Cluster Builder, passing in profile and Cluster
         builder = clusterbuilder.DefaultClusterBuilder(profile_contents, cl)

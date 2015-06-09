@@ -21,21 +21,35 @@ class AnsibleHelper(object):
         process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, error = process.communicate()
         
-        print output
-        print error
         if process.returncode != 0:
-            print >> sys.stderr, error
+            print >> sys.stderr, ValueError     # TODO: change to use logger
 
         return process.returncode
 
 class Cluster(object):
+    """
+    Represents infrastrucure aspects of the cluster. Includes high level operations
+    for setting up cluster controller, launching application nodes etc.
+
+    Prepares cluster to a stage where applications can be run on it
+    """
     def __init__(self, config):
-        self._config = config['AWS']
+        self._config = config
+        self._cluster_name = None
         self._running = False
 
+    def init_cluster(self, cluster_name):
+        pass
+
+    def launch_nodes(self, num_nodes, instance_type):
+        pass
 
 
-    def _prepare_vars_dict(self, cluster_name):
+class AWSCluster(Cluster):
+      
+    def _prepare_vars_dict(self):
+        if not self._cluster_name:
+            raise ValueError('No cluster name, was cluster not initialised?')
         return {
                 'AWS_KEY': self._config['access_key_id'],
                 'AWS_SECRET': self._config['secret_access_key'],
@@ -43,47 +57,64 @@ class Cluster(object):
                 'keypair': self._config['key_pair'],
                 'vpc_id': self._config['vpc_id'],
                 'vpc_subnet_id': self._config['subnet_id'],
-                'cluster_name': cluster_name,
-                'security_group_name': defaults.security_group_name_format.format(cluster_name),
+                'cluster_name': self._cluster_name,
+                'security_group_name': defaults.security_group_name_format.format(self._cluster_name),
                 'controller_ami_id': defaults.controller_ami_id,
-                'controller_instance_name': defaults.controller_name_format.format(cluster_name),
+                'controller_instance_name': defaults.controller_name_format.format(self._cluster_name),
                 'controller_instance_type': defaults.controller_instance_type,
+                'node_name': defaults.node_name_format.format(self._cluster_name),
                 'node_ami_id': defaults.node_ami_id,
                 }
+
+    def _make_vars_file(self, vars_dict):
+        vars_file = tempfile.NamedTemporaryFile()
+        vars_file.write(yaml.dump(vars_dict, default_flow_style=False))
+        vars_file.flush()
+        return vars_file
 
     def init_cluster(self, cluster_name):
         """
         Initialise security group(s), cluster controller etc
         """
-        vars_dict = self._prepare_vars_dict(cluster_name)
+
+        self._cluster_name = cluster_name
+        vars_dict = self._prepare_vars_dict()
 
         print yaml.dump(vars_dict, default_flow_style=False)
 
-        vars_file = tempfile.NamedTemporaryFile()
-        vars_file.write(yaml.dump(vars_dict, default_flow_style=False))
-        vars_file.flush()
+        vars_file = self._make_vars_file(vars_dict)
 
         # Run ansible
-        print "Creating security group"
-        AnsibleHelper.run_playbook(get_script('ansible/01_create_sg.yml'),
+        
+        AnsibleHelper.run_playbook(get_script('ansible/init_01_create_sg.yml'),
                                    vars_file.name, self._config['key_file'])
-        print "Launching cluster"
-        AnsibleHelper.run_playbook(get_script('ansible/02_create_master.yml'),
+        
+        AnsibleHelper.run_playbook(get_script('ansible/init_02_create_controller.yml'),
                                    vars_file.name, self._config['key_file'])
-        print "Done"
+        # TODO: create S3 bucket for docker registry
 
         vars_file.close()
 
-        # template = open(defaults.ANSIBLE_VARS_TEMPLATE, 'r')
-        # template_string = template.read()
-        # template.close()
 
-        # playbook_string = template_string.format(**vars)
-        # print playbook_string
+    def launch_nodes(self, num_nodes, instance_type):
+        """
+        Launch a group of application nodes of the same type
+        """
+        vars_dict = self._prepare_vars_dict()
+        vars_dict['num_nodes'] = num_nodes
+        vars_dict['instance_type'] = instance_type
+
+        #print yaml.dump(vars_dict, default_flow_style=False)
+        vars_file = self._make_vars_file(vars_dict)
+
+        # Run ansible
+        print 'Creating {0} nodes'.format(num_nodes)
+        AnsibleHelper.run_playbook(get_script('ansible/nodes_01_create_nodes.yml'),
+                                   vars_file.name, self._config['key_file'])
+        #print 'Done'
 
 
-
-        # print vars_file.name
+        vars_file.close()
 
 
 

@@ -1,20 +1,18 @@
 import os
 
 """
-Module storing default and static values
+Module for storing default and static values
 """
-
-
-
 
 DEFAULT_CONFIG_FILE = '~/.clusterous.yml'
 
 
-controller_ami_id = 'ami-472b547d'
-node_ami_id = 'ami-5678'
+controller_ami_id = 'ami-6dafd757'
+node_ami_id = 'ami-01afd73b'
 security_group_name_format = '{0}-sg'
 controller_name_format = '{0}_controller'
-controller_instance_type = 'c3.large'   #'t2.medium'
+controller_instance_type = 't2.small'
+node_name_format = '{0}_node'
 
 def get_script(filename):
     """
