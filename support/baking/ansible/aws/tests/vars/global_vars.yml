@@ -8,17 +8,17 @@ security_group_name: "{{ cluster_name }}-sg"
 billing_tag: "BDKD+BDKD_CC+dev"
 
 # AMI
-ami_master: "ami-6dafd757"
-ami_node: "ami-01afd73b"
-ami_elk: "ami-07afd73d"
+ami_controller: "ami-25542f1f"
+ami_node: "ami-334b3009"
+ami_elk: "ami-19542f23"
 
 # Instances
-private_ip_master: 10.0.80.40
+private_ip_controller: 10.0.80.40
 private_ip_elk: 10.0.80.41
-instance_name_master: "cluster-{{ cluster_name }}-master"
+instance_name_controller: "cluster-{{ cluster_name }}-controller"
 instance_name_node: "cluster-{{ cluster_name }}-node"
 instance_name_elk: "cluster-{{ cluster_name }}-elk"
-instance_type_master: t2.micro
+instance_type_controller: t2.micro
 instance_type_node: t2.micro
 instance_type_elk: t2.micro
 nodes: 2

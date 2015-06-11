@@ -10,7 +10,7 @@
 
   tasks:
     - gce_img:
-        name: bdkd-cluster-master-image-20150602
-        source: bdkd-cluster-master
+        name: bdkd-cluster-controller-image-20150602
+        source: bdkd-cluster-controller
         zone: "{{ zone }}"
         state: present

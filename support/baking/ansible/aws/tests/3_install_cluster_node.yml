@@ -7,12 +7,12 @@
   tasks:
     # HOSTNAME
     - name: hostnames
-      lineinfile: dest=/etc/hosts line="{{ private_ip_master }} master registry"
+      lineinfile: dest=/etc/hosts line="{{ private_ip_controller }} controller registry"
     - lineinfile: dest=/etc/hosts line="{{ private_ip_elk }} elk"
 
     # MESOS DNS
     - name: mesos-dns
-      lineinfile: dest=/etc/resolv.conf regexp='^nameserver' line="nameserver {{ private_ip_master }}" mode=0755
+      lineinfile: dest=/etc/resolv.conf regexp='^nameserver' line="nameserver {{ private_ip_controller }}" mode=0755
 
     # MESOS SLAVE
     - name: make sure mesos-slave is running

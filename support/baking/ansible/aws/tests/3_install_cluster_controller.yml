@@ -1,5 +1,5 @@
 ---
-- hosts: tag_Name_cluster_testcluster_master
+- hosts: tag_Name_cluster_testcluster_controller
   user: root
   sudo: yes
   vars_files:
@@ -7,7 +7,7 @@
     - vars/keys.yml
   tasks:
     # Hostnames
-    - lineinfile: dest=/etc/hosts line="{{ private_ip_master }} master registry"
+    - lineinfile: dest=/etc/hosts line="{{ private_ip_controller }} controller registry"
     - lineinfile: dest=/etc/hosts line="{{ private_ip_elk }} elk"
 
     # DOCKER REGISTRY
@@ -31,8 +31,7 @@
       register: result
       ignore_errors: True
     - name: start mesos-dns
-      shell: "nohup /opt/mesos-dns/mesos-dns -v=1 -config=/opt/mesos-dns/config.json&
-        sleep 2;"
+      shell: service mesos-dns start
       when: result.stdout.find('config.json') == -1
 
     # ELK

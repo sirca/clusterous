@@ -21,3 +21,6 @@
 - name: mesos-dns config
   template: src=config.json.j2 dest=/opt/mesos-dns/config.json mode=0755
   when: result.stat.exists == false
+- name: mesos-dns init
+  template: src=mesos-dns.init.j2 dest=/etc/init.d/mesos-dns mode=0755
+  when: result.stat.exists == false

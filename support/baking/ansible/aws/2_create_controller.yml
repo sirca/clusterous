@@ -19,13 +19,13 @@
         wait: yes    
         group: "{{ security_group_name }}"
         instance_tags:  
-          Name: "{{ instance_name_master }}"
-          group: master
+          Name: "{{ instance_name_controller }}"
+          group: controller
           Billing: "{{ billing_tag }}"
         exact_count: 1 
         count_tag:  
-          Name: "{{ instance_name_master }}"
-          group: master
+          Name: "{{ instance_name_controller }}"
+          group: controller
       register: ec2
 
     - name: Wait for ssh to come up

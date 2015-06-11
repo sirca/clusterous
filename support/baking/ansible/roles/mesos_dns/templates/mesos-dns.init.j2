@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# Set defaults.
+exec="/opt/mesos-dns/mesos-dns -v=1 -config=/opt/mesos-dns/config.json"
+log="/var/log/mesos-dns.log"
+prog="mesos-dns"
+pid_file="/var/run/${prog}.pid"
+lock_file="/var/lock/subsys/$prog"
+user="root"
+
+# Execute init.d functions
+. /etc/rc.d/init.d/functions
+
+case "$1" in
+    start)
+        echo "Starting mesos-dns..."
+        $exec 1>$log 2>&1 &
+        echo $! > $pid_file
+        echo "mesos-dns started with pid $!"
+        ;;
+    stop)
+        echo -n "Stopping mesos-dns: "
+        su $user -c "kill `cat $pid_file`"
+        retval=$?
+        [ $retval -eq 0 ] && rm -f $lock_file
+        echo "OK"
+        ;;
+    status)
+        status -p $pid_file mesos-dns
+        exit $?
+        ;;
+    *)
+        echo "Usage: `basename $0` start|stop|status"
+        exit 1
+esac
+
+exit 0

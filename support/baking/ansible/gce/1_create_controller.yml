@@ -1,4 +1,4 @@
-- name: GCE create master instance
+- name: GCE create controller instance
   hosts: localhost
   connection: local
   gather_facts: no
@@ -13,14 +13,14 @@
   tasks:
     - name: Launch instances
       gce:
-         name: bdkd-cluster-master
+         name: bdkd-cluster-controller
          zone: asia-east1-c
          machine_type: "{{ machine_type }}"
          image: "{{ image }}"
          service_account_email: "{{ service_account_email }}"
          pem_file: "{{ pem_file }}"
          project_id: "{{ project_id }}"
-         tags: bdkd-cluster-master
+         tags: bdkd-cluster-controller
       register: gce
 
     - name: Wait for SSH to come up

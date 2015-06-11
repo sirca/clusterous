@@ -1,4 +1,4 @@
-- name: GCE create master instance
+- name: GCE create controller instance
   hosts: localhost
   connection: local
   gather_facts: no

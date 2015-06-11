@@ -7,7 +7,7 @@
   tasks:
     - name: get instance id
       command: "aws ec2 describe-instances 
-               --filters Name=tag:Name,Values={{ instance_name_master }} Name=instance-state-code,Values=16
+               --filters Name=tag:Name,Values={{ instance_name_controller }} Name=instance-state-code,Values=16
                --query 'Reservations[0].Instances[0].InstanceId' --output text"
       register: ec2
 
@@ -16,5 +16,5 @@
         instance_id: "{{ ec2.stdout }}"
         region: "{{ region }}"
         wait: yes
-        name: "{{ ami_master }}"
+        name: "{{ ami_controller }}"
       when: ec2.stdout!="None"
