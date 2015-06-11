@@ -1,0 +1,15 @@
+AWS_KEY: AKIAI6J4MD4RFAVUM5KA
+AWS_SECRET: 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
+cluster_name: balramcluster
+controller_ami_id: ami-6dafd757
+controller_instance_name: balramcluster_controller
+controller_instance_type: t2.small
+keypair: bdkd-sirca
+node_ami_id: ami-01afd73b
+node_name: balramcluster_node
+region: ap-southeast-2
+registry_s3_bucket: clusterous-docker-registry
+registry_s3_path: /dev
+security_group_name: balramcluster-sg
+vpc_id: vpc-18fd1f7d
+vpc_subnet_id: subnet-f17e8f94

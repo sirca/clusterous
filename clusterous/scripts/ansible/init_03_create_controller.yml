@@ -1,0 +1,82 @@
+---
+- name: provision controller instance
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    # Master
+    - name: provisioning cluster controller
+      local_action:
+        module: ec2
+        region: "{{ region }}"
+        key_name: "{{ keypair }}"
+        instance_type: "{{ controller_instance_type }}"
+        image: "{{ controller_ami_id }}"
+        vpc_subnet_id: "{{ vpc_subnet_id }}"
+        assign_public_ip: yes
+        wait: yes
+        group: "{{ security_group_name }}"
+        instance_tags:
+          Name: "{{ controller_instance_name }}"
+        exact_count: 1
+        count_tag:
+          Name: "{{ controller_instance_name }}"
+      register: ec2
+
+    - name: record controller ip
+      copy: content={{ item.public_ip }} dest={{ current_controller_ip_file }}
+      with_items: ec2.instances
+
+    - name: add new instance to host group
+      add_host: hostname={{ item.public_ip }} groupname={{ controller_instance_name }}
+      with_items: ec2.instances
+
+    - name: Wait for ssh to come up
+      wait_for: host={{ item.public_dns_name }} port=22 delay=60 timeout=320 state=started
+      with_items: ec2.instances
+
+- name: configure controller
+  hosts: "{{ controller_instance_name }}"
+  user: root
+  sudo: True
+  tasks:
+    - name: check if registry is running
+      shell: curl -I http://registry:5000/
+      register: result
+      ignore_errors: True
+
+    - name: docker private registry
+      shell: docker run -d
+        -e SETTINGS_FLAVOR=s3
+        -e AWS_BUCKET={{ registry_s3_bucket }}
+        -e STORAGE_PATH={{ registry_s3_path }}
+        -e AWS_KEY={{ AWS_KEY }}
+        -e AWS_SECRET={{ AWS_SECRET }}
+        -p 5000:5000 registry
+      when: result|failed
+
+    # DNS
+    - name: check if mesos-dns is running
+      shell: ps aux | grep mesos-dns
+      register: result
+      ignore_errors: True
+    - name: start mesos-dns
+      shell: "nohup /opt/mesos-dns/mesos-dns -v=1 -config=/opt/mesos-dns/config.json & sleep 2;"
+      when: result.stdout.find('config.json') == -1
+
+    # Copy remote ansible scripts
+    - name: copy remote ansible scripts
+    # Create Clusterous directory on controller
+      file: path=/root/{{ remote_host_scripts_dir }} state=directory mode=0755
+    - copy: src={{ remote_scripts_dir }} dest=/root/{{ remote_host_scripts_dir }}
+    - copy: src={{ remote_scripts_dir }}/ansible.cfg dest=/root/.ansible.cfg
+
+
+
+
+
+    # # Mount volume
+    # - name: format ebs
+    #   shell: mkfs -t ext4 /dev/xvdf
+    # - name: mount volume /home/data
+    #   shell: mount /dev/xvdf /home/data

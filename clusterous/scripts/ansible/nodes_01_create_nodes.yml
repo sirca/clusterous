@@ -16,10 +16,7 @@
         group: "{{ security_group_name }}"
         instance_tags:  
           Name: "{{ node_name }}"
-          group: "{{ node_name }}"
-        exact_count: "{{ num_nodes }}"
-        count_tag:  
-          Name: "{{ node_name }}"
-          group: "{{ node_name }}"
+          Status: "{{ status_tag }}"
+        count: "{{ num_nodes }}"
       register: ec2
       # TODO: how to wait for ssh to come up?

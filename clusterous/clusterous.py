@@ -19,7 +19,11 @@ class Clusterous(object):
         try:
             self._read_config()
         except Exception as e:
-            sys.exit(e)        
+            sys.exit(e)
+
+        conf_dir = os.path.expanduser(defaults.local_config_dir)
+        if not os.path.exists(conf_dir):
+            os.makedirs(conf_dir)
 
     def _read_config(self):
         """
