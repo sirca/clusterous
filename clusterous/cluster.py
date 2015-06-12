@@ -155,9 +155,10 @@ class AWSCluster(Cluster):
             sys.exit(exit_code)
 
 
-    def launch_nodes(self, num_nodes, instance_type):
+    def launch_nodes(self, num_nodes, instance_type, node_name):
         """
-        Launch a group of application nodes of the same type
+        Launch a group of application nodes of the same type.
+        node_name is the Mesos tag by which the application can find a node
         """
         vars_dict = self._ec2_vars_dict()
         vars_dict['num_nodes'] = num_nodes
@@ -167,16 +168,6 @@ class AWSCluster(Cluster):
 
         self._run_remote(vars_dict, 'create_nodes.yml')
 
-        # vars_file = self._make_vars_file(vars_dict)
-
-        # # Run ansible
-        # print 'Creating {0} nodes'.format(num_nodes)
-        # AnsibleHelper.run_playbook(get_script('ansible/nodes_01_create_nodes.yml'),
-        #                            vars_file.name, self._config['key_file'])
-        # #print 'Done'
-
-
-        # vars_file.close()
 
 
 

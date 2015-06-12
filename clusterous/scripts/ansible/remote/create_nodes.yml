@@ -38,16 +38,13 @@
   sudo: yes
 
   tasks:
-    # HOSTNAME
-    - name: hostnames
+    - name: add entry to hosts file
       lineinfile: dest=/etc/hosts line="{{ hostvars['localhost']['ansible_ec2_local_ipv4'] }} controller registry"
 
-    # MESOS DNS
-    - name: mesos-dns
+    - name: add mesos-dns to resolv.conf
       lineinfile: >
         dest=/etc/resolv.conf regexp='^nameserver'
         line="nameserver {{ hostvars['localhost']['ansible_ec2_local_ipv4'] }}" mode=0755
 
-    # MESOS SLAVE
     - name: make sure mesos-slave is running
       service: name=mesos-slave state=started enabled=yes

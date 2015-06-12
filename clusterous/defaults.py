@@ -20,7 +20,7 @@ registry_s3_path = '/dev'
 
 remote_scripts_dir = 'ansible/remote'
 
-remote_host_scripts_dir = 'clusterous/remote'
+remote_host_scripts_dir = 'clusterous'
 remote_host_key_file = 'key.pem'
 remote_host_vars_file = 'vars.yml'
 

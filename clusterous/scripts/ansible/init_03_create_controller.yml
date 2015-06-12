@@ -61,14 +61,14 @@
       register: result
       ignore_errors: True
     - name: start mesos-dns
-      shell: "nohup /opt/mesos-dns/mesos-dns -v=1 -config=/opt/mesos-dns/config.json & sleep 2;"
+      shell: service mesos-dns start
       when: result.stdout.find('config.json') == -1
 
     # Copy remote ansible scripts
     - name: copy remote ansible scripts
     # Create Clusterous directory on controller
       file: path=/root/{{ remote_host_scripts_dir }} state=directory mode=0755
-    - copy: src={{ remote_scripts_dir }} dest=/root/{{ remote_host_scripts_dir }}
+    - copy: src={{ remote_scripts_dir }}/ dest=/root/{{ remote_host_scripts_dir }}
     - copy: src={{ remote_scripts_dir }}/ansible.cfg dest=/root/.ansible.cfg
 
 
