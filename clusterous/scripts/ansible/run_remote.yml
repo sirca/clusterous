@@ -1,5 +1,5 @@
 - name: run remote
-  hosts: all #"{{ controller_ip }}"
+  hosts: all
   user: root
   tasks:
     - name: copy key file

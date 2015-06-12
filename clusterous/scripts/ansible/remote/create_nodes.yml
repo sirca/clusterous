@@ -46,5 +46,15 @@
         dest=/etc/resolv.conf regexp='^nameserver'
         line="nameserver {{ hostvars['localhost']['ansible_ec2_local_ipv4'] }}" mode=0755
 
+    - name: set up NFS
+      lineinfile: dest=/etc/fstab regexp="^controller:/home/data" line="controller:/home/data  /home/data  ndf defaults  0 0" owner=root group=root mode=0644
+
+    - name: mount volume
+      file: path=/home/data state=directory mode=0755
+    - mount: name=/home/data src=controller:/home/data fstype=nfs state=present
+    
+    - name: add node name to mesos attributes file
+      lineinfile: dest=/etc/mesos-slave/attributes line="node_name:{{ node_tag }};" create=yes
+
     - name: make sure mesos-slave is running
       service: name=mesos-slave state=started enabled=yes

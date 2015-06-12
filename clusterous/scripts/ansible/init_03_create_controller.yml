@@ -4,10 +4,11 @@
   connection: local
   gather_facts: no
   tasks:
-    # Master
     - name: provisioning cluster controller
       local_action:
         module: ec2
+        aws_access_key: "{{ AWS_KEY }}"
+        aws_secret_key: "{{ AWS_SECRET }}"
         region: "{{ region }}"
         key_name: "{{ keypair }}"
         instance_type: "{{ controller_instance_type }}"
@@ -22,6 +23,28 @@
         count_tag:
           Name: "{{ controller_instance_name }}"
       register: ec2
+
+    - name: create and attach volume to master
+      local_action:  
+        module: ec2_vol
+        volume_size: 50
+        device_name: /dev/sdf
+        region: "{{ region }}"  
+        instance: "{{ item.id }}"
+      register: ec2_volume
+      with_items: ec2.instances
+
+    - name: debug
+      debug: msg="{{ ec2_volume }}"
+
+    - name: tag volume
+      local_action: ec2_tag
+      args:
+        resource: "{{ ec2_volume.results[0].volume_id }}"
+        region: "{{ region }}"
+        state: present
+        tags:
+          Name: "{{ cluster_name }}"
 
     - name: record controller ip
       copy: content={{ item.public_ip }} dest={{ current_controller_ip_file }}
@@ -54,6 +77,13 @@
         -e AWS_SECRET={{ AWS_SECRET }}
         -p 5000:5000 registry
       when: result|failed
+    
+    # Mount volume
+    - name: format ebs
+      shell: mkfs -t ext4 /dev/xvdf
+    - file: path=/home/data state=directory mode=0755
+    - name: mount volume /home/data
+      mount: name=/home/data src=/dev/xvdf fstype=ext4 state=present
 
     # DNS
     - name: check if mesos-dns is running
@@ -72,11 +102,4 @@
     - copy: src={{ remote_scripts_dir }}/ansible.cfg dest=/root/.ansible.cfg
 
 
-
-
-
-    # # Mount volume
-    # - name: format ebs
-    #   shell: mkfs -t ext4 /dev/xvdf
-    # - name: mount volume /home/data
-    #   shell: mount /dev/xvdf /home/data
+  

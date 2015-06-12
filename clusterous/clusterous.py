@@ -1,6 +1,7 @@
 import yaml
 import os
 import sys
+import logging
 
 import defaults
 import cluster
@@ -13,12 +14,23 @@ class Clusterous(object):
     """
     Clusterous application
     """
-    def __init__(self):
+
+    class Verbosity:
+        DEBUG = logging.DEBUG
+        NORMAL = logging.INFO
+        QUIET = logging.WARNING
+
+    def __init__(self, log_level=Verbosity.NORMAL):
         self.clusters = []
         self._config = {}
+
+        logging.basicConfig(level=log_level, format='%(message)s')
+        self._logger = logging.getLogger()
+
         try:
             self._read_config()
         except Exception as e:
+            self._logger.error(e)
             sys.exit(e)
 
         conf_dir = os.path.expanduser(defaults.local_config_dir)
@@ -56,15 +68,15 @@ class Clusterous(object):
         if 'AWS' in self._config:
             cl = cluster.AWSCluster(self._config['AWS'])
         else:
+            self._logger.error('Unknown cloud type')
             raise ValueError('Unknown cloud type')
 
 
-        # TODO: determine plugin name from profile file, and send to 
-        # appropriate Cluster Builder if necessary
-
         # Create Cluster Builder, passing in profile and Cluster
         builder = clusterbuilder.DefaultClusterBuilder(profile_contents, cl)
+        self._logger.info('Starting cluster')
         builder.start_cluster()
+        self._logger.info('Started cluster')
 
 
 

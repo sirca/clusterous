@@ -5,7 +5,9 @@
   tasks:  
     - name: create security group
       local_action:  
-        module: ec2_group    
+        module: ec2_group
+        aws_access_key: "{{ AWS_KEY }}"
+        aws_secret_key: "{{ AWS_SECRET }}"
         name: "{{ security_group_name }}"
         description: "Security group for {{ cluster_name }}"
         region: "{{ region }}"
