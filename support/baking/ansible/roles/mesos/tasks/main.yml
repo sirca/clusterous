@@ -1,0 +1,20 @@
+# MESOS
+---
+- name: check if mesos is present
+  stat: path=/usr/bin/mesos
+  register: result
+- name: install the mesosphere yum repo
+  yum: name=http://repos.mesosphere.io/el/7/noarch/RPMS/mesosphere-el-repo-7-1.noarch.rpm state=present
+  when: result.stat.exists == false
+- name: install the mesos package
+  yum: pkg=mesos state=present
+  when: result.stat.exists == false
+- name: init mesos-master off
+  service: name=mesos-master state=stopped enabled=no
+  when: result.stat.exists == false
+- name: init mesos-slave off
+  service: name=mesos-slave state=stopped enabled=no
+  when: result.stat.exists == false
+- name: mesos master config
+  template: src=mesos-master.j2 dest=/etc/default/mesos-master mode=0755
+  when: result.stat.exists == false

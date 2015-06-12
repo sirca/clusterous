@@ -1,0 +1,9 @@
+---
+- hosts: tag_Name_bdkd_cluster_elk
+  user: root
+  sudo: yes
+  vars_files:
+    - vars/global_vars.yml
+  roles:
+    - roles/java
+    - roles/elk

@@ -1,0 +1,5 @@
+---
+dependencies:
+  - { role: roles/mesos }
+  - { role: roles/zookeeper }
+  

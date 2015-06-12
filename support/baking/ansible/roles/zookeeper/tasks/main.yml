@@ -1,0 +1,16 @@
+# Zookeeper
+---
+- name: check if zookeeper is present
+  stat: path=/usr/bin/zookeeper-server
+  register: result
+- name: install zookeeper repo
+  yum: name=http://archive.cloudera.com/cdh4/one-click-install/redhat/6/x86_64/cloudera-cdh-4-0.x86_64.rpm state=present
+  when: result.stat.exists == false
+- name: install zookeeper
+  yum: pkg=zookeeper,zookeeper-server state=present
+  when: result.stat.exists == false
+- name: configure zookeeper ID
+  shell: sudo -u zookeeper zookeeper-server-initialize --myid=1 --force
+  when: result.stat.exists == false
+- name: start up zookeeper
+  service: name=zookeeper-server state=started enabled=yes
