@@ -25,7 +25,7 @@ class CLIParser(object):
     def _init_clusterous_object(self, args):
         app = None
         if args.verbose:
-            app = clusterous.Clusterous(clusterous.Clusterous.Verbosity.DEBUG)
+            app = clusterous.Clusterous(log_level=clusterous.Clusterous.Verbosity.DEBUG)
         else:
             app = clusterous.Clusterous()
 

@@ -20,7 +20,7 @@ class Clusterous(object):
         NORMAL = logging.INFO
         QUIET = logging.WARNING
 
-    def __init__(self, log_level=Verbosity.NORMAL):
+    def __init__(self, config_file=defaults.DEFAULT_CONFIG_FILE, log_level=Verbosity.NORMAL):
         self.clusters = []
         self._config = {}
 
@@ -28,7 +28,7 @@ class Clusterous(object):
         self._logger = logging.getLogger()
 
         try:
-            self._read_config()
+            self._read_config(config_file)
         except Exception as e:
             self._logger.error(e)
             sys.exit(e)
@@ -37,12 +37,12 @@ class Clusterous(object):
         if not os.path.exists(conf_dir):
             os.makedirs(conf_dir)
 
-    def _read_config(self):
+    def _read_config(self, config_file):
         """
         Read and validate global configuration
         """
 
-        stream = open(os.path.expanduser(defaults.DEFAULT_CONFIG_FILE), 'r')
+        stream = open(os.path.expanduser(config_file), 'r')
         contents = yaml.load(stream)
         stream.close()
 
