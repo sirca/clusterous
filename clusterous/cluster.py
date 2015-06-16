@@ -38,7 +38,7 @@ class AnsibleHelper(object):
         # logger.debug(' '.join(args))
         process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=run_env)
         output, error = process.communicate()
-        
+
         if process.returncode != 0:
             logger.error('Ansible exited with code {0} when running {1}'.format(process.returncode, playbook_file))
             logger.debug(output)
@@ -89,7 +89,7 @@ class Cluster(object):
 
 
 class AWSCluster(Cluster):
-      
+
     def _ec2_vars_dict(self):
         if not self._cluster_name:
             raise ValueError('No cluster name, was cluster not initialised?')
@@ -113,7 +113,7 @@ class AWSCluster(Cluster):
                 'remote_scripts_dir': defaults.get_remote_dir(),
                 'remote_host_scripts_dir': defaults.remote_host_scripts_dir
                 }
-    
+
     def _ansible_env_credentials(self):
         return {
                 'AWS_ACCESS_KEY_ID': self._config['access_key_id'],
@@ -140,22 +140,22 @@ class AWSCluster(Cluster):
         return vars_file
 
     def _run_remote(self, vars_dict, playbook):
-        
+
         vars_file = self._make_vars_file(vars_dict)
-        
+
         local_vars = self._run_remote_vars_dict()
         local_vars['vars_file_src'] = vars_file.name
         local_vars['playbook_file'] = playbook
-        
+
         local_vars_file = self._make_vars_file(local_vars)
 
         AnsibleHelper.run_playbook(get_script('ansible/run_remote.yml'),
                       local_vars_file.name, self._config['key_file'],
                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
-        
+
         local_vars_file.close()
         vars_file.close()
-        
+
 
     def init_cluster(self, cluster_name):
         """
@@ -166,7 +166,7 @@ class AWSCluster(Cluster):
         self._cluster_name = cluster_name
         vars_dict = self._ec2_vars_dict()
 
-        
+
 
         vars_file = self._make_vars_file(vars_dict)
 
@@ -184,7 +184,7 @@ class AWSCluster(Cluster):
         AnsibleHelper.run_playbook(get_script('ansible/init_02_create_s3_bucket.yml'),
                                    vars_file.name, self._config['key_file'],
                                    env=env)
-        
+
         self._logger.debug('Creating and configuring controller instance...')
         AnsibleHelper.run_playbook(get_script('ansible/init_03_create_controller.yml'),
                                    vars_file.name, self._config['key_file'],
@@ -209,8 +209,3 @@ class AWSCluster(Cluster):
 
         self._logger.debug('Adding {0} nodes to cluster...'.format(num_nodes))
         self._run_remote(vars_dict, 'create_nodes.yml')
-
-
-
-
-        
