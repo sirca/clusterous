@@ -25,11 +25,11 @@
       register: ec2
 
     - name: create and attach volume to master
-      local_action:  
+      local_action:
         module: ec2_vol
-        volume_size: 50
+        volume_size: 20
         device_name: /dev/sdf
-        region: "{{ region }}"  
+        region: "{{ region }}"
         instance: "{{ item.id }}"
       register: ec2_volume
       with_items: ec2.instances
@@ -63,6 +63,9 @@
   user: root
   sudo: True
   tasks:
+    - name: add entry to hosts file
+      lineinfile: dest=/etc/hosts line="127.0.0.1 controller registry"
+
     - name: check if registry is running
       shell: curl -I http://registry:5000/
       register: result
@@ -77,13 +80,13 @@
         -e AWS_SECRET={{ AWS_SECRET }}
         -p 5000:5000 registry
       when: result|failed
-    
+
     # Mount volume
     - name: format ebs
       shell: mkfs -t ext4 /dev/xvdf
     - file: path=/home/data state=directory mode=0755
     - name: mount volume /home/data
-      mount: name=/home/data src=/dev/xvdf fstype=ext4 state=present
+      mount: name=/home/data src=/dev/xvdf fstype=ext4 state=mounted
 
     # DNS
     - name: check if mesos-dns is running
@@ -100,6 +103,3 @@
       file: path=/root/{{ remote_host_scripts_dir }} state=directory mode=0755
     - copy: src={{ remote_scripts_dir }}/ dest=/root/{{ remote_host_scripts_dir }}
     - copy: src={{ remote_scripts_dir }}/ansible.cfg dest=/root/.ansible.cfg
-
-
-  
