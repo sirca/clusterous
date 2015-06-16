@@ -1,0 +1,60 @@
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+    - name: gather facts on local instance
+      action: ec2_facts
+
+    # Nodes
+    - name: provisioning nodes
+      local_action:
+        aws_access_key: "{{ AWS_KEY }}"
+        aws_secret_key: "{{ AWS_SECRET }}"
+        module: ec2
+        region: "{{ region }}"
+        key_name: "{{ keypair }}"
+        instance_type: "{{ instance_type }}"
+        image: "{{ node_ami_id }}"
+        vpc_subnet_id: "{{ vpc_subnet_id }}"
+        assign_public_ip: no
+        wait: yes
+        group: "{{ security_group_name }}"
+        instance_tags:
+          Name: "{{ node_name }}"
+        count: "{{ num_nodes }}"
+      register: ec2
+
+    - name: add each instance to host group
+      add_host: hostname={{ item.private_ip }} groupname={{ node_name }}
+      with_items: ec2.instances
+
+    - name: Wait for ssh to come up
+      wait_for: host={{ item.private_ip }} port=22 delay=60 timeout=320 state=started
+      with_items: ec2.instances
+
+- name: configure nodes
+  hosts: "{{ node_name }}"
+  user: root
+  sudo: yes
+
+  tasks:
+    - name: add entry to hosts file
+      lineinfile: dest=/etc/hosts line="{{ hostvars['localhost']['ansible_ec2_local_ipv4'] }} controller registry"
+
+    - name: add mesos-dns to resolv.conf
+      lineinfile: >
+        dest=/etc/resolv.conf regexp='^nameserver'
+        line="nameserver {{ hostvars['localhost']['ansible_ec2_local_ipv4'] }}" mode=0755
+
+    - name: set up NFS
+      lineinfile: dest=/etc/fstab regexp="^controller:/home/data" line="controller:/home/data  /home/data  ndf defaults  0 0" owner=root group=root mode=0644
+
+    - name: mount volume
+      file: path=/home/data state=directory mode=0755
+    - mount: name=/home/data src=controller:/home/data fstype=nfs state=present
+    
+    - name: add node name to mesos attributes file
+      lineinfile: dest=/etc/mesos-slave/attributes line="node_name:{{ node_tag }};" create=yes
+
+    - name: make sure mesos-slave is running
+      service: name=mesos-slave state=started enabled=yes
