@@ -1,0 +1,11 @@
+---
+- name: Install packages
+  hosts: tag_bdkd-cluster-node
+  gather_facts: no
+  connection: ssh
+  sudo: yes
+  vars_files:
+    - vars/keys.yml
+  roles:
+    - roles/mesos_slave
+    - roles/docker

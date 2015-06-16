@@ -1,0 +1,28 @@
+- name: GCE create controller instance
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - vars/keys.yml
+
+  vars:
+    machine_type: n1-standard-1
+    image: centos-7
+    zone: asia-east1-c
+
+  tasks:
+    - name: Launch instances
+      gce:
+         name: bdkd-cluster-node
+         zone: asia-east1-c
+         machine_type: "{{ machine_type }}"
+         image: "{{ image }}"
+         service_account_email: "{{ service_account_email }}"
+         pem_file: "{{ pem_file }}"
+         project_id: "{{ project_id }}"
+         tags: bdkd-cluster-node
+      register: gce
+
+    - name: Wait for SSH to come up
+      wait_for: host={{ item.public_ip }} port=22 delay=10 timeout=60
+      with_items: gce.instance_data

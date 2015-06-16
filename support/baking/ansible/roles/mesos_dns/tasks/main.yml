@@ -1,0 +1,26 @@
+# DNS
+---
+- name: check if mesos-dns is present
+  stat: path=/opt/mesos-dns/mesos-dns
+  register: result
+  ignore_errors: True
+- name: install mesos-dns dependencies
+  yum: name=golang,git,bind-utils state=present
+  when: result.stat.exists == false
+- name: installing mesos-dns
+  shell: "mkdir /opt/go; \
+    export GOPATH=/opt/go; \
+    export PATH=$PATH:$GOPATH/bin; \
+    go get github.com/tools/godep; \
+    go get github.com/mesosphere/mesos-dns; \
+    cd $GOPATH/src/github.com/mesosphere/mesos-dns; \
+    make restoredeps build; \
+    mv $GOPATH/src/github.com/mesosphere/mesos-dns /opt; \
+    rm -fr /opt/go"
+  when: result.stat.exists == false
+- name: mesos-dns config
+  template: src=config.json.j2 dest=/opt/mesos-dns/config.json mode=0755
+  when: result.stat.exists == false
+- name: mesos-dns init
+  template: src=mesos-dns.init.j2 dest=/etc/init.d/mesos-dns mode=0755
+  when: result.stat.exists == false

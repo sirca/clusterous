@@ -1,0 +1,18 @@
+# General
+cluster_name: bdkd-cluster
+region: ap-southeast-2
+keypair: bdkd-sirca
+vpc_id: vpc-18fd1f7d
+vpc_subnet_id: subnet-f17e8f94
+security_group_name: "{{ cluster_name }}-sg"
+billing_tag: "BDKD+BDKD_CC+dev"
+
+# Baking
+ami_version: "20150611"
+base_image: "ami-a38be799"
+instance_name_controller: "{{ cluster_name }}-controller"
+instance_name_node: "{{ cluster_name }}-node"
+instance_name_elk: "{{ cluster_name }}-elk"
+ami_controller: "ami-{{ cluster_name }}-controller-{{ ami_version }}"
+ami_node: "ami-{{ cluster_name }}-node-{{ ami_version }}"
+ami_elk: "ami-{{ cluster_name }}-elk-{{ ami_version }}"

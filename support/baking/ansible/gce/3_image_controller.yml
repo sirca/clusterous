@@ -1,0 +1,16 @@
+- name: Create image
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - vars/keys.yml
+
+  vars:
+    zone: asia-east1-c
+
+  tasks:
+    - gce_img:
+        name: bdkd-cluster-controller-image-20150602
+        source: bdkd-cluster-controller
+        zone: "{{ zone }}"
+        state: present

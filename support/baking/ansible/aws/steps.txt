@@ -1,0 +1,17 @@
+# Security group
+ansible-playbook -i hosts 1_create_sg.yml
+
+# EC2 instances
+ansible-playbook -vvvv -i ec2.py 2_create_controller.yml
+ansible-playbook -vvvv -i ec2.py 2_create_node.yml
+ansible-playbook -vvvv -i ec2.py 2_create_elk.yml
+
+# Packages
+ansible-playbook -vvvv -i ec2.py 3_install_controller.yml
+ansible-playbook -vvvv -i ec2.py 3_install_node.yml
+ansible-playbook -vvvv -i ec2.py 3_install_elk.yml
+
+# Create AMIs
+ansible-playbook -vvvv -i ec2.py 4_image_controller.yml
+ansible-playbook -vvvv -i ec2.py 4_image_node.yml
+ansible-playbook -vvvv -i ec2.py 4_image_elk.yml

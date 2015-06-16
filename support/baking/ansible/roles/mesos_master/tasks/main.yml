@@ -1,0 +1,4 @@
+# MESOS MASTER
+---
+- name: start up the mesos-master
+  service: name=mesos-master state=started enabled=yes
