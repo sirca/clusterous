@@ -6,6 +6,7 @@ import logging
 import defaults
 import cluster
 import clusterbuilder
+from helpers import (AnsibleHelper, get_script)
 
 class ParseError(Exception):
     pass
@@ -78,7 +79,37 @@ class Clusterous(object):
         builder.start_cluster()
         self._logger.info('Started cluster')
 
+    def docker_build_image(self, args):
+        """
+        Create a new docker image
+        """
 
+        # Available cloud providers
+        if 'AWS' in self._config:
+            cl = cluster.AWSCluster(self._config['AWS'])
+            cl._cluster_name = args.cluster_name
+        else:
+            self._logger.error('Unknown cloud type')
+            raise ValueError('Unknown cloud type')
+
+        full_path=args.dockerfile_folder.split("/")
+        vars_dict={
+                'cluster_name': args.cluster_name,
+                'dockerfile_path':'/'.join(full_path[:-1]),
+                'dockerfile_folder':'/'.join(full_path[-1:]),
+                'image_name':args.image_name,
+                }
+
+        vars_file = cl._make_vars_file(vars_dict)
+        controller_hosts_file = cl._make_controller_hosts_file()
+        cl._logger.info('Started building docker image')
+        AnsibleHelper.run_playbook(get_script('ansible/docker_01_build_image.yml'),
+                                   vars_file.name,
+                                   cl._config['key_file'],
+                                   env=cl._ansible_env_credentials(),
+                                   hosts_file=controller_hosts_file.name)
+        vars_file.close()
+        cl._logger.info('Finished building docker image')
 
     def list_clusters(self, args):
         pass

@@ -22,6 +22,12 @@ class CLIParser(object):
         start = subparser.add_parser('start', help='Create a new cluster based on profile file')
         start.add_argument('profile_file', action='store')
 
+        # Build dokcer image
+        build = subparser.add_parser('build-image', help='Build a new Docker image')
+        build.add_argument('cluster_name', action='store')
+        build.add_argument('dockerfile_folder', action='store')
+        build.add_argument('image_name', action='store')
+
     def _init_clusterous_object(self, args):
         app = None
         if args.verbose:
@@ -44,6 +50,9 @@ class CLIParser(object):
             app = self._init_clusterous_object(args)
             app.start_cluster(args)
 
+        if args.subcmd == 'build-image':
+            app = clusterous.Clusterous()
+            app.docker_build_image(args)
 
 def main(argv=None):
     cli = CLIParser()
