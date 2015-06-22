@@ -4,10 +4,31 @@ import sys
 import os
 import yaml
 import logging
+import time
+
+import boto.ec2
 
 import defaults
 from defaults import get_script
 
+
+# TODO: Move to another module as appropriate, as this is very general purpose
+def retry_till_true(func, sleep_interval, timeout_secs=300):
+    """
+    Call func repeatedly, with an interval of sleep_interval, for up to
+    timeout_secs seconds, until func returns true.
+
+    Returns true if succesful, false if timeout occurs
+    """
+    success = True
+    start_time = time.time()
+    while not func():
+        if time.time() >= start_time + timeout_secs:
+            success = False
+            break
+        time.sleep(sleep_interval)
+
+    return success
 
 class AnsibleHelper(object):
 
@@ -161,12 +182,8 @@ class AWSCluster(Cluster):
         """
         Initialise security group(s), cluster controller etc
         """
-
-
         self._cluster_name = cluster_name
         vars_dict = self._ec2_vars_dict()
-
-
 
         vars_file = self._make_vars_file(vars_dict)
 
@@ -180,7 +197,7 @@ class AWSCluster(Cluster):
                                    vars_file.name, self._config['key_file'],
                                    env=env)
 
-        self._logger.debug('Creating Docker registry bucket')
+        self._logger.debug('Ensuring Docker registry bucket exists')
         AnsibleHelper.run_playbook(get_script('ansible/init_02_create_s3_bucket.yml'),
                                    vars_file.name, self._config['key_file'],
                                    env=env)
@@ -209,3 +226,53 @@ class AWSCluster(Cluster):
 
         self._logger.debug('Adding {0} nodes to cluster...'.format(num_nodes))
         self._run_remote(vars_dict, 'create_nodes.yml')
+
+
+    def terminate_cluster(self, cluster_name):
+        conn = boto.ec2.connect_to_region(self._config['region'],
+                    aws_access_key_id=self._config['access_key_id'],
+                    aws_secret_access_key=self._config['secret_access_key'])
+
+
+        # Delete instances
+        instance_filters = { 'tag:Name':
+                        ['{0}_controller'.format(cluster_name),
+                        '{0}_node'.format(cluster_name)],
+                        'instance-state-name': ['running', 'pending']
+                        }
+        instance_list = conn.get_only_instances(filters=instance_filters)
+        num_instances = len(instance_list)
+        instances = [ i.id for i in instance_list ]
+
+        self._logger.info('Terminating {0} instances'.format(num_instances))
+        conn.terminate_instances(instance_ids=instances)
+
+        def instances_terminated():
+            term_filter = {'instance-state-name': 'terminated'}
+            num_terminated = len(conn.get_only_instances(instance_ids=instances, filters=term_filter))
+            return num_terminated == num_instances
+
+        success = retry_till_true(instances_terminated, 2)
+        if not success:
+            self._logger.error('Timeout while trying to terminate instances in {0}'.format(cluster_name))
+        else:
+            self._logger.debug('{0} instances terminated'.format(num_instances))
+
+        # Delete EBS volume
+        volumes = conn.get_all_volumes(filters={'tag:Name':cluster_name})
+        volumes_deleted = [ v.delete() for v in volumes ]
+        volume_ids_str = ','.join([ v.id for v in volumes])
+        if False in volumes_deleted:
+            self._logger.error('Unable to delete volume in {0}: {1}'.format(cluster_name, volume_ids_str))
+        else:
+            self._logger.debug('Deleted shared volume: {0}'.format(volume_ids_str))
+
+        # Delete security group
+        sg = conn.get_all_security_groups(filters={'tag:Name':'{0}-sg'.format(cluster_name)})
+        sg_deleted = [ g.delete() for g in sg ]
+        if False in sg_deleted:
+            self._logger.error('Unable to delete security group for {0}'.format(cluster_name))
+        else:
+            self._logger.debug('Deleted security group')
+
+        return True

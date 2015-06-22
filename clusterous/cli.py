@@ -22,6 +22,11 @@ class CLIParser(object):
         start = subparser.add_parser('start', help='Create a new cluster based on profile file')
         start.add_argument('profile_file', action='store')
 
+        terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
+        terminate.add_argument('cluster_name', action='store')
+        terminate.add_argument('--confirm', dest='no_prompt', action='store_true',
+            default=False, help='Immediately terminate cluster without prompting for confirmation')
+
     def _init_clusterous_object(self, args):
         app = None
         if args.verbose:
@@ -30,7 +35,16 @@ class CLIParser(object):
             app = clusterous.Clusterous()
 
         return app
-        
+
+    def _terminate_cluster(self, args):
+        if not args.no_prompt:
+            prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(args.cluster_name)
+            cont = raw_input(prompt_str)
+            if cont.lower() != 'y' and cont.lower() != 'yes':
+                sys.exit(0)
+
+        app = self._init_clusterous_object(args)
+        app.terminate_cluster(args.cluster_name)
 
     def main(self, argv=None):
         parser = argparse.ArgumentParser('clusterous', description='Tool to create and manage compute clusters')
@@ -43,9 +57,10 @@ class CLIParser(object):
         if args.subcmd == 'start':
             app = self._init_clusterous_object(args)
             app.start_cluster(args)
+        elif args.subcmd == 'terminate':
+            self._terminate_cluster(args)
 
 
 def main(argv=None):
     cli = CLIParser()
     cli.main(argv)
-
