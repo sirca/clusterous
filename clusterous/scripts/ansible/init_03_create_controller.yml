@@ -22,6 +22,9 @@
         exact_count: 1
         count_tag:
           Name: "{{ controller_instance_name }}"
+        volumes:
+          - device_name: /dev/sda1
+            volume_size: 20
       register: ec2
 
     - name: create and attach volume to master
@@ -45,6 +48,7 @@
         state: present
         tags:
           Name: "{{ cluster_name }}"
+      when: ec2_volume.changed
 
     - name: record controller ip
       copy: content={{ item.public_ip }} dest={{ current_controller_ip_file }}

@@ -4,6 +4,8 @@ import sys
 import os
 import yaml
 import logging
+from defaults import get_script
+
 
 class AnsibleHelper(object):
 
