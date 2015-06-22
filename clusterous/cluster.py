@@ -6,7 +6,8 @@ import yaml
 import logging
 
 import defaults
-from helpers import (AnsibleHelper, get_script, get_remote_dir)
+from defaults import get_script, get_remote_dir
+from helpers import AnsibleHelper
 
 class Cluster(object):
     """
@@ -100,12 +101,6 @@ class AWSCluster(Cluster):
         vars_file.flush()
         return vars_file
 
-    def _make_controller_hosts_file(self):
-        vars_file = tempfile.NamedTemporaryFile()
-        hosts_file.write("[controller]\n{0}\n".format(self._get_controller_ip()))
-        hosts_file.flush()
-        return hosts_file
-
     def _run_remote(self, vars_dict, playbook):
 
         vars_file = self._make_vars_file(vars_dict)
@@ -176,3 +171,31 @@ class AWSCluster(Cluster):
 
         self._logger.debug('Adding {0} nodes to cluster...'.format(num_nodes))
         self._run_remote(vars_dict, 'create_nodes.yml')
+
+
+    def docker_build_image(self, args):
+        """
+        Create a new docker image
+        """
+        try:
+            cl._cluster_name = args.cluster_name
+            full_path=args.dockerfile_folder.split("/")
+            vars_dict={
+                    'cluster_name': args.cluster_name,
+                    'dockerfile_path':'/'.join(full_path[:-1]),
+                    'dockerfile_folder':'/'.join(full_path[-1:]),
+                    'image_name':args.image_name,
+                    }
+    
+            vars_file = self._make_vars_file(vars_dict)
+            self._logger.info('Started building docker image')
+            AnsibleHelper.run_playbook(defaults.get_script('ansible/docker_01_build_image.yml'),
+                                       vars_file.name,
+                                       self._config['key_file'],
+                                       env=self._ansible_env_credentials(),
+                                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+            vars_file.close()
+            self._logger.info('Finished building docker image')
+        except Exception as e:
+            self._logger.error(e)
+            raise

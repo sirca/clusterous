@@ -1,6 +1,6 @@
 ---
 - name: build docker image
-  hosts: controller
+  hosts: all
   user: root
   sudo: yes
   tasks:

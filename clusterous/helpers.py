@@ -5,19 +5,6 @@ import os
 import yaml
 import logging
 
-def get_script(filename):
-    """
-    Takes script relative filename, returns absolute path
-    Assumes this file is in Clusterous source root, uses __file__
-    """
-    return '{0}/{1}/{2}'.format(os.path.dirname(__file__), 'scripts', filename)
-
-def get_remote_dir():
-    """
-    Return full path of remote scripts directory
-    """
-    return '{0}/{1}/{2}'.format(os.path.dirname(__file__), 'scripts', remote_scripts_dir)
-
 class AnsibleHelper(object):
 
     class AnsibleError(Exception):
