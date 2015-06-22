@@ -233,7 +233,6 @@ class AWSCluster(Cluster):
                     aws_access_key_id=self._config['access_key_id'],
                     aws_secret_access_key=self._config['secret_access_key'])
 
-
         # Delete instances
         instance_filters = { 'tag:Name':
                         ['{0}_controller'.format(cluster_name),
