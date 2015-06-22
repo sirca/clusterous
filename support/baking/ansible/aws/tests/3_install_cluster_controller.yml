@@ -22,7 +22,7 @@
         -e STORAGE_PATH={{ STORAGE_PATH }}
         -e AWS_KEY={{ AWS_KEY }} 
         -e AWS_SECRET={{ AWS_SECRET }} 
-        -p 5000:5000 registry
+        -p 5000:5000 registry:2.0
       when: result|failed
 
     # DNS
