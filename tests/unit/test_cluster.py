@@ -18,3 +18,17 @@ class TestCluster:
         _ec2_vars_dict.assert_called()
         run_playbook.assert_called()
         _create_controller_tunnel.assert_called()
+
+    @patch.object(AWSCluster, '_ec2_vars_dict')
+    @patch.object(AWSCluster, '_make_vars_file')
+    @patch.object(AWSCluster, '_ansible_env_credentials')
+    @patch.object(AnsibleHelper, 'run_playbook')
+    @patch.object(AWSCluster, 'docker_build_image')
+    def test_init_cluster(self, docker_build_image, run_playbook, _ansible_env_credentials, _make_vars_file, _ec2_vars_dict):
+        config = {'key_file': 'dummy'}
+        cl = AWSCluster(config)
+        cl.init_cluster('dog')
+        _ansible_env_credentials.assert_called()
+        _make_vars_file.assert_called()
+        docker_build_image.assert_called()
+        run_playbook.assert_called()
