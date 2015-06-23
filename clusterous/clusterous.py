@@ -2,6 +2,7 @@ import yaml
 import os
 import sys
 import logging
+import boto
 
 import defaults
 import cluster
@@ -34,6 +35,8 @@ class Clusterous(object):
             self._logger.error(e)
             sys.exit(e)
 
+        logging.getLogger('boto').setLevel(logging.CRITICAL)
+
         conf_dir = os.path.expanduser(defaults.local_config_dir)
         if not os.path.exists(conf_dir):
             os.makedirs(conf_dir)
@@ -55,6 +58,17 @@ class Clusterous(object):
         # TODO: validate properly by sending to provisioner
         self._config = contents[0]
 
+    def _make_cluster_object(self):
+        cl = None
+        if 'AWS' in self._config:
+            cl = cluster.AWSCluster(self._config['AWS'])
+        else:
+            self._logger.error('Unknown cloud type')
+            raise ValueError('Unknown cloud type')
+
+        return cl
+
+
 
     def start_cluster(self, args):
         """
@@ -66,12 +80,7 @@ class Clusterous(object):
 
 
         # Init Cluster object
-        if 'AWS' in self._config:
-            cl = cluster.AWSCluster(self._config['AWS'])
-        else:
-            self._logger.error('Unknown cloud type')
-            raise ValueError('Unknown cloud type')
-
+        cl = self._make_cluster_object()
 
         # Create Cluster Builder, passing in profile and Cluster
         builder = clusterbuilder.DefaultClusterBuilder(profile_contents, cl)
@@ -83,15 +92,13 @@ class Clusterous(object):
         """
         Create a new docker image
         """
-
-        # Available cloud providers
-        if 'AWS' in self._config:
-            cl = cluster.AWSCluster(self._config['AWS'])
-        else:
-            self._logger.error('Unknown cloud type')
-            raise ValueError('Unknown cloud type')
-
+        cl = self._make_cluster_object()
         cl.docker_build_image(args)
+
+    def terminate_cluster(self, cluster_name):
+        cl = self._make_cluster_object()
+        self._logger.info('Terminating cluster {0}'.format(cluster_name))
+        cl.terminate_cluster(cluster_name)
 
     def list_clusters(self, args):
         pass
