@@ -28,6 +28,11 @@ class CLIParser(object):
         build.add_argument('dockerfile_folder', action='store')
         build.add_argument('image_name', action='store')
 
+        # Docker image info
+        image_info = subparser.add_parser('image-info', help='Gets information of a Docker image')
+        image_info.add_argument('cluster_name', action='store')
+        image_info.add_argument('image_name', action='store')
+
         terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
         terminate.add_argument('cluster_name', action='store')
         terminate.add_argument('--confirm', dest='no_prompt', action='store_true',
@@ -65,10 +70,12 @@ class CLIParser(object):
             app.start_cluster(args)
         elif args.subcmd == 'terminate':
             self._terminate_cluster(args)
-
-        if args.subcmd == 'build-image':
+        elif args.subcmd == 'build-image':
             app = clusterous.Clusterous()
             app.docker_build_image(args)
+        elif args.subcmd == 'image-info':
+            app = clusterous.Clusterous()
+            app.docker_image_info(args)
 
 def main(argv=None):
     cli = CLIParser()

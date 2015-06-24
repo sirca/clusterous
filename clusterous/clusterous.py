@@ -95,6 +95,13 @@ class Clusterous(object):
         cl = self._make_cluster_object()
         cl.docker_build_image(args)
 
+    def docker_image_info(self, args):
+        """
+        Gets information of a Docker image
+        """
+        cl = self._make_cluster_object()
+        cl.docker_image_info(args)
+
     def terminate_cluster(self, cluster_name):
         cl = self._make_cluster_object()
         self._logger.info('Terminating cluster {0}'.format(cluster_name))

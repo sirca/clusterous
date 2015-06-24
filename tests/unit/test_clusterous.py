@@ -17,3 +17,19 @@ class TestClusterous:
         cluster_name = 'dummycluster'
         c.terminate_cluster(cluster_name)
         terminate_cluster.assert_called_once_with(cluster_name)
+
+    @patch.object(cluster.AWSCluster, 'docker_build_image')
+    def test_terminate_cluster(self, docker_build_image):
+        c = Clusterous()
+        c._config = {'AWS': {'dummy': 'val'}}
+        cluster_name = 'dummycluster'
+        c.docker_build_image(cluster_name)
+        docker_build_image.assert_called_once_with(cluster_name)
+
+    @patch.object(cluster.AWSCluster, 'docker_image_info')
+    def test_terminate_cluster(self, docker_image_info):
+        c = Clusterous()
+        c._config = {'AWS': {'dummy': 'val'}}
+        cluster_name = 'dummycluster'
+        c.docker_image_info(cluster_name)
+        docker_image_info.assert_called_once_with(cluster_name)

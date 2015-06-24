@@ -36,3 +36,29 @@ class TestCluster:
         cl.terminate_cluster('dummy')
         assert connect_to_region.called == True
         assert retry_till_true.called == True
+
+    @patch.object(AWSCluster, '_ec2_vars_dict')
+    @patch.object(AWSCluster, '_make_vars_file')
+    @patch.object(AWSCluster, '_ansible_env_credentials')
+    @patch.object(AnsibleHelper, 'run_playbook')
+    @patch.object(AWSCluster, 'docker_build_image')
+    def test_docker_build_image(self, docker_build_image, run_playbook, _ansible_env_credentials, _make_vars_file, _ec2_vars_dict, config):
+        cl = AWSCluster(config)
+        cl.init_cluster('dog')
+        assert _ansible_env_credentials.called == True
+        assert _make_vars_file.called == True
+        assert _ec2_vars_dict.called == True
+        assert run_playbook.called == True
+
+    @patch.object(AWSCluster, '_ec2_vars_dict')
+    @patch.object(AWSCluster, '_make_vars_file')
+    @patch.object(AWSCluster, '_ansible_env_credentials')
+    @patch.object(AnsibleHelper, 'run_playbook')
+    @patch.object(AWSCluster, 'docker_image_info')
+    def test_docker_image_info(self, docker_image_info, run_playbook, _ansible_env_credentials, _make_vars_file, _ec2_vars_dict, config):
+        cl = AWSCluster(config)
+        cl.init_cluster('dog')
+        assert _ansible_env_credentials.called == True
+        assert _make_vars_file.called == True
+        assert _ec2_vars_dict.called == True
+        assert run_playbook.called == True
