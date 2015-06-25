@@ -232,20 +232,25 @@ class AWSCluster(Cluster):
                 image_name = args.image_name
                 tag_name = 'latest'
 
-            logging.getLogger("paramiko").setLevel(logging.WARNING)
-            ssh = paramiko.SSHClient()
-            ssh.load_system_host_keys()
-            ssh.connect(hostname = self._get_controller_ip(), username = 'root', key_filename = os.path.expanduser(self._config['key_file']))
-            cmd = 'curl http://registry:5000/v2/{0}/manifests/{1}'.format(image_name, tag_name)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            json_results = json.loads(stdout.read())
-
-            if 'history' in json_results:
-                v1=json.loads(json_results.get('history')[0].get('v1Compatibility'))
-                self._logger.info('Docker image:{}\ntag:{}\nauthor: {}\ncreated: {}\n'.format(
-                    json_results.get('name'), json_results.get('tag'), v1.get('author',''), v1.get('created','')))
-            else:
-                self._logger.info('"{0}" docker image does not exist.'.format(args.image_name))
+            with paramiko.SSHClient() as ssh:
+                logging.getLogger("paramiko").setLevel(logging.WARNING)
+                ssh.load_system_host_keys()
+                ssh.connect(hostname = self._get_controller_ip(), username = 'root', key_filename = os.path.expanduser(self._config['key_file']))
+    
+                # get image_id
+                cmd = 'curl registry:5000/v1/repositories/library/{0}/tags/{1}'.format(image_name, tag_name)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                image_id = stdout.read().replace('"','')
+                if 'Tag not found' in image_id:
+                    self._logger.info('"{0}" docker image does not exist.'.format(args.image_name))
+                    return
+    
+                # get image_info
+                cmd = 'curl registry:5000/v1/images/{0}/json'.format(image_id)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                json_results = json.loads(stdout.read())
+                self._logger.info('Docker image: {}:{}\nImage id: {}\nAuthor: {}\nCreated: {}\n'.format(
+                    image_name, tag_name, image_id, json_results.get('author',''), json_results.get('created','')))
 
         except Exception as e:
             self._logger.error(e)
