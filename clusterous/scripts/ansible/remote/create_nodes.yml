@@ -51,7 +51,7 @@
 
     - name: mount volume
       file: path=/home/data state=directory mode=0755
-    - mount: name=/home/data src=controller:/home/data fstype=nfs state=present
+    - mount: name=/home/data src=controller:/home/data fstype=nfs state=mounted
     
     - name: add node name to mesos attributes file
       lineinfile: dest=/etc/mesos-slave/attributes line="node_name:{{ node_tag }};" create=yes
