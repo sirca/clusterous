@@ -24,14 +24,14 @@ class CLIParser(object):
 
         # Build dokcer image
         build = subparser.add_parser('build-image', help='Build a new Docker image')
-        build.add_argument('cluster_name', action='store')
-        build.add_argument('dockerfile_folder', action='store')
-        build.add_argument('image_name', action='store')
+        build.add_argument('cluster_name', action='store', help='Name of the cluster')
+        build.add_argument('dockerfile_folder', action='store', help='Local folder name which contains the Dockerfile')
+        build.add_argument('image_name', action='store', help='Name of the docker image to be created on the cluster')
 
         # Docker image info
         image_info = subparser.add_parser('image-info', help='Gets information of a Docker image')
-        image_info.add_argument('cluster_name', action='store')
-        image_info.add_argument('image_name', action='store')
+        image_info.add_argument('cluster_name', action='store', help='Name of the cluster')
+        image_info.add_argument('image_name', action='store', help='Name of the docker image available on the cluster')
 
         terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
         terminate.add_argument('cluster_name', action='store')
