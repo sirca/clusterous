@@ -1,0 +1,38 @@
+---
+- name: ipython cluster setup
+  hosts: all
+  user: root
+  sudo: yes
+  gather_facts: no
+  tasks:
+    - name: launch ipcontroller
+      marathon:
+        app_name=ipcontroller 
+        image="registry:5000/bdkd:ipython"
+        volumes="/home/data:/home/data"
+        cmd="source /home/data/setup/01_ipcontroller.sh"
+        ports="31000:31000,31001:31001,31002:31002,31003:31003,31004:31004,31005:31005,31006:31006,31007:31007,31008:31008,31009:31009,31010:31010,31011:31011"
+        state=present
+
+    - name: launch ipengine
+      marathon:
+        app_name=ipengine
+        image="registry:5000/bdkd:ipython"
+        volumes="/home/data:/home/data"
+        cmd="source /home/data/setup/02_ipengine.sh"
+        count=1
+        mem=128
+        cpus=0.25
+        state=present
+ 
+    - name: launch ipnotebook
+      marathon:
+        app_name=ipnotebook
+        image="registry:5000/bdkd:ipython"
+        volumes="/home/data:/home/data"
+        cmd="source /home/data/setup/03_ipnotebook.sh"
+        ports="31080:8888"
+        state=present
+
+    - name: lists apps running on marathon
+      marathon: state=list-apps
