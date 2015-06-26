@@ -1,0 +1,21 @@
+---
+- name: ipython cluster
+  hosts: all
+  user: root
+  sudo: yes
+  gather_facts: no
+  tasks:
+    - name: destroy ipcontroller
+      marathon:
+        app_name=ipcontroller 
+        state=absent
+
+    - name: destroy ipengine
+      marathon:
+        app_name=ipengine
+        state=absent
+ 
+    - name: destroy ipnotebook
+      marathon:
+        app_name=ipnotebook
+        state=absent

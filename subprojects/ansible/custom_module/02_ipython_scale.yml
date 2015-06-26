@@ -1,0 +1,12 @@
+---
+- name: ipython cluster
+  hosts: all
+  user: root
+  sudo: yes
+  gather_facts: no
+  tasks:
+    - name: scale ipengine
+      marathon:
+        app_name=ipengine
+        count=4
+        state=present
