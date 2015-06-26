@@ -92,6 +92,12 @@
     - name: mount volume /home/data
       mount: name=/home/data src=/dev/xvdf fstype=ext4 state=mounted
 
+    # NFS share
+    - name: nfs share
+      lineinfile: dest=/etc/exports line="/home/data            *(rw,sync,no_root_squash,no_all_squash)"
+    - name: restart nfs
+      shell: systemctl restart nfs-server
+
     # DNS
     - name: check if mesos-dns is running
       shell: ps aux | grep mesos-dns

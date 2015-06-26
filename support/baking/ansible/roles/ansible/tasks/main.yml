@@ -10,6 +10,7 @@
     - epel-release.noarch
     - python-pip
     - python-devel
+    - marathon
 - name: install setuptools
   pip: name=setuptools extra_args='--upgrade'
 - name: install ansible

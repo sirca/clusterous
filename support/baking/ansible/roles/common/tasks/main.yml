@@ -3,3 +3,18 @@
 # Firewall off
 - name: stop firewall
   service: name=firewalld state=stopped enabled=no
+# NFS
+- name: nfs package
+  yum: name=nfs-utils state=present
+- name: nfs enable
+  service: name={{ item }} enabled=yes
+  with_items:
+    - rpcbind
+    - nfs-server
+- name: nfs started
+  service: name={{ item }} state=started
+  with_items:
+    - rpcbind
+    - nfs-server
+    - nfs-lock
+    - nfs-idmap
