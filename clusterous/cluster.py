@@ -198,8 +198,7 @@ class AWSCluster(Cluster):
         """
         try:
             full_path = args.dockerfile_folder
-            if (args.dockerfile_folder.startswith('.') or 
-                args.dockerfile_folder.startswith('~')):
+            if args.dockerfile_folder.startswith('./'):
                 full_path = os.path.abspath(args.dockerfile_folder)
 
             if not os.path.isdir(full_path):
@@ -213,11 +212,10 @@ class AWSCluster(Cluster):
             self._cluster_name = args.cluster_name
             vars_dict={
                     'cluster_name': args.cluster_name,
-                    'dockerfile_path':'/'.join(full_path.split("/")[:-1]),
-                    'dockerfile_folder':'/'.join(full_path.split("/")[-1:]),
+                    'dockerfile_path': os.path.dirname(full_path),
+                    'dockerfile_folder': os.path.basename(full_path),
                     'image_name':args.image_name,
                     }
-    
             vars_file = self._make_vars_file(vars_dict)
             self._logger.info('Started building docker image')
             AnsibleHelper.run_playbook(defaults.get_script('ansible/docker_01_build_image.yml'),
