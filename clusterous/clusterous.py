@@ -7,6 +7,7 @@ import boto
 import defaults
 import cluster
 import clusterbuilder
+from helpers import AnsibleHelper
 
 class ParseError(Exception):
     pass
@@ -87,12 +88,24 @@ class Clusterous(object):
         builder.start_cluster()
         self._logger.info('Started cluster')
 
+    def docker_build_image(self, args):
+        """
+        Create a new docker image
+        """
+        cl = self._make_cluster_object()
+        cl.docker_build_image(args)
+
+    def docker_image_info(self, args):
+        """
+        Gets information of a Docker image
+        """
+        cl = self._make_cluster_object()
+        cl.docker_image_info(args)
+
     def terminate_cluster(self, cluster_name):
         cl = self._make_cluster_object()
         self._logger.info('Terminating cluster {0}'.format(cluster_name))
         cl.terminate_cluster(cluster_name)
-
-
 
     def list_clusters(self, args):
         pass

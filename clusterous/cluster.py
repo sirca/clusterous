@@ -5,12 +5,14 @@ import os
 import yaml
 import logging
 import time
+import json
 
 import boto.ec2
+import paramiko
 
 import defaults
-from defaults import get_script
-
+from defaults import get_script, get_remote_dir
+from helpers import AnsibleHelper
 
 # TODO: Move to another module as appropriate, as this is very general purpose
 def retry_till_true(func, sleep_interval, timeout_secs=300):
@@ -29,44 +31,6 @@ def retry_till_true(func, sleep_interval, timeout_secs=300):
         time.sleep(sleep_interval)
 
     return success
-
-class AnsibleHelper(object):
-
-    class AnsibleError(Exception):
-        def __init__(self, playbook, exit_code, output, error):
-            self.playbook = playbook
-            self.exit_code = exit_code
-            self.output = output
-            self.error = error
-
-        def __str__(self):
-            return self.error
-
-    @staticmethod
-    def run_playbook(playbook_file, vars_file, key_file, hosts_file=None, env=None):
-        logger = logging.getLogger()
-        if hosts_file == None:
-            # Default
-            hosts_file = get_script('ansible/hosts')
-
-        run_env = os.environ.copy()
-        if env != None:
-            run_env.update(env)
-
-        args = ['ansible-playbook', '-i', hosts_file,
-                '--private-key', key_file,
-                '--extra-vars', '@{0}'.format(vars_file), playbook_file]
-        # logger.debug(' '.join(args))
-        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=run_env)
-        output, error = process.communicate()
-
-        if process.returncode != 0:
-            logger.error('Ansible exited with code {0} when running {1}'.format(process.returncode, playbook_file))
-            logger.debug(output)
-            logger.error(error)
-            raise AnsibleHelper.AnsibleError(playbook_file, process.returncode, output, error)
-
-        return process.returncode
 
 class Cluster(object):
     """
@@ -131,7 +95,7 @@ class AWSCluster(Cluster):
                 'registry_s3_bucket': defaults.registry_s3_bucket,
                 'registry_s3_path': defaults.registry_s3_path,
                 'current_controller_ip_file': defaults.current_controller_ip_file,
-                'remote_scripts_dir': defaults.get_remote_dir(),
+                'remote_scripts_dir': get_remote_dir(),
                 'remote_host_scripts_dir': defaults.remote_host_scripts_dir
                 }
 
@@ -227,6 +191,80 @@ class AWSCluster(Cluster):
         self._logger.debug('Adding {0} nodes to cluster...'.format(num_nodes))
         self._run_remote(vars_dict, 'create_nodes.yml')
 
+
+    def docker_build_image(self, args):
+        """
+        Create a new docker image
+        """
+        try:
+            full_path = args.dockerfile_folder
+            if args.dockerfile_folder.startswith('./'):
+                full_path = os.path.abspath(args.dockerfile_folder)
+
+            if not os.path.isdir(full_path):
+                self._logger.error("Error: Folder '{0}' does not exists.".format(full_path))
+                return
+
+            if not os.path.exists("{0}/Dockerfile".format(full_path)):
+                self._logger.error("Error: Folder '{0}' does not have a Dockerfile.".format(full_path))
+                return
+
+            self._cluster_name = args.cluster_name
+            vars_dict={
+                    'cluster_name': args.cluster_name,
+                    'dockerfile_path': os.path.dirname(full_path),
+                    'dockerfile_folder': os.path.basename(full_path),
+                    'image_name':args.image_name,
+                    }
+            vars_file = self._make_vars_file(vars_dict)
+            self._logger.info('Started building docker image')
+            AnsibleHelper.run_playbook(defaults.get_script('ansible/docker_01_build_image.yml'),
+                                       vars_file.name,
+                                       self._config['key_file'],
+                                       env=self._ansible_env_credentials(),
+                                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+            vars_file.close()
+            self._logger.info('Finished building docker image')
+        except Exception as e:
+            self._logger.error(e)
+            raise
+
+    def docker_image_info(self, args):
+        """
+        Gets information of a Docker image
+        """
+        try:
+            self._cluster_name = args.cluster_name
+            
+            if ':' in args.image_name:
+                image_name, tag_name = args.image_name.split(':')
+            else:
+                image_name = args.image_name
+                tag_name = 'latest'
+
+            with paramiko.SSHClient() as ssh:
+                logging.getLogger("paramiko").setLevel(logging.WARNING)
+                ssh.load_system_host_keys()
+                ssh.connect(hostname = self._get_controller_ip(), username = 'root', key_filename = os.path.expanduser(self._config['key_file']))
+    
+                # get image_id
+                cmd = 'curl registry:5000/v1/repositories/library/{0}/tags/{1}'.format(image_name, tag_name)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                image_id = stdout.read().replace('"','')
+                if 'Tag not found' in image_id:
+                    self._logger.info('"{0}" docker image does not exist.'.format(args.image_name))
+                    return
+    
+                # get image_info
+                cmd = 'curl registry:5000/v1/images/{0}/json'.format(image_id)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                json_results = json.loads(stdout.read())
+                self._logger.info('Docker image: {}:{}\nImage id: {}\nAuthor: {}\nCreated: {}\n'.format(
+                    image_name, tag_name, image_id, json_results.get('author',''), json_results.get('created','')))
+
+        except Exception as e:
+            self._logger.error(e)
+            raise
 
     def terminate_cluster(self, cluster_name):
         conn = boto.ec2.connect_to_region(self._config['region'],

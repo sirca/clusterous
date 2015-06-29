@@ -27,7 +27,6 @@ remote_host_vars_file = 'vars.yml'
 node_tag_status_uninitialized = 'uninitialized'
 node_tag_status_initialized = 'initialized'
 
-
 def get_script(filename):
     """
     Takes script relative filename, returns absolute path

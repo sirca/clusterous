@@ -1,0 +1,14 @@
+---
+- name: build docker image
+  hosts: all
+  user: root
+  sudo: yes
+  tasks:
+    - name: copy dockerfile to controller
+      synchronize: src={{ dockerfile_path }}/{{ dockerfile_folder }} dest=/home/data/docker_images
+      sudo: no
+    - name: build docker images
+      shell: "docker build -t='registry:5000/{{ image_name }}' /home/data/docker_images/{{ dockerfile_folder }}"
+    - name: push to private registry
+      shell: "docker tag {{ image_name }} registry:5000/{{ image_name }}; \
+        docker push registry:5000/{{ image_name }}"

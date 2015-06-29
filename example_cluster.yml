@@ -1,4 +1,0 @@
-- IPython:
-    cluster_name: balramcluster
-    num_instances: 2
-    instance_type: t2.micro
