@@ -197,12 +197,24 @@ class AWSCluster(Cluster):
         Create a new docker image
         """
         try:
+            full_path = args.dockerfile_folder
+            if (args.dockerfile_folder.startswith('.') or 
+                args.dockerfile_folder.startswith('~')):
+                full_path = os.path.abspath(args.dockerfile_folder)
+
+            if not os.path.isdir(full_path):
+                self._logger.error("Error: Folder '{0}' does not exists.".format(full_path))
+                return
+
+            if not os.path.exists("{0}/Dockerfile".format(full_path)):
+                self._logger.error("Error: Folder '{0}' does not have a Dockerfile.".format(full_path))
+                return
+
             self._cluster_name = args.cluster_name
-            full_path=args.dockerfile_folder.split("/")
             vars_dict={
                     'cluster_name': args.cluster_name,
-                    'dockerfile_path':'/'.join(full_path[:-1]),
-                    'dockerfile_folder':'/'.join(full_path[-1:]),
+                    'dockerfile_path':'/'.join(full_path.split("/")[:-1]),
+                    'dockerfile_folder':'/'.join(full_path.split("/")[-1:]),
                     'image_name':args.image_name,
                     }
     
