@@ -192,30 +192,19 @@ class AWSCluster(Cluster):
         self._run_remote(vars_dict, 'create_nodes.yml')
 
 
-    def docker_build_image(self, args):
+    def docker_build_image(self, cluster_name, full_path, image_name):
         """
         Create a new docker image
         """
+
+        self._cluster_name = cluster_name
+        vars_dict = {
+                'cluster_name': cluster_name,
+                'dockerfile_path': os.path.dirname(full_path),
+                'dockerfile_folder': os.path.basename(full_path),
+                'image_name': image_name,
+                }
         try:
-            full_path = args.dockerfile_folder
-            if args.dockerfile_folder.startswith('./'):
-                full_path = os.path.abspath(args.dockerfile_folder)
-
-            if not os.path.isdir(full_path):
-                self._logger.error("Error: Folder '{0}' does not exists.".format(full_path))
-                return
-
-            if not os.path.exists("{0}/Dockerfile".format(full_path)):
-                self._logger.error("Error: Folder '{0}' does not have a Dockerfile.".format(full_path))
-                return
-
-            self._cluster_name = args.cluster_name
-            vars_dict={
-                    'cluster_name': args.cluster_name,
-                    'dockerfile_path': os.path.dirname(full_path),
-                    'dockerfile_folder': os.path.basename(full_path),
-                    'image_name':args.image_name,
-                    }
             vars_file = self._make_vars_file(vars_dict)
             self._logger.info('Started building docker image')
             AnsibleHelper.run_playbook(defaults.get_script('ansible/docker_01_build_image.yml'),
@@ -229,39 +218,46 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise
 
-    def docker_image_info(self, args):
+    def docker_image_info(self, cluster_name, image_name_str):
         """
         Gets information of a Docker image
         """
         try:
-            self._cluster_name = args.cluster_name
-            
-            if ':' in args.image_name:
-                image_name, tag_name = args.image_name.split(':')
+            self._cluster_name = cluster_name
+
+            if ':' in image_name_str:
+                image_name, tag_name = image_name_str.split(':', 1)
             else:
-                image_name = args.image_name
+                image_name = image_name_str
                 tag_name = 'latest'
 
+            image_info = {}
+            # TODO: rewrite to use make HTTP calls directly
             with paramiko.SSHClient() as ssh:
-                logging.getLogger("paramiko").setLevel(logging.WARNING)
+                logging.getLogger('paramiko').setLevel(logging.WARNING)
                 ssh.load_system_host_keys()
-                ssh.connect(hostname = self._get_controller_ip(), username = 'root', key_filename = os.path.expanduser(self._config['key_file']))
-    
+                ssh.connect(hostname = self._get_controller_ip(),
+                            username = 'root',
+                            key_filename = os.path.expanduser(self._config['key_file']))
+
                 # get image_id
                 cmd = 'curl registry:5000/v1/repositories/library/{0}/tags/{1}'.format(image_name, tag_name)
                 stdin, stdout, stderr = ssh.exec_command(cmd)
                 image_id = stdout.read().replace('"','')
                 if 'Tag not found' in image_id:
-                    self._logger.info('"{0}" docker image does not exist.'.format(args.image_name))
-                    return
-    
+                    return None
+
                 # get image_info
                 cmd = 'curl registry:5000/v1/images/{0}/json'.format(image_id)
                 stdin, stdout, stderr = ssh.exec_command(cmd)
                 json_results = json.loads(stdout.read())
-                self._logger.info('Docker image: {}:{}\nImage id: {}\nAuthor: {}\nCreated: {}\n'.format(
-                    image_name, tag_name, image_id, json_results.get('author',''), json_results.get('created','')))
-
+                image_info = { 'image_name': image_name,
+                               'tag_name': tag_name,
+                               'image_id': image_id,
+                               'author': json_results.get('author',''),
+                               'created': json_results.get('created','')
+                               }
+            return image_info
         except Exception as e:
             self._logger.error(e)
             raise

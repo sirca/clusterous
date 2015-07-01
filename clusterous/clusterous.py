@@ -7,7 +7,9 @@ import boto
 import defaults
 import cluster
 import clusterbuilder
+# import environmentfile
 from helpers import AnsibleHelper
+
 
 class ParseError(Exception):
     pass
@@ -92,20 +94,37 @@ class Clusterous(object):
         """
         Create a new docker image
         """
-        cl = self._make_cluster_object()
-        cl.docker_build_image(args)
+        full_path = args.dockerfile_folder
 
-    def docker_image_info(self, args):
+        if args.dockerfile_folder.startswith('./'):
+            full_path = os.path.abspath(args.dockerfile_folder)
+
+        if not os.path.isdir(full_path):
+            self._logger.error("Error: Folder '{0}' does not exists.".format(full_path))
+            return False
+
+        if not os.path.exists("{0}/Dockerfile".format(full_path)):
+            self._logger.error("Error: Folder '{0}' does not have a Dockerfile.".format(full_path))
+            return False
+
+        cl = self._make_cluster_object()
+        cl.docker_build_image(args.cluster_name, full_path, args.image_name)
+
+    def docker_image_info(self, cluster_name, image_name):
         """
         Gets information of a Docker image
         """
         cl = self._make_cluster_object()
-        cl.docker_image_info(args)
+        return cl.docker_image_info(cluster_name, image_name)
 
     def terminate_cluster(self, cluster_name):
         cl = self._make_cluster_object()
         self._logger.info('Terminating cluster {0}'.format(cluster_name))
         cl.terminate_cluster(cluster_name)
+
+
+    def launch_environment(self, environment_file):
+        # env_file = environmentfile.EnvironmentFile(environment_file)
 
     def list_clusters(self, args):
         pass
