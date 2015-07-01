@@ -16,7 +16,7 @@
         instance_type: "{{ instance_type }}"
         image: "{{ node_ami_id }}"
         vpc_subnet_id: "{{ vpc_subnet_id }}"
-        assign_public_ip: no
+        assign_public_ip: yes
         wait: yes
         group: "{{ security_group_name }}"
         instance_tags:
