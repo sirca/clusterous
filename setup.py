@@ -5,9 +5,12 @@ extra = {'scripts': ['bin/clusterous']}
 
 setup(name='clusterous',
       version='0.1.0',
-      #package_dir={'': '.'},
-      packages=['.'],
+      packages=['clusterous'],
+      package_data={'clusterous': [
+                        'scripts/ansible/*.yml',
+                        'scripts/ansible/hosts',
+                        'scripts/ansible/remote/*'
+                    ]},
       install_requires=['pyyaml', 'pytest', 'mock', 'paramiko'],
       **extra
       )
-
