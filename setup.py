@@ -11,6 +11,6 @@ setup(name='clusterous',
                         'scripts/ansible/hosts',
                         'scripts/ansible/remote/*'
                     ]},
-      install_requires=['pyyaml', 'pytest', 'mock', 'paramiko', 'boto'],
+      install_requires=['pyyaml', 'pytest', 'mock', 'paramiko', 'boto', 'ansible'],
       **extra
       )
