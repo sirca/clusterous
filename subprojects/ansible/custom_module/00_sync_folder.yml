@@ -1,0 +1,9 @@
+---
+- name: sync folder
+  hosts: all
+  user: root
+  sudo: yes
+  tasks:
+    - name: sync folder
+      synchronize: src={{ src_path }} dest={{ dst_path }}
+      sudo: no
