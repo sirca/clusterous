@@ -1,47 +1,6 @@
 # Custom Ansible Modules
-Example of IPython Parallel been deployed on the cluster via ansible scripts
-
-### Clone repo
-```
-git clone https://<username>@github.com/sirca/bdkd_cluster.git
-cd bdkd_cluster
-python setup.py install
-```
-
-### Setup AWS keys
-```
-vi ~/.clusterous.yml
-```
-
-```yaml
-- AWS:
-    access_key_id: xxx
-    secret_access_key: xxx
-    key_pair: xxx
-    key_file: ~/.ssh/xxx.pem
-    vpc_id: vpc-xxx
-    subnet_id: subnet-xxx
-    region: ap-southeast-2
-    clustserous_s3_bucket: xxx
-```
-
-### Setup cluster profile
-```
-vi democluster.yml
-```
-
-```yaml
-- Deafult:
-    cluster_name: democluster
-    num_instances: 1
-    instance_type: t2.micro
-```
-
-### Start cluster
-```
-clusterous --verbose start democluster.yml
-```
-
+Example of IPython Parallel been deployed on the cluster via ansible scripts.
+It assumes you have a cluster running (instructions on root repository).
 
 ### IPython example
 ```
@@ -95,7 +54,3 @@ ssh -i ~/.ssh/bdkd-sirca.pem root@54.79.124.206 -L 31080:127.0.0.1:31080 # IPyth
 Browse: http://localhost:31080
 ```
 
-### Terminate cluster
-```
-clusterous --verbose terminate democluster
-```
