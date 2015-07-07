@@ -92,7 +92,7 @@ class AWSCluster(Cluster):
                 'controller_instance_type': defaults.controller_instance_type,
                 'node_name': defaults.node_name_format.format(self._cluster_name),
                 'node_ami_id': defaults.node_ami_id,
-                'clustserous_s3_bucket': self._config['clustserous_s3_bucket'],
+                'clusterous_s3_bucket': self._config['clusterous_s3_bucket'],
                 'registry_s3_path': defaults.registry_s3_path,
                 'current_controller_ip_file': defaults.current_controller_ip_file,
                 'remote_scripts_dir': get_remote_dir(),
