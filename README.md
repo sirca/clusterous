@@ -22,7 +22,7 @@ vi ~/.clusterous.yml
     vpc_id: vpc-xxx
     subnet_id: subnet-xxx
     region: xxx
-    clustserous_s3_bucket: xxx
+    clusterous_s3_bucket: xxx
 ```
 
 ### Setup cluster profile
