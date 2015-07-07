@@ -30,7 +30,9 @@ class AnsibleHelper(object):
         if env != None:
             run_env.update(env)
 
-        run_env['ANSIBLE_HOST_KEY_CHECKING']='False'
+        if 'ANSIBLE_HOST_KEY_CHECKING' not in run_env:
+            run_env['ANSIBLE_HOST_KEY_CHECKING']='False'
+            
         args = ['ansible-playbook', '-i', hosts_file,
                 '--private-key', key_file,
                 '-c', 'ssh',
