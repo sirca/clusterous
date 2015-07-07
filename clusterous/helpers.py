@@ -30,8 +30,10 @@ class AnsibleHelper(object):
         if env != None:
             run_env.update(env)
 
+        run_env['ANSIBLE_HOST_KEY_CHECKING']='False'
         args = ['ansible-playbook', '-i', hosts_file,
                 '--private-key', key_file,
+                '-c', 'ssh',
                 '--extra-vars', '@{0}'.format(vars_file), playbook_file]
         # logger.debug(' '.join(args))
         process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=run_env)
