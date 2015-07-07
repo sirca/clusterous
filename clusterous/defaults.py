@@ -15,8 +15,7 @@ security_group_name_format = '{0}-sg'
 controller_name_format = '{0}_controller'
 controller_instance_type = 't2.small'
 node_name_format = '{0}_node'
-registry_s3_bucket = 'clusterous-docker-registry'
-registry_s3_path = '/dev'
+registry_s3_path = '/docker-registry'
 
 remote_scripts_dir = 'ansible/remote'
 
