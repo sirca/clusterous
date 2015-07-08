@@ -39,6 +39,12 @@ class CLIParser(object):
         sync_put.add_argument('local_path', action='store', help='Path to the local folder')
         sync_put.add_argument('remote_path', action='store', help='Path on the cluster')
 
+        # Sync: get
+        sync_put = subparser.add_parser('get', help='Copy folder from "/home/data/" on cluster to local')
+        sync_put.add_argument('cluster_name', action='store', help='Name of the cluster')
+        sync_put.add_argument('remote_path', action='store', help='Path on the cluster')
+        sync_put.add_argument('local_path', action='store', help='Path to the local folder')
+
         terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
         terminate.add_argument('cluster_name', action='store')
         terminate.add_argument('--confirm', dest='no_prompt', action='store_true',
@@ -73,6 +79,16 @@ class CLIParser(object):
             return 1
         return 0
 
+    def _sync_get(self, args):
+        app = self._init_clusterous_object(args)
+        success, message = app.sync_get(cluster_name = args.cluster_name, 
+                                        remote_path = args.remote_path,
+                                        local_path = args.local_path)
+        if not success:
+            print message
+            return 1
+        return 0
+
     def main(self, argv=None):
         parser = argparse.ArgumentParser('clusterous', description='Tool to create and manage compute clusters')
 
@@ -94,6 +110,8 @@ class CLIParser(object):
             app.docker_image_info(args)
         elif args.subcmd == 'put':
             status = self._sync_put(args)
+        elif args.subcmd == 'get':
+            status = self._sync_get(args)
 
 def main(argv=None):
     cli = CLIParser()

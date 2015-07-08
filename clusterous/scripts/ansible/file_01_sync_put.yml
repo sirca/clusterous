@@ -3,10 +3,11 @@
   hosts: all
   user: root
   sudo: yes
+  gather_facts: no
   tasks:
     - name: create remote directory if it doesn't exist
       file: path={{ dst_path }} state=directory mode=0755
 
     - name: sync folder
-      synchronize: src={{ src_path }} dest={{ dst_path }}
+      synchronize: src={{ src_path }} dest={{ dst_path }} mode=push
       sudo: no

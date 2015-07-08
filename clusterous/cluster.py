@@ -272,7 +272,7 @@ class AWSCluster(Cluster):
         """
         try:
             # Check local path
-            src_path = os.path.abspath(local_path) if local_path.startswith('./') else args.local_path
+            src_path = os.path.abspath(local_path) if local_path.startswith('./') else local_path
             if not os.path.isdir(src_path):
                 message = "Error: local_path '{0}' does not exists.".format(src_path)
                 return (False, message)
@@ -281,11 +281,41 @@ class AWSCluster(Cluster):
             vars_dict={
                     'src_path': src_path,
                     'dst_path': '/home/data/{}'.format(dst_path),
-                    'mode': 'push',
                     }
             vars_file = self._make_vars_file(vars_dict)
             self._logger.info('Started sync folder')
-            AnsibleHelper.run_playbook(defaults.get_script('ansible/file_01_sync.yml'),
+            AnsibleHelper.run_playbook(defaults.get_script('ansible/file_01_sync_put.yml'),
+                                       vars_file.name,
+                                       self._config['key_file'],
+                                       env=self._ansible_env_credentials(),
+                                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+            vars_file.close()
+            self._logger.info('Finished sync folder')
+        except Exception as e:
+            self._logger.error(e)
+            raise
+
+        return (True, 'Ok')
+
+    def sync_get(self, cluster_name, remote_path, local_path):
+        """
+        Sync folder from the cluster to local
+        """
+        try:
+            # Check local path
+            dst_path = os.path.abspath(local_path) if local_path.startswith('./') else local_path
+            if not os.path.isdir(dst_path):
+                message = "Error: local_path '{0}' does not exists.".format(dst_path)
+                return (False, message)
+
+            src_path = remote_path
+            vars_dict={
+                    'src_path': '/home/data/{}'.format(src_path),
+                    'dst_path': dst_path,
+                    }
+            vars_file = self._make_vars_file(vars_dict)
+            self._logger.info('Started sync folder')
+            AnsibleHelper.run_playbook(defaults.get_script('ansible/file_02_sync_get.yml'),
                                        vars_file.name,
                                        self._config['key_file'],
                                        env=self._ansible_env_credentials(),
