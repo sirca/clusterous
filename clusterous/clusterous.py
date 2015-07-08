@@ -116,6 +116,13 @@ class Clusterous(object):
         cl = self._make_cluster_object()
         return cl.sync_get(cluster_name, local_path, remote_path)
 
+    def ls(self, cluster_name, remote_path):
+        """
+        List content of a folder on the on cluster
+        """
+        cl = self._make_cluster_object()
+        return cl.ls(cluster_name, remote_path)
+
     def terminate_cluster(self, cluster_name):
         cl = self._make_cluster_object()
         self._logger.info('Terminating cluster {0}'.format(cluster_name))

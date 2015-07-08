@@ -291,11 +291,11 @@ class AWSCluster(Cluster):
                                        hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
             vars_file.close()
             self._logger.info('Finished sync folder')
+            return (True, 'Ok')
+
         except Exception as e:
             self._logger.error(e)
             raise
-
-        return (True, 'Ok')
 
     def sync_get(self, cluster_name, remote_path, local_path):
         """
@@ -322,11 +322,44 @@ class AWSCluster(Cluster):
                                        hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
             vars_file.close()
             self._logger.info('Finished sync folder')
+            return (True, 'Ok')
+
         except Exception as e:
             self._logger.error(e)
             raise
 
-        return (True, 'Ok')
+    def ls(self, cluster_name, remote_path):
+        """
+        List content of a folder on the on cluster
+        """
+        try:
+            invalid_characters = "".join(i for i in remote_path if i in r';&<>')
+            if len(invalid_characters) > 0:
+                message = "Error: Folder '{0}' contains invalid characters.".format(remote_path)
+                return (False, message)
+                
+            self._cluster_name = cluster_name
+            with paramiko.SSHClient() as ssh:
+                logging.getLogger("paramiko").setLevel(logging.WARNING)
+                ssh.load_system_host_keys()
+                ssh.connect(hostname = self._get_controller_ip(), username = 'root', 
+                            key_filename = os.path.expanduser(self._config['key_file']))
+    
+                # run ls on the remote
+                self._logger.info('Started ls')
+                cmd = 'ls -al /home/data/{0}'.format(remote_path)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                ls_output = stdout.read()
+                if 'cannot access' in stderr.read():
+                    message = "Error: remote_path '{0}' does not exists.".format(remote_path)
+                    return (False, message)
+                self._logger.info('Finished ls')
+
+                return (True, ls_output)
+
+        except Exception as e:
+            self._logger.error(e)
+            raise
 
     def terminate_cluster(self, cluster_name):
         conn = boto.ec2.connect_to_region(self._config['region'],

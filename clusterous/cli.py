@@ -34,16 +34,21 @@ class CLIParser(object):
         image_info.add_argument('image_name', action='store', help='Name of the docker image available on the cluster')
 
         # Sync: put
-        sync_put = subparser.add_parser('put', help='Copy local folder to "/home/data/" on the cluster')
+        sync_put = subparser.add_parser('put', help='Copy folder from local to the cluster')
         sync_put.add_argument('cluster_name', action='store', help='Name of the cluster')
         sync_put.add_argument('local_path', action='store', help='Path to the local folder')
-        sync_put.add_argument('remote_path', action='store', help='Path on the cluster')
+        sync_put.add_argument('remote_path', action='store', help='Path inside "/home/data/" on the cluster')
 
         # Sync: get
-        sync_put = subparser.add_parser('get', help='Copy folder from "/home/data/" on cluster to local')
-        sync_put.add_argument('cluster_name', action='store', help='Name of the cluster')
-        sync_put.add_argument('remote_path', action='store', help='Path on the cluster')
-        sync_put.add_argument('local_path', action='store', help='Path to the local folder')
+        sync_get = subparser.add_parser('get', help='Copy folder from cluster to local')
+        sync_get.add_argument('cluster_name', action='store', help='Name of the cluster')
+        sync_get.add_argument('remote_path', action='store', help='Path inside "/home/data/" on the cluster')
+        sync_get.add_argument('local_path', action='store', help='Path to the local folder')
+
+        # ls
+        ls = subparser.add_parser('ls', help='List folder\'s content on the cluster')
+        ls.add_argument('cluster_name', action='store', help='Name of the cluster')
+        ls.add_argument('remote_path', action='store', help='Path inside "/home/data/" on the cluster')
 
         terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
         terminate.add_argument('cluster_name', action='store')
@@ -88,6 +93,14 @@ class CLIParser(object):
             print message
             return 1
         return 0
+    
+    def _ls(self, args):
+        app = self._init_clusterous_object(args)
+        success, message = app.ls(cluster_name = args.cluster_name, 
+                                        remote_path = args.remote_path)
+        print message
+        return 0 if success else 1
+
 
     def main(self, argv=None):
         parser = argparse.ArgumentParser('clusterous', description='Tool to create and manage compute clusters')
@@ -112,6 +125,8 @@ class CLIParser(object):
             status = self._sync_put(args)
         elif args.subcmd == 'get':
             status = self._sync_get(args)
+        elif args.subcmd == 'ls':
+            status = self._ls(args)
 
 def main(argv=None):
     cli = CLIParser()
