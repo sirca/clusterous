@@ -266,6 +266,38 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise
 
+    def sync_put(self, cluster_name, local_path, remote_path):
+        """
+        Sync local folder to the cluster
+        """
+        try:
+            # Check local path
+            src_path = os.path.abspath(local_path) if local_path.startswith('./') else args.local_path
+            if not os.path.isdir(src_path):
+                message = "Error: local_path '{0}' does not exists.".format(src_path)
+                return (False, message)
+
+            dst_path = remote_path
+            vars_dict={
+                    'src_path': src_path,
+                    'dst_path': '/home/data/{}'.format(dst_path),
+                    'mode': 'push',
+                    }
+            vars_file = self._make_vars_file(vars_dict)
+            self._logger.info('Started sync folder')
+            AnsibleHelper.run_playbook(defaults.get_script('ansible/file_01_sync.yml'),
+                                       vars_file.name,
+                                       self._config['key_file'],
+                                       env=self._ansible_env_credentials(),
+                                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+            vars_file.close()
+            self._logger.info('Finished sync folder')
+        except Exception as e:
+            self._logger.error(e)
+            raise
+
+        return (True, 'Ok')
+
     def terminate_cluster(self, cluster_name):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
