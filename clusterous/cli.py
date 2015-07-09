@@ -26,13 +26,11 @@ class CLIParser(object):
 
         # Build dokcer image
         build = subparser.add_parser('build-image', help='Build a new Docker image')
-        build.add_argument('cluster_name', action='store', help='Name of the cluster')
         build.add_argument('dockerfile_folder', action='store', help='Local folder name which contains the Dockerfile')
         build.add_argument('image_name', action='store', help='Name of the docker image to be created on the cluster')
 
         # Docker image info
         image_info = subparser.add_parser('image-info', help='Gets information of a Docker image')
-        image_info.add_argument('cluster_name', action='store', help='Name of the cluster')
         image_info.add_argument('image_name', action='store', help='Name of the docker image available on the cluster')
 
         # Sync: put
@@ -62,7 +60,6 @@ class CLIParser(object):
         workon.add_argument('cluster_name', action='store', help='Name of the cluster')
 
         terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
-        terminate.add_argument('cluster_name', action='store')
         terminate.add_argument('--confirm', dest='no_prompt', action='store_true',
             default=False, help='Immediately terminate cluster without prompting for confirmation')
 
@@ -92,14 +89,19 @@ class CLIParser(object):
         return 0 if success else 1
 
     def _terminate_cluster(self, args):
+        cluster_name = defaults.get_cluster_name()
+        if cluster_name is None:
+            print 'Error: No working cluster has been set. Check "workon" command'
+            return 1
+
         if not args.no_prompt:
-            prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(args.cluster_name)
+            prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(cluster_name)
             cont = raw_input(prompt_str)
             if cont.lower() != 'y' and cont.lower() != 'yes':
                 sys.exit(0)
 
         app = self._init_clusterous_object(args)
-        app.terminate_cluster(args.cluster_name)
+        app.terminate_cluster(cluster_name)
 
     def _sync_put(self, args):
         app = self._init_clusterous_object(args)

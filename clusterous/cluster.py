@@ -41,7 +41,7 @@ class Cluster(object):
     """
     def __init__(self, config):
         self._config = config
-        self._cluster_name = None
+        self._cluster_name = defaults.get_cluster_name()
         self._running = False
         self._logger = logging.getLogger()
 
@@ -225,9 +225,8 @@ class AWSCluster(Cluster):
                 self._logger.error("Error: Folder '{0}' does not have a Dockerfile.".format(full_path))
                 return
 
-            self._cluster_name = args.cluster_name
             vars_dict={
-                    'cluster_name': args.cluster_name,
+                    'cluster_name': self._cluster_name,
                     'dockerfile_path': os.path.dirname(full_path),
                     'dockerfile_folder': os.path.basename(full_path),
                     'image_name':args.image_name,
@@ -250,8 +249,6 @@ class AWSCluster(Cluster):
         Gets information of a Docker image
         """
         try:
-            self._cluster_name = args.cluster_name
-            
             if ':' in args.image_name:
                 image_name, tag_name = args.image_name.split(':')
             else:

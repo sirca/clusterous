@@ -1,4 +1,5 @@
 import os
+import yaml
 
 """
 Module for storing default and static values
@@ -39,3 +40,13 @@ def get_remote_dir():
     Return full path of remote scripts directory
     """
     return '{0}/{1}/{2}'.format(os.path.dirname(__file__), 'scripts', remote_scripts_dir)
+
+def get_cluster_name():
+    cluster_info_file = os.path.expanduser(CLUSTER_INFO_FILE)
+    if not os.path.isfile(cluster_info_file):
+        return None
+    
+    with open(os.path.expanduser(cluster_info_file), 'r') as stream:
+        cluster_info = yaml.load(stream)
+
+    return cluster_info.get('cluster_name')
