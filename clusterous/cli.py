@@ -1,4 +1,6 @@
 import sys
+import os
+import defaults
 import argparse
 
 import clusterous
@@ -55,6 +57,10 @@ class CLIParser(object):
         rm.add_argument('cluster_name', action='store', help='Name of the cluster')
         rm.add_argument('remote_path', action='store', help='Path on the shared volume')
 
+        # workon
+        workon = subparser.add_parser('workon', help='Sets a working cluster')
+        workon.add_argument('cluster_name', action='store', help='Name of the cluster')
+
         terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
         terminate.add_argument('cluster_name', action='store')
         terminate.add_argument('--confirm', dest='no_prompt', action='store_true',
@@ -68,6 +74,22 @@ class CLIParser(object):
             app = clusterous.Clusterous()
 
         return app
+
+    def _workon(self, args):
+        # Check cluster_info_file
+        cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
+        if os.path.isfile(cluster_info_file):
+            prompt_str = 'File "{0}" already exists. Overwrite (y/n)? '.format(cluster_info_file)
+            cont = raw_input(prompt_str)
+            if cont.lower() != 'y' and cont.lower() != 'yes':
+                print 'Cancelled by user'
+                sys.exit(0)
+        
+        app = self._init_clusterous_object(args)
+        success, message = app.workon(cluster_name = args.cluster_name)
+        print message
+
+        return 0 if success else 1
 
     def _terminate_cluster(self, args):
         if not args.no_prompt:
@@ -140,6 +162,8 @@ class CLIParser(object):
             status = self._ls(args)
         elif args.subcmd == 'rm':
             status = self._rm(args)
+        elif args.subcmd == 'workon':
+            status = self._workon(args)        
 
 def main(argv=None):
     cli = CLIParser()

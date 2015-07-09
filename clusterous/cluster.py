@@ -141,6 +141,19 @@ class AWSCluster(Cluster):
         local_vars_file.close()
         vars_file.close()
 
+    def _get_instances(self, cluster_name):
+        conn = boto.ec2.connect_to_region(self._config['region'],
+                    aws_access_key_id=self._config['access_key_id'],
+                    aws_secret_access_key=self._config['secret_access_key'])
+
+        # Delete instances
+        instance_filters = { 'tag:Name':
+                        ['{0}_controller'.format(cluster_name),
+                        '{0}_node'.format(cluster_name)],
+                        'instance-state-name': ['running', 'pending']
+                        }
+        instance_list = conn.get_only_instances(filters=instance_filters)
+        return instance_list
 
     def init_cluster(self, cluster_name):
         """
@@ -174,6 +187,9 @@ class AWSCluster(Cluster):
 
         # TODO: do this properly when orchestration is implemented
         self._create_controller_tunnel(8080, 8080, os.path.expanduser(self._config['key_file']))
+        
+        # Set working cluster
+        self.workon(cluster_name)
 
         vars_file.close()
 
@@ -406,18 +422,39 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
+    def workon(self, cluster_name):
+        """
+        Sets a working cluster
+        """
+        # Getting cluster info
+        instances = self._get_instances(cluster_name)
+        data = {}
+        for instance in instances:
+            if defaults.controller_name_format.format(cluster_name) in instance.tags['Name']:
+                data['controller']={'ip': str(instance.ip_address)}
+                data['cluster_name']=cluster_name
+
+        if not data:
+            return (False, 'Cluster "{0}" does not exist'.format(cluster_name))
+    
+        # Write cluster_info
+        cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
+        with open(cluster_info_file,'w+') as fw:
+            fw.write(yaml.dump(data, default_flow_style=False))
+
+        # Write controller_ip
+        ip_file = os.path.expanduser(defaults.current_controller_ip_file)
+        with open(ip_file,'w+') as fw:
+            fw.write(data.get('controller',{}).get('ip'))
+
+        return (True, 'Ok')
+
+
     def terminate_cluster(self, cluster_name):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
                     aws_secret_access_key=self._config['secret_access_key'])
-
-        # Delete instances
-        instance_filters = { 'tag:Name':
-                        ['{0}_controller'.format(cluster_name),
-                        '{0}_node'.format(cluster_name)],
-                        'instance-state-name': ['running', 'pending']
-                        }
-        instance_list = conn.get_only_instances(filters=instance_filters)
+        instance_list = self._get_instances(cluster_name)
         num_instances = len(instance_list)
         instances = [ i.id for i in instance_list ]
 
@@ -451,5 +488,9 @@ class AWSCluster(Cluster):
             self._logger.error('Unable to delete security group for {0}'.format(cluster_name))
         else:
             self._logger.debug('Deleted security group')
+        
+        # Delete cluster info
+        os.remove(os.path.expanduser(defaults.CLUSTER_INFO_FILE))
+        os.remove(os.path.expanduser(defaults.current_controller_ip_file))
 
         return True
