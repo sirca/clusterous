@@ -273,6 +273,9 @@ class AWSCluster(Cluster):
         try:
             # Check local path
             src_path = os.path.abspath(local_path) if local_path.startswith('./') else local_path
+            if not src_path.startswith('/'):
+                src_path = '{0}/{1}'.format(os.getcwd(), src_path)
+
             if not os.path.isdir(src_path):
                 message = "Error: local_path '{0}' does not exists.".format(src_path)
                 return (False, message)
@@ -297,20 +300,23 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise
 
-    def sync_get(self, cluster_name, remote_path, local_path):
+    def sync_get(self, cluster_name, local_path, remote_path):
         """
         Sync folder from the cluster to local
         """
         try:
             # Check local path
             dst_path = os.path.abspath(local_path) if local_path.startswith('./') else local_path
+            if not dst_path.startswith('/'):
+                dst_path = '{0}/{1}'.format(os.getcwd(), dst_path)
+
             if not os.path.isdir(dst_path):
                 message = "Error: local_path '{0}' does not exist.".format(dst_path)
                 return (False, message)
 
             src_path = remote_path
             vars_dict={
-                    'src_path': '/home/data/{}'.format(src_path),
+                    'src_path': '/home/data/{0}'.format(src_path),
                     'dst_path': dst_path,
                     }
             vars_file = self._make_vars_file(vars_dict)
