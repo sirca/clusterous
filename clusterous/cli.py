@@ -79,13 +79,10 @@ class CLIParser(object):
         return 0 if success else 1
 
     def _terminate_cluster(self, args):
-        cluster_name = defaults.get_cluster_name()
-        if cluster_name is None:
-            print 'Error: No working cluster has been set. Check "workon" command'
-            return 1
-
+        app = self._init_clusterous_object(args)
+        cl = app._make_cluster_object()
         if not args.no_prompt:
-            prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(cluster_name)
+            prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(cl._cluster_name)
             cont = raw_input(prompt_str)
             if cont.lower() != 'y' and cont.lower() != 'yes':
                 sys.exit(0)

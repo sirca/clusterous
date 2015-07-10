@@ -46,10 +46,11 @@ class Cluster(object):
         if cluster_name is None:
             cluster_name = self._get_working_cluster_name()
             if cluster_name is None:
-                raise ValueError('No cluster name, was cluster not initialised?')
+                raise ValueError('No working cluster has been set.')
+                
         self._cluster_name = cluster_name
 
-    def _get_working_cluster_name():
+    def _get_working_cluster_name(self):
         cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
         if not os.path.isfile(cluster_info_file):
             return None
@@ -427,20 +428,20 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def workon(self, cluster_name):
+    def workon(self):
         """
         Sets a working cluster
         """
         # Getting cluster info
-        instances = self._get_instances(cluster_name)
+        instances = self._get_instances(self._cluster_name)
         data = {}
         for instance in instances:
-            if defaults.controller_name_format.format(cluster_name) in instance.tags['Name']:
+            if defaults.controller_name_format.format(self._cluster_name) in instance.tags['Name']:
                 data['controller']={'ip': str(instance.ip_address)}
-                data['cluster_name']=cluster_name
+                data['cluster_name']=self._cluster_name
 
         if not data:
-            return (False, 'Cluster "{0}" does not exist'.format(cluster_name))
+            return (False, 'Cluster "{0}" does not exist'.format(self._cluster_name))
     
         # Write cluster_info
         cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)

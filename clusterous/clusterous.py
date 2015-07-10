@@ -58,10 +58,10 @@ class Clusterous(object):
         # TODO: validate properly by sending to provisioner
         self._config = contents[0]
 
-    def _make_cluster_object(self):
+    def _make_cluster_object(self, cluster_name=None):
         cl = None
         if 'AWS' in self._config:
-            cl = cluster.AWSCluster(self._config['AWS'])
+            cl = cluster.AWSCluster(self._config['AWS'], cluster_name)
         else:
             self._logger.error('Unknown cloud type')
             raise ValueError('Unknown cloud type')
@@ -133,8 +133,8 @@ class Clusterous(object):
         """
         Sets a working cluster
         """
-        cl = self._make_cluster_object()
-        return cl.workon(cluster_name)
+        cl = self._make_cluster_object(cluster_name)
+        return cl.workon()
 
     def terminate_cluster(self):
         cl = self._make_cluster_object()
