@@ -243,7 +243,7 @@ class AWSCluster(Cluster):
                 tag_name = 'latest'
 
             with paramiko.SSHClient() as ssh:
-                logging.getLogger("paramiko").setLevel(logging.WARNING)
+                logging.getLogger('paramiko').setLevel(logging.WARNING)
                 ssh.load_system_host_keys()
                 ssh.connect(hostname = self._get_controller_ip(), username = 'root', key_filename = os.path.expanduser(self._config['key_file']))
     
@@ -278,9 +278,12 @@ class AWSCluster(Cluster):
                 return (False, message)
 
             dst_path = remote_path
+            if dst_path != '/home/data/':
+                dst_path = '/home/data/{0}'.format(dst_path)
+
             vars_dict={
                     'src_path': src_path,
-                    'dst_path': '/home/data/{}'.format(dst_path),
+                    'dst_path': dst_path,
                     }
             vars_file = self._make_vars_file(vars_dict)
             self._logger.info('Started sync folder')
@@ -305,7 +308,7 @@ class AWSCluster(Cluster):
             # Check local path
             dst_path = os.path.abspath(local_path) if local_path.startswith('./') else local_path
             if not os.path.isdir(dst_path):
-                message = "Error: local_path '{0}' does not exists.".format(dst_path)
+                message = "Error: local_path '{0}' does not exist.".format(dst_path)
                 return (False, message)
 
             src_path = remote_path
@@ -333,27 +336,23 @@ class AWSCluster(Cluster):
         List content of a folder on the on cluster
         """
         try:
-            invalid_characters = "".join(i for i in remote_path if i in r';&<>')
-            if len(invalid_characters) > 0:
-                message = "Error: Folder '{0}' contains invalid characters.".format(remote_path)
-                return (False, message)
-                
             self._cluster_name = cluster_name
             with paramiko.SSHClient() as ssh:
-                logging.getLogger("paramiko").setLevel(logging.WARNING)
+                logging.getLogger('paramiko').setLevel(logging.WARNING)
                 ssh.load_system_host_keys()
                 ssh.connect(hostname = self._get_controller_ip(), username = 'root', 
                             key_filename = os.path.expanduser(self._config['key_file']))
     
                 # run ls on the remote
-                self._logger.info('Started ls')
-                cmd = 'ls -al /home/data/{0}'.format(remote_path)
+                if remote_path != '/home/data/':
+                    remote_path = '/home/data/{0}'.format(remote_path)
+                    
+                cmd = "ls -al '{0}'".format(remote_path)
                 stdin, stdout, stderr = ssh.exec_command(cmd)
                 ls_output = stdout.read()
                 if 'cannot access' in stderr.read():
                     message = "Error: remote_path '{0}' does not exists.".format(remote_path)
                     return (False, message)
-                self._logger.info('Finished ls')
 
                 return (True, ls_output)
 
