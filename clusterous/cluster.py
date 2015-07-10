@@ -360,6 +360,40 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise
 
+    def rm(self, cluster_name, remote_path):
+        """
+        Delete content of a folder on the on cluster
+        """
+        try:
+            self._cluster_name = cluster_name
+            with paramiko.SSHClient() as ssh:
+                logging.getLogger('paramiko').setLevel(logging.WARNING)
+                ssh.load_system_host_keys()
+                ssh.connect(hostname = self._get_controller_ip(), username = 'root', 
+                            key_filename = os.path.expanduser(self._config['key_file']))
+
+                # check if folder exists
+                remote_path = '/home/data/{0}'.format(remote_path)
+                cmd = "ls -d '{0}'".format(remote_path)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                ls_output = stdout.read()
+                if 'cannot access' in stderr.read():
+                    message = "Error: remote_path '{0}' does not exists.".format(remote_path)
+                    return (False, message)
+    
+                cmd = "rm -fr '{0}'".format(remote_path)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                ls_output = stdout.read()
+                if 'cannot access' in stderr.read():
+                    message = "Error: Faild to delete folder '{0}'.".format(remote_path)
+                    return (False, message)
+
+                return (True, 'Ok')
+
+        except Exception as e:
+            self._logger.error(e)
+            raise
+
     def terminate_cluster(self, cluster_name):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
