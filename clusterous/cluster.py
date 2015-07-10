@@ -340,10 +340,7 @@ class AWSCluster(Cluster):
                 ssh.connect(hostname = self._get_controller_ip(), username = 'root', 
                             key_filename = os.path.expanduser(self._config['key_file']))
     
-                # run ls on the remote
-                if remote_path != '/home/data/':
-                    remote_path = '/home/data/{0}'.format(remote_path)
-                    
+                remote_path = '/home/data/{0}'.format(remote_path)
                 cmd = "ls -al '{0}'".format(remote_path)
                 stdin, stdout, stderr = ssh.exec_command(cmd)
                 ls_output = stdout.read()

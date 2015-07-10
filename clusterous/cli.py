@@ -48,7 +48,7 @@ class CLIParser(object):
         # ls
         ls = subparser.add_parser('ls', help='List folder\'s content on the cluster')
         ls.add_argument('cluster_name', action='store', help='Name of the cluster')
-        ls.add_argument('remote_path', action='store', help='Path on the cluster. Default "/home/data/"', nargs='?', default='/home/data/')
+        ls.add_argument('remote_path', action='store', help='Path on the cluster. Default "/home/data/"', nargs='?', default='')
 
         terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
         terminate.add_argument('cluster_name', action='store')
