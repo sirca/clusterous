@@ -277,10 +277,7 @@ class AWSCluster(Cluster):
                 message = "Error: local_path '{0}' does not exists.".format(src_path)
                 return (False, message)
 
-            dst_path = remote_path
-            if dst_path != '/home/data/':
-                dst_path = '/home/data/{0}'.format(dst_path)
-
+            dst_path = '/home/data/{0}'.format(remote_path)
             vars_dict={
                     'src_path': src_path,
                     'dst_path': dst_path,
