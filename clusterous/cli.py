@@ -34,21 +34,21 @@ class CLIParser(object):
         image_info.add_argument('image_name', action='store', help='Name of the docker image available on the cluster')
 
         # Sync: put
-        sync_put = subparser.add_parser('put', help='Copy folder from local to the cluster')
+        sync_put = subparser.add_parser('put', help='Copy a folder from local to the cluster')
         sync_put.add_argument('cluster_name', action='store', help='Name of the cluster')
         sync_put.add_argument('local_path', action='store', help='Path to the local folder')
-        sync_put.add_argument('remote_path', action='store', help='Path on the cluster. Default "/home/data/"', nargs='?', default='')
+        sync_put.add_argument('remote_path', action='store', help='Path on the shared volume', nargs='?', default='')
 
         # Sync: get
-        sync_get = subparser.add_parser('get', help='Copy folder from cluster to local')
+        sync_get = subparser.add_parser('get', help='Copy a folder from cluster to local')
         sync_get.add_argument('cluster_name', action='store', help='Name of the cluster')
-        sync_get.add_argument('remote_path', action='store', help='Path inside "/home/data/" on the cluster')
+        sync_get.add_argument('remote_path', action='store', help='Path on the shared volume')
         sync_get.add_argument('local_path', action='store', help='Path to the local folder')
 
         # ls
-        ls = subparser.add_parser('ls', help='List folder\'s content on the cluster')
+        ls = subparser.add_parser('ls', help='List content of the shared volume')
         ls.add_argument('cluster_name', action='store', help='Name of the cluster')
-        ls.add_argument('remote_path', action='store', help='Path on the cluster. Default "/home/data/"', nargs='?', default='')
+        ls.add_argument('remote_path', action='store', help='Path on the shared volume', nargs='?', default='')
 
         terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
         terminate.add_argument('cluster_name', action='store')
