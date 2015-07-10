@@ -243,7 +243,7 @@ class AWSCluster(Cluster):
                 tag_name = 'latest'
 
             with paramiko.SSHClient() as ssh:
-                logging.getLogger("paramiko").setLevel(logging.WARNING)
+                logging.getLogger('paramiko').setLevel(logging.WARNING)
                 ssh.load_system_host_keys()
                 ssh.connect(hostname = self._get_controller_ip(), username = 'root', key_filename = os.path.expanduser(self._config['key_file']))
     
@@ -261,6 +261,94 @@ class AWSCluster(Cluster):
                 json_results = json.loads(stdout.read())
                 self._logger.info('Docker image: {}:{}\nImage id: {}\nAuthor: {}\nCreated: {}\n'.format(
                     image_name, tag_name, image_id, json_results.get('author',''), json_results.get('created','')))
+
+        except Exception as e:
+            self._logger.error(e)
+            raise
+
+    def sync_put(self, cluster_name, local_path, remote_path):
+        """
+        Sync local folder to the cluster
+        """
+        try:
+            # Check local path
+            src_path = os.path.abspath(local_path) if local_path.startswith('./') else local_path
+            if not os.path.isdir(src_path):
+                message = "Error: local_path '{0}' does not exists.".format(src_path)
+                return (False, message)
+
+            dst_path = '/home/data/{0}'.format(remote_path)
+            vars_dict={
+                    'src_path': src_path,
+                    'dst_path': dst_path,
+                    }
+            vars_file = self._make_vars_file(vars_dict)
+            self._logger.info('Started sync folder')
+            AnsibleHelper.run_playbook(defaults.get_script('ansible/file_01_sync_put.yml'),
+                                       vars_file.name,
+                                       self._config['key_file'],
+                                       env=self._ansible_env_credentials(),
+                                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+            vars_file.close()
+            self._logger.info('Finished sync folder')
+            return (True, 'Ok')
+
+        except Exception as e:
+            self._logger.error(e)
+            raise
+
+    def sync_get(self, cluster_name, remote_path, local_path):
+        """
+        Sync folder from the cluster to local
+        """
+        try:
+            # Check local path
+            dst_path = os.path.abspath(local_path) if local_path.startswith('./') else local_path
+            if not os.path.isdir(dst_path):
+                message = "Error: local_path '{0}' does not exist.".format(dst_path)
+                return (False, message)
+
+            src_path = remote_path
+            vars_dict={
+                    'src_path': '/home/data/{}'.format(src_path),
+                    'dst_path': dst_path,
+                    }
+            vars_file = self._make_vars_file(vars_dict)
+            self._logger.info('Started sync folder')
+            AnsibleHelper.run_playbook(defaults.get_script('ansible/file_02_sync_get.yml'),
+                                       vars_file.name,
+                                       self._config['key_file'],
+                                       env=self._ansible_env_credentials(),
+                                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+            vars_file.close()
+            self._logger.info('Finished sync folder')
+            return (True, 'Ok')
+
+        except Exception as e:
+            self._logger.error(e)
+            raise
+
+    def ls(self, cluster_name, remote_path):
+        """
+        List content of a folder on the on cluster
+        """
+        try:
+            self._cluster_name = cluster_name
+            with paramiko.SSHClient() as ssh:
+                logging.getLogger('paramiko').setLevel(logging.WARNING)
+                ssh.load_system_host_keys()
+                ssh.connect(hostname = self._get_controller_ip(), username = 'root', 
+                            key_filename = os.path.expanduser(self._config['key_file']))
+    
+                remote_path = '/home/data/{0}'.format(remote_path)
+                cmd = "ls -al '{0}'".format(remote_path)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                ls_output = stdout.read()
+                if 'cannot access' in stderr.read():
+                    message = "Error: remote_path '{0}' does not exists.".format(remote_path)
+                    return (False, message)
+
+                return (True, ls_output)
 
         except Exception as e:
             self._logger.error(e)
