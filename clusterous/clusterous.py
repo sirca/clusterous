@@ -136,10 +136,10 @@ class Clusterous(object):
         cl = self._make_cluster_object()
         return cl.workon(cluster_name)
 
-    def terminate_cluster(self, cluster_name):
+    def terminate_cluster(self):
         cl = self._make_cluster_object()
-        self._logger.info('Terminating cluster {0}'.format(cluster_name))
-        cl.terminate_cluster(cluster_name)
+        self._logger.info('Terminating cluster {0}'.format(cl._cluster_name))
+        cl.terminate_cluster()
 
     def list_clusters(self, args):
         pass

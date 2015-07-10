@@ -73,19 +73,9 @@ class CLIParser(object):
         return app
 
     def _workon(self, args):
-        # Check cluster_info_file
-        cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
-        if os.path.isfile(cluster_info_file):
-            prompt_str = 'File "{0}" already exists. Overwrite (y/n)? '.format(cluster_info_file)
-            cont = raw_input(prompt_str)
-            if cont.lower() != 'y' and cont.lower() != 'yes':
-                print 'Cancelled by user'
-                sys.exit(0)
-        
         app = self._init_clusterous_object(args)
         success, message = app.workon(cluster_name = args.cluster_name)
         print message
-
         return 0 if success else 1
 
     def _terminate_cluster(self, args):
@@ -101,7 +91,7 @@ class CLIParser(object):
                 sys.exit(0)
 
         app = self._init_clusterous_object(args)
-        app.terminate_cluster(cluster_name)
+        app.terminate_cluster()
 
     def _sync_put(self, args):
         app = self._init_clusterous_object(args)
