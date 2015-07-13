@@ -51,7 +51,7 @@ class CLIParser(object):
         ls.add_argument('remote_path', action='store', help='Path on the shared volume', nargs='?', default='')
 
         # rm
-        rm = subparser.add_parser('rm', help='Delete content of the shared volume')
+        rm = subparser.add_parser('rm', help='Deletes a folder on the shared volume')
         rm.add_argument('cluster_name', action='store', help='Name of the cluster')
         rm.add_argument('remote_path', action='store', help='Path on the shared volume')
 
