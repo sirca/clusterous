@@ -310,6 +310,7 @@ class AWSCluster(Cluster):
                 return (False, message)
 
             # Check remote path
+            remote_path = '/home/data/{0}'.format(remote_path)
             with paramiko.SSHClient() as ssh:
                 logging.getLogger('paramiko').setLevel(logging.WARNING)
                 ssh.load_system_host_keys()
@@ -317,7 +318,6 @@ class AWSCluster(Cluster):
                             key_filename = os.path.expanduser(self._config['key_file']))
 
                 # check if folder exists
-                remote_path = '/home/data/{0}'.format(remote_path)
                 cmd = "ls -d '{0}'".format(remote_path)
                 stdin, stdout, stderr = ssh.exec_command(cmd)
                 output_content = stdout.read()
@@ -327,7 +327,7 @@ class AWSCluster(Cluster):
             
             src_path = remote_path
             vars_dict={
-                    'src_path': '/home/data/{0}'.format(src_path),
+                    'src_path': src_path,
                     'dst_path': dst_path,
                     }
             vars_file = self._make_vars_file(vars_dict)
