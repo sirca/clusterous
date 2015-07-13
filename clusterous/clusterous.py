@@ -58,17 +58,15 @@ class Clusterous(object):
         # TODO: validate properly by sending to provisioner
         self._config = contents[0]
 
-    def _make_cluster_object(self, cluster_name=None):
+    def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
         cl = None
         if 'AWS' in self._config:
-            cl = cluster.AWSCluster(self._config['AWS'], cluster_name)
+            cl = cluster.AWSCluster(self._config['AWS'], cluster_name, cluster_name_required)
         else:
             self._logger.error('Unknown cloud type')
             raise ValueError('Unknown cloud type')
 
         return cl
-
-
 
     def start_cluster(self, args):
         """
@@ -80,7 +78,7 @@ class Clusterous(object):
 
 
         # Init Cluster object
-        cl = self._make_cluster_object()
+        cl = self.make_cluster_object(cluster_name_required=False)
 
         # Create Cluster Builder, passing in profile and Cluster
         builder = clusterbuilder.DefaultClusterBuilder(profile_contents, cl)
@@ -92,14 +90,14 @@ class Clusterous(object):
         """
         Create a new docker image
         """
-        cl = self._make_cluster_object()
+        cl = self.make_cluster_object()
         cl.docker_build_image(args)
 
     def docker_image_info(self, args):
         """
         Gets information of a Docker image
         """
-        cl = self._make_cluster_object()
+        cl = self.make_cluster_object()
         cl.docker_image_info(args)
 
     def sync_put(self, cluster_name, local_path, remote_path):
@@ -133,11 +131,11 @@ class Clusterous(object):
         """
         Sets a working cluster
         """
-        cl = self._make_cluster_object(cluster_name)
+        cl = self.make_cluster_object(cluster_name)
         return cl.workon()
 
     def terminate_cluster(self):
-        cl = self._make_cluster_object()
+        cl = self.make_cluster_object()
         self._logger.info('Terminating cluster {0}'.format(cl._cluster_name))
         cl.terminate_cluster()
 

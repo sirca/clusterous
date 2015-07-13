@@ -80,7 +80,7 @@ class CLIParser(object):
 
     def _terminate_cluster(self, args):
         app = self._init_clusterous_object(args)
-        cl = app._make_cluster_object()
+        cl = app.make_cluster_object()
         if not args.no_prompt:
             prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(cl._cluster_name)
             cont = raw_input(prompt_str)

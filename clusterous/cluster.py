@@ -39,17 +39,17 @@ class Cluster(object):
 
     Prepares cluster to a stage where applications can be run on it
     """
-    def __init__(self, config, cluster_name=None):
+    def __init__(self, config, cluster_name=None, cluster_name_required=True):
         self._config = config
         self._running = False
         self._logger = logging.getLogger()
-        if cluster_name is None:
-            cluster_name = self._get_working_cluster_name()
+        if cluster_name_required:
             if cluster_name is None:
-                raise ValueError('No working cluster has been set.')
-                
-        self._cluster_name = cluster_name
-
+                cluster_name = self._get_working_cluster_name()
+                if cluster_name is None:
+                    raise ValueError('No working cluster has been set.')
+            self._cluster_name = cluster_name
+       
     def _get_working_cluster_name(self):
         cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
         if not os.path.isfile(cluster_info_file):
@@ -198,7 +198,7 @@ class AWSCluster(Cluster):
         self._create_controller_tunnel(8080, 8080, os.path.expanduser(self._config['key_file']))
         
         # Set working cluster
-        self.workon(cluster_name)
+        self.workon()
 
         vars_file.close()
 
