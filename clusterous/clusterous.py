@@ -123,6 +123,13 @@ class Clusterous(object):
         cl = self._make_cluster_object()
         return cl.ls(cluster_name, remote_path)
 
+    def rm(self, cluster_name, remote_path):
+        """
+        Delete content of a folder on the on cluster
+        """
+        cl = self._make_cluster_object()
+        return cl.rm(cluster_name, remote_path)
+
     def terminate_cluster(self, cluster_name):
         cl = self._make_cluster_object()
         self._logger.info('Terminating cluster {0}'.format(cluster_name))

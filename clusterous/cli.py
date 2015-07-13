@@ -34,21 +34,26 @@ class CLIParser(object):
         image_info.add_argument('image_name', action='store', help='Name of the docker image available on the cluster')
 
         # Sync: put
-        sync_put = subparser.add_parser('put', help='Copy folder from local to the cluster')
+        sync_put = subparser.add_parser('put', help='Copy a folder from local to the cluster')
         sync_put.add_argument('cluster_name', action='store', help='Name of the cluster')
         sync_put.add_argument('local_path', action='store', help='Path to the local folder')
-        sync_put.add_argument('remote_path', action='store', help='Path on the cluster. Default "/home/data/"', nargs='?', default='')
+        sync_put.add_argument('remote_path', action='store', help='Path on the shared volume', nargs='?', default='')
 
         # Sync: get
-        sync_get = subparser.add_parser('get', help='Copy folder from cluster to local')
+        sync_get = subparser.add_parser('get', help='Copy a folder from cluster to local')
         sync_get.add_argument('cluster_name', action='store', help='Name of the cluster')
-        sync_get.add_argument('remote_path', action='store', help='Path inside "/home/data/" on the cluster')
+        sync_get.add_argument('remote_path', action='store', help='Path on the shared volume')
         sync_get.add_argument('local_path', action='store', help='Path to the local folder')
 
         # ls
-        ls = subparser.add_parser('ls', help='List folder\'s content on the cluster')
+        ls = subparser.add_parser('ls', help='List content of the shared volume')
         ls.add_argument('cluster_name', action='store', help='Name of the cluster')
-        ls.add_argument('remote_path', action='store', help='Path on the cluster. Default "/home/data/"', nargs='?', default='')
+        ls.add_argument('remote_path', action='store', help='Path on the shared volume', nargs='?', default='')
+
+        # rm
+        rm = subparser.add_parser('rm', help='Deletes a folder on the shared volume')
+        rm.add_argument('cluster_name', action='store', help='Name of the cluster')
+        rm.add_argument('remote_path', action='store', help='Path on the shared volume')
 
         terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
         terminate.add_argument('cluster_name', action='store')
@@ -101,6 +106,12 @@ class CLIParser(object):
         print message
         return 0 if success else 1
 
+    def _rm(self, args):
+        app = self._init_clusterous_object(args)
+        success, message = app.rm(cluster_name = args.cluster_name, 
+                                        remote_path = args.remote_path)
+        print message
+        return 0 if success else 1
 
     def main(self, argv=None):
         parser = argparse.ArgumentParser('clusterous', description='Tool to create and manage compute clusters')
@@ -127,6 +138,8 @@ class CLIParser(object):
             status = self._sync_get(args)
         elif args.subcmd == 'ls':
             status = self._ls(args)
+        elif args.subcmd == 'rm':
+            status = self._rm(args)
 
 def main(argv=None):
     cli = CLIParser()

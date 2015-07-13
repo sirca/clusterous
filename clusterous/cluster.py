@@ -227,7 +227,7 @@ class AWSCluster(Cluster):
             self._logger.info('Finished building docker image')
         except Exception as e:
             self._logger.error(e)
-            raise
+            raise e
 
     def docker_image_info(self, args):
         """
@@ -264,7 +264,7 @@ class AWSCluster(Cluster):
 
         except Exception as e:
             self._logger.error(e)
-            raise
+            raise e
 
     def sync_put(self, cluster_name, local_path, remote_path):
         """
@@ -272,9 +272,9 @@ class AWSCluster(Cluster):
         """
         try:
             # Check local path
-            src_path = os.path.abspath(local_path) if local_path.startswith('./') else local_path
+            src_path = os.path.abspath(local_path)
             if not os.path.isdir(src_path):
-                message = "Error: local_path '{0}' does not exists.".format(src_path)
+                message = "Error: Folder '{0}' does not exists.".format(src_path)
                 return (False, message)
 
             dst_path = '/home/data/{0}'.format(remote_path)
@@ -295,22 +295,39 @@ class AWSCluster(Cluster):
 
         except Exception as e:
             self._logger.error(e)
-            raise
+            raise e
 
-    def sync_get(self, cluster_name, remote_path, local_path):
+    def sync_get(self, cluster_name, local_path, remote_path):
         """
         Sync folder from the cluster to local
         """
         try:
+            self._cluster_name = cluster_name
             # Check local path
-            dst_path = os.path.abspath(local_path) if local_path.startswith('./') else local_path
+            dst_path = os.path.abspath(local_path)
             if not os.path.isdir(dst_path):
-                message = "Error: local_path '{0}' does not exist.".format(dst_path)
+                message = "Error: Folder '{0}' does not exist.".format(dst_path)
                 return (False, message)
 
+            # Check remote path
+            with paramiko.SSHClient() as ssh:
+                logging.getLogger('paramiko').setLevel(logging.WARNING)
+                ssh.load_system_host_keys()
+                ssh.connect(hostname = self._get_controller_ip(), username = 'root', 
+                            key_filename = os.path.expanduser(self._config['key_file']))
+
+                # check if folder exists
+                remote_path = '/home/data/{0}'.format(remote_path)
+                cmd = "ls -d '{0}'".format(remote_path)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                output_content = stdout.read()
+                if 'cannot access' in stderr.read():
+                    message = "Error: Folder '{0}' does not exists.".format(remote_path)
+                    return (False, message)
+            
             src_path = remote_path
             vars_dict={
-                    'src_path': '/home/data/{}'.format(src_path),
+                    'src_path': '/home/data/{0}'.format(src_path),
                     'dst_path': dst_path,
                     }
             vars_file = self._make_vars_file(vars_dict)
@@ -326,7 +343,7 @@ class AWSCluster(Cluster):
 
         except Exception as e:
             self._logger.error(e)
-            raise
+            raise e
 
     def ls(self, cluster_name, remote_path):
         """
@@ -343,16 +360,51 @@ class AWSCluster(Cluster):
                 remote_path = '/home/data/{0}'.format(remote_path)
                 cmd = "ls -al '{0}'".format(remote_path)
                 stdin, stdout, stderr = ssh.exec_command(cmd)
-                ls_output = stdout.read()
+                output_content = stdout.read()
                 if 'cannot access' in stderr.read():
-                    message = "Error: remote_path '{0}' does not exists.".format(remote_path)
+                    message = "Error: Folder '{0}' does not exists.".format(remote_path)
                     return (False, message)
 
-                return (True, ls_output)
+                return (True, output_content)
 
         except Exception as e:
             self._logger.error(e)
-            raise
+            raise e
+
+    def rm(self, cluster_name, remote_path):
+        """
+        Delete content of a folder on the on cluster
+        """
+        try:
+            self._cluster_name = cluster_name
+            with paramiko.SSHClient() as ssh:
+                logging.getLogger('paramiko').setLevel(logging.WARNING)
+                ssh.load_system_host_keys()
+                ssh.connect(hostname = self._get_controller_ip(), username = 'root', 
+                            key_filename = os.path.expanduser(self._config['key_file']))
+
+                # check if folder exists
+                remote_path = '/home/data/{0}'.format(remote_path)
+                cmd = "ls -d '{0}'".format(remote_path)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                output_content = stdout.read()
+                if 'cannot access' in stderr.read():
+                    message = "Error: Folder '{0}' does not exists.".format(remote_path)
+                    return (False, message)
+    
+                cmd = "rm -fr '{0}'".format(remote_path)
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                output_content = stdout.read()
+                # TODO: More error checking may need to be added
+                if 'cannot access' in stderr.read():
+                    message = "Error: Failed to delete folder '{0}'.".format(remote_path)
+                    return (False, message)
+
+                return (True, 'Ok')
+
+        except Exception as e:
+            self._logger.error(e)
+            raise e
 
     def terminate_cluster(self, cluster_name):
         conn = boto.ec2.connect_to_region(self._config['region'],
