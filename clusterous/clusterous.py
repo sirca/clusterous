@@ -100,33 +100,33 @@ class Clusterous(object):
         cl = self.make_cluster_object()
         cl.docker_image_info(args)
 
-    def sync_put(self, cluster_name, local_path, remote_path):
+    def sync_put(self, local_path, remote_path):
         """
         Sync local folder to the cluster
         """
-        cl = self._make_cluster_object()
-        return cl.sync_put(cluster_name, local_path, remote_path)
+        cl = self.make_cluster_object()
+        return cl.sync_put(local_path, remote_path)
 
-    def sync_get(self, cluster_name, local_path, remote_path):
+    def sync_get(self, local_path, remote_path):
         """
         Sync folder from the cluster to local
         """
-        cl = self._make_cluster_object()
-        return cl.sync_get(cluster_name, local_path, remote_path)
+        cl = self.make_cluster_object()
+        return cl.sync_get(local_path, remote_path)
 
-    def ls(self, cluster_name, remote_path):
+    def ls(self, remote_path):
         """
         List content of a folder on the on cluster
         """
-        cl = self._make_cluster_object()
-        return cl.ls(cluster_name, remote_path)
+        cl = self.make_cluster_object()
+        return cl.ls(remote_path)
 
-    def rm(self, cluster_name, remote_path):
+    def rm(self, remote_path):
         """
         Delete content of a folder on the on cluster
         """
-        cl = self._make_cluster_object()
-        return cl.rm(cluster_name, remote_path)
+        cl = self.make_cluster_object()
+        return cl.rm(remote_path)
     def workon(self, cluster_name):
         """
         Sets a working cluster

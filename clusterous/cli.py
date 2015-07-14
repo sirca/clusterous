@@ -35,24 +35,20 @@ class CLIParser(object):
 
         # Sync: put
         sync_put = subparser.add_parser('put', help='Copy a folder from local to the cluster')
-        sync_put.add_argument('cluster_name', action='store', help='Name of the cluster')
         sync_put.add_argument('local_path', action='store', help='Path to the local folder')
         sync_put.add_argument('remote_path', action='store', help='Path on the shared volume', nargs='?', default='')
 
         # Sync: get
         sync_get = subparser.add_parser('get', help='Copy a folder from cluster to local')
-        sync_get.add_argument('cluster_name', action='store', help='Name of the cluster')
         sync_get.add_argument('remote_path', action='store', help='Path on the shared volume')
         sync_get.add_argument('local_path', action='store', help='Path to the local folder')
 
         # ls
         ls = subparser.add_parser('ls', help='List content of the shared volume')
-        ls.add_argument('cluster_name', action='store', help='Name of the cluster')
         ls.add_argument('remote_path', action='store', help='Path on the shared volume', nargs='?', default='')
 
         # rm
         rm = subparser.add_parser('rm', help='Deletes a folder on the shared volume')
-        rm.add_argument('cluster_name', action='store', help='Name of the cluster')
         rm.add_argument('remote_path', action='store', help='Path on the shared volume')
 
         # workon
@@ -92,8 +88,7 @@ class CLIParser(object):
 
     def _sync_put(self, args):
         app = self._init_clusterous_object(args)
-        success, message = app.sync_put(cluster_name = args.cluster_name, 
-                                        local_path = args.local_path, 
+        success, message = app.sync_put(local_path = args.local_path, 
                                         remote_path = args.remote_path)
         if not success:
             print message
@@ -102,8 +97,7 @@ class CLIParser(object):
 
     def _sync_get(self, args):
         app = self._init_clusterous_object(args)
-        success, message = app.sync_get(cluster_name = args.cluster_name, 
-                                        remote_path = args.remote_path,
+        success, message = app.sync_get(remote_path = args.remote_path,
                                         local_path = args.local_path)
         if not success:
             print message
@@ -112,15 +106,13 @@ class CLIParser(object):
     
     def _ls(self, args):
         app = self._init_clusterous_object(args)
-        success, message = app.ls(cluster_name = args.cluster_name, 
-                                        remote_path = args.remote_path)
+        success, message = app.ls(remote_path = args.remote_path)
         print message
         return 0 if success else 1
 
     def _rm(self, args):
         app = self._init_clusterous_object(args)
-        success, message = app.rm(cluster_name = args.cluster_name, 
-                                        remote_path = args.remote_path)
+        success, message = app.rm(remote_path = args.remote_path)
         print message
         return 0 if success else 1
 

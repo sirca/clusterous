@@ -288,7 +288,7 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def sync_put(self, cluster_name, local_path, remote_path):
+    def sync_put(self, local_path, remote_path):
         """
         Sync local folder to the cluster
         """
@@ -319,12 +319,11 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def sync_get(self, cluster_name, local_path, remote_path):
+    def sync_get(self, local_path, remote_path):
         """
         Sync folder from the cluster to local
         """
         try:
-            self._cluster_name = cluster_name
             # Check local path
             dst_path = os.path.abspath(local_path)
             if not os.path.isdir(dst_path):
@@ -367,12 +366,11 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def ls(self, cluster_name, remote_path):
+    def ls(self, remote_path):
         """
         List content of a folder on the on cluster
         """
         try:
-            self._cluster_name = cluster_name
             with paramiko.SSHClient() as ssh:
                 logging.getLogger('paramiko').setLevel(logging.WARNING)
                 ssh.load_system_host_keys()
@@ -393,12 +391,11 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def rm(self, cluster_name, remote_path):
+    def rm(self, remote_path):
         """
         Delete content of a folder on the on cluster
         """
         try:
-            self._cluster_name = cluster_name
             with paramiko.SSHClient() as ssh:
                 logging.getLogger('paramiko').setLevel(logging.WARNING)
                 ssh.load_system_host_keys()
