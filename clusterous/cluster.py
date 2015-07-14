@@ -12,7 +12,7 @@ import paramiko
 
 import defaults
 from defaults import get_script, get_remote_dir
-from helpers import AnsibleHelper
+from helpers import AnsibleHelper, NoWorkingClusterException
 
 # TODO: Move to another module as appropriate, as this is very general purpose
 def retry_till_true(func, sleep_interval, timeout_secs=300):
@@ -47,7 +47,9 @@ class Cluster(object):
             if cluster_name is None:
                 cluster_name = self._get_working_cluster_name()
                 if cluster_name is None:
-                    raise ValueError('No working cluster has been set.')
+                    message = 'No working cluster has been set.'
+                    self._logger.error(message)
+                    raise NoWorkingClusterException(message)
             self._cluster_name = cluster_name
        
     def _get_working_cluster_name(self):
