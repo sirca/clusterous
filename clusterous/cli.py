@@ -4,7 +4,7 @@ import defaults
 import argparse
 
 import clusterous
-
+from helpers import NoWorkingClusterException
 
 class CLIParser(object):
     """
@@ -123,28 +123,32 @@ class CLIParser(object):
         self._create_subparsers(parser)
 
         args = parser.parse_args(argv)
-
-        if args.subcmd == 'start':
-            app = self._init_clusterous_object(args)
-            app.start_cluster(args)
-        elif args.subcmd == 'terminate':
-            self._terminate_cluster(args)
-        elif args.subcmd == 'build-image':
-            app = clusterous.Clusterous()
-            app.docker_build_image(args)
-        elif args.subcmd == 'image-info':
-            app = clusterous.Clusterous()
-            app.docker_image_info(args)
-        elif args.subcmd == 'put':
-            status = self._sync_put(args)
-        elif args.subcmd == 'get':
-            status = self._sync_get(args)
-        elif args.subcmd == 'ls':
-            status = self._ls(args)
-        elif args.subcmd == 'rm':
-            status = self._rm(args)
-        elif args.subcmd == 'workon':
-            status = self._workon(args)        
+        try:
+            if args.subcmd == 'start':
+                app = self._init_clusterous_object(args)
+                app.start_cluster(args)
+            elif args.subcmd == 'terminate':
+                self._terminate_cluster(args)
+            elif args.subcmd == 'build-image':
+                app = clusterous.Clusterous()
+                app.docker_build_image(args)
+            elif args.subcmd == 'image-info':
+                app = clusterous.Clusterous()
+                app.docker_image_info(args)
+            elif args.subcmd == 'put':
+                status = self._sync_put(args)
+            elif args.subcmd == 'get':
+                status = self._sync_get(args)
+            elif args.subcmd == 'ls':
+                status = self._ls(args)
+            elif args.subcmd == 'rm':
+                status = self._rm(args)
+            elif args.subcmd == 'workon':
+                status = self._workon(args)
+        except NoWorkingClusterException as e:
+            pass
+        except Exception as e:
+            raise e
 
 def main(argv=None):
     cli = CLIParser()
