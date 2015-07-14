@@ -39,15 +39,28 @@ class Cluster(object):
 
     Prepares cluster to a stage where applications can be run on it
     """
-    def __init__(self, config):
+    def __init__(self, config, cluster_name=None, cluster_name_required=True):
         self._config = config
-        self._cluster_name = None
         self._running = False
         self._logger = logging.getLogger()
+        if cluster_name_required:
+            if cluster_name is None:
+                cluster_name = self._get_working_cluster_name()
+                if cluster_name is None:
+                    raise ValueError('No working cluster has been set.')
+            self._cluster_name = cluster_name
+       
+    def _get_working_cluster_name(self):
+        cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
+        if not os.path.isfile(cluster_info_file):
+            return None
+        
+        with open(os.path.expanduser(cluster_info_file), 'r') as stream:
+            cluster_info = yaml.load(stream)
+    
+        return cluster_info.get('cluster_name')
 
     def _get_controller_ip(self):
-        if not self._cluster_name:
-            raise ValueError('No cluster name, was cluster not initialised?')
         ip = None
         ip_file = os.path.expanduser(defaults.current_controller_ip_file)
         if os.path.isfile(ip_file):
@@ -76,8 +89,6 @@ class Cluster(object):
 class AWSCluster(Cluster):
 
     def _ec2_vars_dict(self):
-        if not self._cluster_name:
-            raise ValueError('No cluster name, was cluster not initialised?')
         return {
                 'AWS_KEY': self._config['access_key_id'],
                 'AWS_SECRET': self._config['secret_access_key'],
@@ -106,8 +117,6 @@ class AWSCluster(Cluster):
                 }
 
     def _run_remote_vars_dict(self):
-        if not self._cluster_name:
-            raise ValueError('No cluster name, was cluster not initialised?')
         return {
                 'controller_ip': self._get_controller_ip(),
                 'key_file_src': self._config['key_file'],
@@ -141,6 +150,19 @@ class AWSCluster(Cluster):
         local_vars_file.close()
         vars_file.close()
 
+    def _get_instances(self, cluster_name):
+        conn = boto.ec2.connect_to_region(self._config['region'],
+                    aws_access_key_id=self._config['access_key_id'],
+                    aws_secret_access_key=self._config['secret_access_key'])
+
+        # Delete instances
+        instance_filters = { 'tag:Name':
+                        ['{0}_controller'.format(cluster_name),
+                        '{0}_node'.format(cluster_name)],
+                        'instance-state-name': ['running', 'pending']
+                        }
+        instance_list = conn.get_only_instances(filters=instance_filters)
+        return instance_list
 
     def init_cluster(self, cluster_name):
         """
@@ -174,6 +196,9 @@ class AWSCluster(Cluster):
 
         # TODO: do this properly when orchestration is implemented
         self._create_controller_tunnel(8080, 8080, os.path.expanduser(self._config['key_file']))
+        
+        # Set working cluster
+        self.workon()
 
         vars_file.close()
 
@@ -209,9 +234,8 @@ class AWSCluster(Cluster):
                 self._logger.error("Error: Folder '{0}' does not have a Dockerfile.".format(full_path))
                 return
 
-            self._cluster_name = args.cluster_name
             vars_dict={
-                    'cluster_name': args.cluster_name,
+                    'cluster_name': self._cluster_name,
                     'dockerfile_path': os.path.dirname(full_path),
                     'dockerfile_folder': os.path.basename(full_path),
                     'image_name':args.image_name,
@@ -234,8 +258,6 @@ class AWSCluster(Cluster):
         Gets information of a Docker image
         """
         try:
-            self._cluster_name = args.cluster_name
-            
             if ':' in args.image_name:
                 image_name, tag_name = args.image_name.split(':')
             else:
@@ -266,7 +288,7 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def sync_put(self, cluster_name, local_path, remote_path):
+    def sync_put(self, local_path, remote_path):
         """
         Sync local folder to the cluster
         """
@@ -297,12 +319,11 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def sync_get(self, cluster_name, local_path, remote_path):
+    def sync_get(self, local_path, remote_path):
         """
         Sync folder from the cluster to local
         """
         try:
-            self._cluster_name = cluster_name
             # Check local path
             dst_path = os.path.abspath(local_path)
             if not os.path.isdir(dst_path):
@@ -345,12 +366,11 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def ls(self, cluster_name, remote_path):
+    def ls(self, remote_path):
         """
         List content of a folder on the on cluster
         """
         try:
-            self._cluster_name = cluster_name
             with paramiko.SSHClient() as ssh:
                 logging.getLogger('paramiko').setLevel(logging.WARNING)
                 ssh.load_system_host_keys()
@@ -371,12 +391,11 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def rm(self, cluster_name, remote_path):
+    def rm(self, remote_path):
         """
         Delete content of a folder on the on cluster
         """
         try:
-            self._cluster_name = cluster_name
             with paramiko.SSHClient() as ssh:
                 logging.getLogger('paramiko').setLevel(logging.WARNING)
                 ssh.load_system_host_keys()
@@ -406,18 +425,39 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def terminate_cluster(self, cluster_name):
+    def workon(self):
+        """
+        Sets a working cluster
+        """
+        # Getting cluster info
+        instances = self._get_instances(self._cluster_name)
+        data = {}
+        for instance in instances:
+            if defaults.controller_name_format.format(self._cluster_name) in instance.tags['Name']:
+                data['controller']={'ip': str(instance.ip_address)}
+                data['cluster_name']=self._cluster_name
+
+        if not data:
+            return (False, 'Cluster "{0}" does not exist'.format(self._cluster_name))
+    
+        # Write cluster_info
+        cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
+        with open(cluster_info_file,'w+') as fw:
+            fw.write(yaml.dump(data, default_flow_style=False))
+
+        # Write controller_ip
+        ip_file = os.path.expanduser(defaults.current_controller_ip_file)
+        with open(ip_file,'w+') as fw:
+            fw.write(data.get('controller',{}).get('ip'))
+
+        return (True, 'Ok')
+
+
+    def terminate_cluster(self):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
                     aws_secret_access_key=self._config['secret_access_key'])
-
-        # Delete instances
-        instance_filters = { 'tag:Name':
-                        ['{0}_controller'.format(cluster_name),
-                        '{0}_node'.format(cluster_name)],
-                        'instance-state-name': ['running', 'pending']
-                        }
-        instance_list = conn.get_only_instances(filters=instance_filters)
+        instance_list = self._get_instances(self._cluster_name)
         num_instances = len(instance_list)
         instances = [ i.id for i in instance_list ]
 
@@ -431,25 +471,29 @@ class AWSCluster(Cluster):
 
         success = retry_till_true(instances_terminated, 2)
         if not success:
-            self._logger.error('Timeout while trying to terminate instances in {0}'.format(cluster_name))
+            self._logger.error('Timeout while trying to terminate instances in {0}'.format(self._cluster_name))
         else:
             self._logger.debug('{0} instances terminated'.format(num_instances))
 
         # Delete EBS volume
-        volumes = conn.get_all_volumes(filters={'tag:Name':cluster_name})
+        volumes = conn.get_all_volumes(filters={'tag:Name':self._cluster_name})
         volumes_deleted = [ v.delete() for v in volumes ]
         volume_ids_str = ','.join([ v.id for v in volumes])
         if False in volumes_deleted:
-            self._logger.error('Unable to delete volume in {0}: {1}'.format(cluster_name, volume_ids_str))
+            self._logger.error('Unable to delete volume in {0}: {1}'.format(self._cluster_name, volume_ids_str))
         else:
             self._logger.debug('Deleted shared volume: {0}'.format(volume_ids_str))
 
         # Delete security group
-        sg = conn.get_all_security_groups(filters={'tag:Name':'{0}-sg'.format(cluster_name)})
+        sg = conn.get_all_security_groups(filters={'tag:Name':'{0}-sg'.format(self._cluster_name)})
         sg_deleted = [ g.delete() for g in sg ]
         if False in sg_deleted:
-            self._logger.error('Unable to delete security group for {0}'.format(cluster_name))
+            self._logger.error('Unable to delete security group for {0}'.format(self._cluster_name))
         else:
             self._logger.debug('Deleted security group')
+        
+        # Delete cluster info
+        os.remove(os.path.expanduser(defaults.CLUSTER_INFO_FILE))
+        os.remove(os.path.expanduser(defaults.current_controller_ip_file))
 
         return True
