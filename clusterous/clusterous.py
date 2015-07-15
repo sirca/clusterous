@@ -60,17 +60,15 @@ class Clusterous(object):
         # TODO: validate properly by sending to provisioner
         self._config = contents[0]
 
-    def _make_cluster_object(self):
+    def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
         cl = None
         if 'AWS' in self._config:
-            cl = cluster.AWSCluster(self._config['AWS'])
+            cl = cluster.AWSCluster(self._config['AWS'], cluster_name, cluster_name_required)
         else:
             self._logger.error('Unknown cloud type')
             raise ValueError('Unknown cloud type')
 
         return cl
-
-
 
     def start_cluster(self, args):
         """
@@ -82,7 +80,7 @@ class Clusterous(object):
 
 
         # Init Cluster object
-        cl = self._make_cluster_object()
+        cl = self.make_cluster_object(cluster_name_required=False)
 
         # Create Cluster Builder, passing in profile and Cluster
         builder = clusterbuilder.DefaultClusterBuilder(profile_contents, cl)
@@ -117,10 +115,44 @@ class Clusterous(object):
         cl = self._make_cluster_object()
         return cl.docker_image_info(cluster_name, image_name)
 
-    def terminate_cluster(self, cluster_name):
-        cl = self._make_cluster_object()
-        self._logger.info('Terminating cluster {0}'.format(cluster_name))
-        cl.terminate_cluster(cluster_name)
+    def sync_put(self, local_path, remote_path):
+        """
+        Sync local folder to the cluster
+        """
+        cl = self.make_cluster_object()
+        return cl.sync_put(local_path, remote_path)
+
+    def sync_get(self, local_path, remote_path):
+        """
+        Sync folder from the cluster to local
+        """
+        cl = self.make_cluster_object()
+        return cl.sync_get(local_path, remote_path)
+
+    def ls(self, remote_path):
+        """
+        List content of a folder on the on cluster
+        """
+        cl = self.make_cluster_object()
+        return cl.ls(remote_path)
+
+    def rm(self, remote_path):
+        """
+        Delete content of a folder on the on cluster
+        """
+        cl = self.make_cluster_object()
+        return cl.rm(remote_path)
+    def workon(self, cluster_name):
+        """
+        Sets a working cluster
+        """
+        cl = self.make_cluster_object(cluster_name)
+        return cl.workon()
+
+    def terminate_cluster(self):
+        cl = self.make_cluster_object()
+        self._logger.info('Terminating cluster {0}'.format(cl._cluster_name))
+        cl.terminate_cluster()
 
 
     def launch_environment(self, environment_file):

@@ -1,4 +1,5 @@
 import os
+import yaml
 
 """
 Module for storing default and static values
@@ -8,6 +9,7 @@ DEFAULT_CONFIG_FILE = '~/.clusterous.yml'
 
 local_config_dir = '~/.clusterous'
 current_controller_ip_file = local_config_dir + '/' + 'current_controller'
+CLUSTER_INFO_FILE = local_config_dir + '/' + 'cluster_info.yml'
 
 controller_ami_id = 'ami-ed4d08d7'
 node_ami_id = 'ami-4b4d0871'

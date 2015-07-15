@@ -48,3 +48,6 @@ class AnsibleHelper(object):
             raise AnsibleHelper.AnsibleError(playbook_file, process.returncode, output, error)
 
         return process.returncode
+
+class NoWorkingClusterException(Exception):
+    pass
