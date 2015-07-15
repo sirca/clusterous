@@ -19,6 +19,8 @@ controller_instance_type = 't2.small'
 node_name_format = '{0}_node'
 registry_s3_path = '/docker-registry'
 
+shared_volume_path = '/home/data/'
+
 remote_scripts_dir = 'ansible/remote'
 
 remote_host_scripts_dir = 'clusterous'
@@ -27,6 +29,9 @@ remote_host_vars_file = 'vars.yml'
 
 node_tag_status_uninitialized = 'uninitialized'
 node_tag_status_initialized = 'initialized'
+
+# How many seconds to wait for all Marathon applications to reach "started" state
+app_launch_start_timeout = 600
 
 def get_script(filename):
     """

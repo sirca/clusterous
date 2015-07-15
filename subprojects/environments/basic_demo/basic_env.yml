@@ -1,0 +1,33 @@
+
+# This is an example specification for orchestrating a simple Python application
+
+name: basic-python    # environment name
+
+environment:
+  # Relative path to directory that will be copied to shared storage. Should contain
+  # files necessary to launch the application
+  copy:
+    - "basic_python"
+  image:
+    - dockerfile: "image"   # location of Dockerfile to build associated Docker image
+      image_name: "basic-python"
+  components:
+    master:
+      machine: master
+      cpu: auto
+      image: registry:5000/basic-python   # docker image
+      cmd: "/bin/bash /home/data/basic_python/launch_master.sh"
+      ports: "31000"
+
+    notebook:
+      machine: worker
+      depends: master   # Marathon constrait; launch only after controller is running
+      cpu: 1
+      count: auto 
+      image: registry:5000/basic-python
+      cmd: "/bin/bash /home/data/basic_python/launch_worker.sh"
+      ports: "31001"
+
+  expose_tunnel:      # create an ssh tunnel
+    service: 31080:master:8080    # source port 31080 on master to 8080 on localhost
+    message: "To access the master, use this URL:"

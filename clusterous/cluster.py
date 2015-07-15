@@ -11,8 +11,8 @@ import boto.ec2
 import paramiko
 
 import defaults
-from defaults import get_script, get_remote_dir
-from helpers import AnsibleHelper, NoWorkingClusterException
+from defaults import get_script
+from helpers import AnsibleHelper, SSHTunnel, NoWorkingClusterException
 
 # TODO: Move to another module as appropriate, as this is very general purpose
 def retry_till_true(func, sleep_interval, timeout_secs=300):
@@ -62,6 +62,7 @@ class Cluster(object):
 
         return cluster_info.get('cluster_name')
 
+
     def _get_controller_ip(self):
         ip = None
         ip_file = os.path.expanduser(defaults.current_controller_ip_file)
@@ -72,6 +73,12 @@ class Cluster(object):
         else:
             raise ValueError('Cannot find controller IP: {0}'.format(ip_file))
         return ip
+
+    def controller_tunnel(self, remote_port):
+        """
+        Returns helpers.SSHTunnel object connected to remote_port on controller
+        """
+        pass
 
     def init_cluster(self, cluster_name):
         pass
@@ -108,7 +115,7 @@ class AWSCluster(Cluster):
                 'clusterous_s3_bucket': self._config['clusterous_s3_bucket'],
                 'registry_s3_path': defaults.registry_s3_path,
                 'current_controller_ip_file': defaults.current_controller_ip_file,
-                'remote_scripts_dir': get_remote_dir(),
+                'remote_scripts_dir': defaults.get_remote_dir(),
                 'remote_host_scripts_dir': defaults.remote_host_scripts_dir
                 }
 
@@ -166,6 +173,14 @@ class AWSCluster(Cluster):
         instance_list = conn.get_only_instances(filters=instance_filters)
         return instance_list
 
+    def make_controller_tunnel(self, remote_port):
+        """
+        Returns helpers.SSHTunnel object connected to remote_port on controller
+        """
+        return SSHTunnel(self._get_controller_ip(), 'root',
+                os.path.expanduser(self._config['key_file']), remote_port)
+
+
     def init_cluster(self, cluster_name):
         """
         Initialise security group(s), cluster controller etc
@@ -215,27 +230,22 @@ class AWSCluster(Cluster):
         vars_dict['instance_type'] = instance_type
         vars_dict['node_tag'] = node_tag
 
-        self._logger.debug('Adding {0} nodes to cluster...'.format(num_nodes))
+        self._logger.debug('Adding {0} nodes tagged "{1}" to cluster...'.format(num_nodes, node_tag))
         self._run_remote(vars_dict, 'create_nodes.yml')
 
 
-    def docker_build_image(self, cluster_name, full_path, image_name):
+    def docker_build_image(self, full_path, image_name):
         """
         Create a new docker image
         """
 
-        self._cluster_name = cluster_name
         vars_dict = {
-                'cluster_name': cluster_name,
+                'cluster_name': self._cluster_name,
                 'dockerfile_path': os.path.dirname(full_path),
                 'dockerfile_folder': os.path.basename(full_path),
                 'image_name': image_name,
                 }
         try:
-            full_path = args.dockerfile_folder
-            if args.dockerfile_folder.startswith('./'):
-                full_path = os.path.abspath(args.dockerfile_folder)
-
             if not os.path.isdir(full_path):
                 self._logger.error("Error: Folder '{0}' does not exists.".format(full_path))
                 return
@@ -244,12 +254,6 @@ class AWSCluster(Cluster):
                 self._logger.error("Error: Folder '{0}' does not have a Dockerfile.".format(full_path))
                 return
 
-            vars_dict={
-                    'cluster_name': self._cluster_name,
-                    'dockerfile_path': os.path.dirname(full_path),
-                    'dockerfile_folder': os.path.basename(full_path),
-                    'image_name':args.image_name,
-                    }
             vars_file = self._make_vars_file(vars_dict)
             self._logger.info('Started building docker image')
             AnsibleHelper.run_playbook(defaults.get_script('ansible/docker_01_build_image.yml'),
@@ -263,13 +267,11 @@ class AWSCluster(Cluster):
             self._logger.error(e)
             raise e
 
-    def docker_image_info(self, cluster_name, image_name_str):
+    def docker_image_info(self, image_name_str):
         """
         Gets information of a Docker image
         """
         try:
-            self._cluster_name = cluster_name
-
             if ':' in image_name_str:
                 image_name, tag_name = image_name_str.split(':', 1)
             else:

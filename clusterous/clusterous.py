@@ -2,12 +2,14 @@ import yaml
 import os
 import sys
 import logging
+import logging.config
 import boto
 
 import defaults
 import cluster
 import clusterbuilder
-# import environmentfile
+import environmentfile
+import environment
 from helpers import AnsibleHelper
 
 
@@ -20,15 +22,15 @@ class Clusterous(object):
     """
 
     class Verbosity:
-        DEBUG = logging.DEBUG
-        NORMAL = logging.INFO
-        QUIET = logging.WARNING
+        DEBUG = 'DEBUG'
+        NORMAL = 'INFO'
+        QUIET = 'WARNING'
 
     def __init__(self, config_file=defaults.DEFAULT_CONFIG_FILE, log_level=Verbosity.NORMAL):
         self.clusters = []
         self._config = {}
 
-        logging.basicConfig(level=log_level, format='%(message)s')
+        self._configure_logger(log_level)
         self._logger = logging.getLogger()
 
         try:
@@ -42,6 +44,31 @@ class Clusterous(object):
         conf_dir = os.path.expanduser(defaults.local_config_dir)
         if not os.path.exists(conf_dir):
             os.makedirs(conf_dir)
+
+    def _configure_logger(self, level):
+        logging_dict = {
+                            'version': 1,
+                            'disable_existing_loggers': False,
+                            'formatters': {
+                                'standard': {
+                                    'format': '%(message)s'
+                                },
+                            },
+                            'handlers': {
+                                'default': {
+                                    'level': level,
+                                    'class':'logging.StreamHandler',
+                                },
+                            },
+                            'loggers': {
+                                '': {
+                                    'handlers': ['default'],
+                                    'level': level,
+                                    'propagate': True
+                                },
+                            }
+                        }
+        logging.config.dictConfig(logging_dict)
 
     def _read_config(self, config_file):
         """
@@ -78,7 +105,6 @@ class Clusterous(object):
         profile_contents = yaml.load(stream)[0]
         stream.close()
 
-
         # Init Cluster object
         cl = self.make_cluster_object(cluster_name_required=False)
 
@@ -92,10 +118,7 @@ class Clusterous(object):
         """
         Create a new docker image
         """
-        full_path = args.dockerfile_folder
-
-        if args.dockerfile_folder.startswith('./'):
-            full_path = os.path.abspath(args.dockerfile_folder)
+        full_path = os.path.abspath(args.dockerfile_folder)
 
         if not os.path.isdir(full_path):
             self._logger.error("Error: Folder '{0}' does not exists.".format(full_path))
@@ -105,15 +128,15 @@ class Clusterous(object):
             self._logger.error("Error: Folder '{0}' does not have a Dockerfile.".format(full_path))
             return False
 
-        cl = self._make_cluster_object()
-        cl.docker_build_image(args.cluster_name, full_path, args.image_name)
+        cl = self.make_cluster_object()
+        cl.docker_build_image(full_path, args.image_name)
 
-    def docker_image_info(self, cluster_name, image_name):
+    def docker_image_info(self, image_name):
         """
         Gets information of a Docker image
         """
-        cl = self._make_cluster_object()
-        return cl.docker_image_info(cluster_name, image_name)
+        cl = self.make_cluster_object()
+        return cl.docker_image_info(image_name)
 
     def sync_put(self, local_path, remote_path):
         """
@@ -156,7 +179,11 @@ class Clusterous(object):
 
 
     def launch_environment(self, environment_file):
-        # env_file = environmentfile.EnvironmentFile(environment_file)
+        cl = self.make_cluster_object()
+
+        env_file = environmentfile.EnvironmentFile(environment_file)
+        env = environment.Environment(env_file.spec, env_file.base_path, cl)
+        env.launch_from_spec()
 
     def list_clusters(self, args):
         pass

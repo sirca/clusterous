@@ -96,7 +96,7 @@ class CLIParser(object):
 
     def _docker_image_info(self, args):
         app = self._init_clusterous_object(args)
-        info = app.docker_image_info(args.cluster_name, args.image_name)
+        info = app.docker_image_info(args.image_name)
         if not info:
             print 'Docker image "{0}" does not exist in the Docker registry'.format(args.image_name)
             return 1
@@ -159,7 +159,7 @@ class CLIParser(object):
                 app.docker_build_image(args)
             elif args.subcmd == 'image-info':
                 app = clusterous.Clusterous()
-                app.docker_image_info(args)
+                self._docker_image_info(args)
             elif args.subcmd == 'put':
                 status = self._sync_put(args)
             elif args.subcmd == 'get':
@@ -170,10 +170,9 @@ class CLIParser(object):
                 status = self._rm(args)
             elif args.subcmd == 'workon':
                 status = self._workon(args)
+        # TODO: this exception should not be caught here
         except NoWorkingClusterException as e:
             pass
-        except Exception as e:
-            raise e
 
         return status
 

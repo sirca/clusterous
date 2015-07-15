@@ -4,6 +4,8 @@ import sys
 import os
 import yaml
 import logging
+
+from sshtunnel import SSHTunnelForwarder
 from defaults import get_script
 
 
@@ -32,7 +34,7 @@ class AnsibleHelper(object):
 
         if 'ANSIBLE_HOST_KEY_CHECKING' not in run_env:
             run_env['ANSIBLE_HOST_KEY_CHECKING']='False'
-            
+
         args = ['ansible-playbook', '-i', hosts_file,
                 '--private-key', key_file,
                 '-c', 'ssh',
@@ -43,11 +45,33 @@ class AnsibleHelper(object):
 
         if process.returncode != 0:
             logger.error('Ansible exited with code {0} when running {1}'.format(process.returncode, playbook_file))
-            logger.debug(output)
+            logger.info(output)
             logger.error(error)
             raise AnsibleHelper.AnsibleError(playbook_file, process.returncode, output, error)
 
         return process.returncode
 
+
 class NoWorkingClusterException(Exception):
     pass
+
+class SSHTunnel(object):
+    def __init__(self, host, username, key_file, remote_port, host_port=22):
+        """
+        Returns tuple consisting of local port and sshtunnel SSHTunnelForwarder object.
+        Caller must call stop() on object when finished
+        """
+        logger = logging.getLogger('sshtunnel')
+        logger.setLevel(logging.ERROR)
+
+        self._server = SSHTunnelForwarder((host, host_port),
+                ssh_username=username, ssh_private_key=key_file,
+                remote_bind_address=('127.0.0.1', remote_port), logger=logger)
+
+    def __enter__(self):
+        self._server.start()
+        self.local_port = self._server.local_bind_port
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self._server.stop()
