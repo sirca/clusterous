@@ -81,18 +81,20 @@ class CLIParser(object):
         app = self._init_clusterous_object(args)
         cl = app.make_cluster_object()
         if not args.no_prompt:
-            prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(cl._cluster_name)
+            prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(cl.cluster_name)
             cont = raw_input(prompt_str)
             if cont.lower() != 'y' and cont.lower() != 'yes':
                 return 1
 
         app = self._init_clusterous_object(args)
-        app.terminate_cluster(args.cluster_name)
+        app.terminate_cluster()
         return 0
 
     def _launch_environment(self, args):
         app = self._init_clusterous_object(args)
-        app.launch_environment(args.environment_file)
+        success = app.launch_environment(args.environment_file)
+
+        return 0 if success else 1
 
     def _docker_image_info(self, args):
         app = self._init_clusterous_object(args)

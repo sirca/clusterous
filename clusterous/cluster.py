@@ -50,7 +50,7 @@ class Cluster(object):
                     message = 'No working cluster has been set.'
                     self._logger.error(message)
                     raise NoWorkingClusterException(message)
-            self._cluster_name = cluster_name
+            self.cluster_name = cluster_name
 
     def _get_working_cluster_name(self):
         cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
@@ -105,12 +105,12 @@ class AWSCluster(Cluster):
                 'keypair': self._config['key_pair'],
                 'vpc_id': self._config['vpc_id'],
                 'vpc_subnet_id': self._config['subnet_id'],
-                'cluster_name': self._cluster_name,
-                'security_group_name': defaults.security_group_name_format.format(self._cluster_name),
+                'cluster_name': self.cluster_name,
+                'security_group_name': defaults.security_group_name_format.format(self.cluster_name),
                 'controller_ami_id': defaults.controller_ami_id,
-                'controller_instance_name': defaults.controller_name_format.format(self._cluster_name),
+                'controller_instance_name': defaults.controller_name_format.format(self.cluster_name),
                 'controller_instance_type': defaults.controller_instance_type,
-                'node_name': defaults.node_name_format.format(self._cluster_name),
+                'node_name': defaults.node_name_format.format(self.cluster_name),
                 'node_ami_id': defaults.node_ami_id,
                 'clusterous_s3_bucket': self._config['clusterous_s3_bucket'],
                 'registry_s3_path': defaults.registry_s3_path,
@@ -185,15 +185,13 @@ class AWSCluster(Cluster):
         """
         Initialise security group(s), cluster controller etc
         """
-        self._cluster_name = cluster_name
+        self.cluster_name = cluster_name
         vars_dict = self._ec2_vars_dict()
 
         vars_file = self._make_vars_file(vars_dict)
 
         # Run ansible
 
-        # Due to a possible bug (Ansible=1.9.1), we apparently need to specify
-        # AWS keys in a special environment variable
         env = self._ansible_env_credentials()
         self._logger.debug('Creating security group')
         AnsibleHelper.run_playbook(get_script('ansible/init_01_create_sg.yml'),
@@ -211,7 +209,7 @@ class AWSCluster(Cluster):
                                    env=env)
         self._logger.debug('Launched controller instance at {0}'.format(self._get_controller_ip()))
 
-        # TODO: do this properly when orchestration is implemented
+        # TODO: this is useful for debugging, but remove at a later stage
         self._create_controller_tunnel(8080, 8080, os.path.expanduser(self._config['key_file']))
 
         # Set working cluster
@@ -240,226 +238,203 @@ class AWSCluster(Cluster):
         """
 
         vars_dict = {
-                'cluster_name': self._cluster_name,
+                'cluster_name': self.cluster_name,
                 'dockerfile_path': os.path.dirname(full_path),
                 'dockerfile_folder': os.path.basename(full_path),
                 'image_name': image_name,
                 }
-        try:
-            if not os.path.isdir(full_path):
-                self._logger.error("Error: Folder '{0}' does not exists.".format(full_path))
-                return
 
-            if not os.path.exists("{0}/Dockerfile".format(full_path)):
-                self._logger.error("Error: Folder '{0}' does not have a Dockerfile.".format(full_path))
-                return
+        if not os.path.isdir(full_path):
+            self._logger.error("Folder '{0}' does not exist".format(full_path))
+            return False
 
-            vars_file = self._make_vars_file(vars_dict)
-            self._logger.info('Started building docker image')
-            AnsibleHelper.run_playbook(defaults.get_script('ansible/docker_01_build_image.yml'),
-                                       vars_file.name,
-                                       self._config['key_file'],
-                                       env=self._ansible_env_credentials(),
-                                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
-            vars_file.close()
-            self._logger.info('Finished building docker image')
-        except Exception as e:
-            self._logger.error(e)
-            raise e
+        if not os.path.exists("{0}/Dockerfile".format(full_path)):
+            self._logger.error("Folder '{0}' does not have a Dockerfile".format(full_path))
+            return False
+
+        vars_file = self._make_vars_file(vars_dict)
+        self._logger.info('Started building docker image {0}'.format(image_name))
+        AnsibleHelper.run_playbook(defaults.get_script('ansible/docker_01_build_image.yml'),
+                                   vars_file.name,
+                                   self._config['key_file'],
+                                   env=self._ansible_env_credentials(),
+                                   hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+        vars_file.close()
+        self._logger.info('Finished building docker image')
+        return True
 
     def docker_image_info(self, image_name_str):
         """
         Gets information of a Docker image
         """
-        try:
-            if ':' in image_name_str:
-                image_name, tag_name = image_name_str.split(':', 1)
-            else:
-                image_name = image_name_str
-                tag_name = 'latest'
+        if ':' in image_name_str:
+            image_name, tag_name = image_name_str.split(':', 1)
+        else:
+            image_name = image_name_str
+            tag_name = 'latest'
 
-            image_info = {}
-            # TODO: rewrite to use make HTTP calls directly
-            with paramiko.SSHClient() as ssh:
-                logging.getLogger('paramiko').setLevel(logging.WARNING)
-                ssh.load_system_host_keys()
-                ssh.connect(hostname = self._get_controller_ip(),
-                            username = 'root',
-                            key_filename = os.path.expanduser(self._config['key_file']))
+        image_info = {}
+        # TODO: rewrite to use make HTTP calls directly
+        with paramiko.SSHClient() as ssh:
+            logging.getLogger('paramiko').setLevel(logging.WARNING)
+            ssh.load_system_host_keys()
+            ssh.connect(hostname = self._get_controller_ip(),
+                        username = 'root',
+                        key_filename = os.path.expanduser(self._config['key_file']))
 
-                # get image_id
-                cmd = 'curl registry:5000/v1/repositories/library/{0}/tags/{1}'.format(image_name, tag_name)
-                stdin, stdout, stderr = ssh.exec_command(cmd)
-                image_id = stdout.read().replace('"','')
-                if 'Tag not found' in image_id:
-                    return None
+            # get image_id
+            cmd = 'curl registry:5000/v1/repositories/library/{0}/tags/{1}'.format(image_name, tag_name)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            image_id = stdout.read().replace('"','')
+            if 'Tag not found' in image_id:
+                return None
 
-                # get image_info
-                cmd = 'curl registry:5000/v1/images/{0}/json'.format(image_id)
-                stdin, stdout, stderr = ssh.exec_command(cmd)
-                json_results = json.loads(stdout.read())
-                image_info = { 'image_name': image_name,
-                               'tag_name': tag_name,
-                               'image_id': image_id,
-                               'author': json_results.get('author',''),
-                               'created': json_results.get('created','')
-                               }
-            return image_info
-        except Exception as e:
-            self._logger.error(e)
-            raise e
+            # get image_info
+            cmd = 'curl registry:5000/v1/images/{0}/json'.format(image_id)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            json_results = json.loads(stdout.read())
+            image_info = { 'image_name': image_name,
+                           'tag_name': tag_name,
+                           'image_id': image_id,
+                           'author': json_results.get('author',''),
+                           'created': json_results.get('created','')
+                           }
+        return image_info
 
     def sync_put(self, local_path, remote_path):
         """
         Sync local folder to the cluster
         """
-        try:
-            # Check local path
-            src_path = os.path.abspath(local_path)
-            if not os.path.isdir(src_path):
-                message = "Error: Folder '{0}' does not exists.".format(src_path)
-                return (False, message)
+        # Check local path
+        src_path = os.path.abspath(local_path)
+        if not os.path.isdir(src_path):
+            message = "Folder '{0}' does not exist".format(src_path)
+            return (False, message)
 
-            dst_path = '/home/data/{0}'.format(remote_path)
-            vars_dict={
-                    'src_path': src_path,
-                    'dst_path': dst_path,
-                    }
-            vars_file = self._make_vars_file(vars_dict)
-            self._logger.info('Started sync folder')
-            AnsibleHelper.run_playbook(defaults.get_script('ansible/file_01_sync_put.yml'),
-                                       vars_file.name,
-                                       self._config['key_file'],
-                                       env=self._ansible_env_credentials(),
-                                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
-            vars_file.close()
-            self._logger.info('Finished sync folder')
-            return (True, 'Ok')
+        dst_path = '/home/data/{0}'.format(remote_path)
+        vars_dict={
+                'src_path': src_path,
+                'dst_path': dst_path,
+                }
+        vars_file = self._make_vars_file(vars_dict)
+        self._logger.info('Started sync folder')
+        AnsibleHelper.run_playbook(defaults.get_script('ansible/file_01_sync_put.yml'),
+                                   vars_file.name,
+                                   self._config['key_file'],
+                                   env=self._ansible_env_credentials(),
+                                   hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+        vars_file.close()
+        self._logger.info('Finished sync folder')
+        return (True, 'Ok')
 
-        except Exception as e:
-            self._logger.error(e)
-            raise e
 
     def sync_get(self, local_path, remote_path):
         """
         Sync folder from the cluster to local
         """
-        try:
-            # Check local path
-            dst_path = os.path.abspath(local_path)
-            if not os.path.isdir(dst_path):
-                message = "Error: Folder '{0}' does not exist.".format(dst_path)
+        # Check local path
+        dst_path = os.path.abspath(local_path)
+        if not os.path.isdir(dst_path):
+            message = "Folder '{0}' does not exist".format(dst_path)
+            return (False, message)
+
+        # Check remote path
+        remote_path = '/home/data/{0}'.format(remote_path)
+        with paramiko.SSHClient() as ssh:
+            logging.getLogger('paramiko').setLevel(logging.WARNING)
+            ssh.load_system_host_keys()
+            ssh.connect(hostname = self._get_controller_ip(), username = 'root',
+                        key_filename = os.path.expanduser(self._config['key_file']))
+
+            # check if folder exists
+            cmd = "ls -d '{0}'".format(remote_path)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            output_content = stdout.read()
+            if 'cannot access' in stderr.read():
+                message = "Error: Folder '{0}' does not exists.".format(remote_path)
                 return (False, message)
 
-            # Check remote path
-            remote_path = '/home/data/{0}'.format(remote_path)
-            with paramiko.SSHClient() as ssh:
-                logging.getLogger('paramiko').setLevel(logging.WARNING)
-                ssh.load_system_host_keys()
-                ssh.connect(hostname = self._get_controller_ip(), username = 'root',
-                            key_filename = os.path.expanduser(self._config['key_file']))
-
-                # check if folder exists
-                cmd = "ls -d '{0}'".format(remote_path)
-                stdin, stdout, stderr = ssh.exec_command(cmd)
-                output_content = stdout.read()
-                if 'cannot access' in stderr.read():
-                    message = "Error: Folder '{0}' does not exists.".format(remote_path)
-                    return (False, message)
-
-            src_path = remote_path
-            vars_dict={
-                    'src_path': src_path,
-                    'dst_path': dst_path,
-                    }
-            vars_file = self._make_vars_file(vars_dict)
-            self._logger.info('Started sync folder')
-            AnsibleHelper.run_playbook(defaults.get_script('ansible/file_02_sync_get.yml'),
-                                       vars_file.name,
-                                       self._config['key_file'],
-                                       env=self._ansible_env_credentials(),
-                                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
-            vars_file.close()
-            self._logger.info('Finished sync folder')
-            return (True, 'Ok')
-
-        except Exception as e:
-            self._logger.error(e)
-            raise e
+        src_path = remote_path
+        vars_dict={
+                'src_path': src_path,
+                'dst_path': dst_path,
+                }
+        vars_file = self._make_vars_file(vars_dict)
+        self._logger.info('Started sync folder')
+        AnsibleHelper.run_playbook(defaults.get_script('ansible/file_02_sync_get.yml'),
+                                   vars_file.name,
+                                   self._config['key_file'],
+                                   env=self._ansible_env_credentials(),
+                                   hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+        vars_file.close()
+        self._logger.info('Finished sync folder')
+        return (True, 'Ok')
 
     def ls(self, remote_path):
         """
         List content of a folder on the on cluster
         """
-        try:
-            with paramiko.SSHClient() as ssh:
-                logging.getLogger('paramiko').setLevel(logging.WARNING)
-                ssh.load_system_host_keys()
-                ssh.connect(hostname = self._get_controller_ip(), username = 'root',
-                            key_filename = os.path.expanduser(self._config['key_file']))
+        with paramiko.SSHClient() as ssh:
+            logging.getLogger('paramiko').setLevel(logging.WARNING)
+            ssh.load_system_host_keys()
+            ssh.connect(hostname = self._get_controller_ip(), username = 'root',
+                        key_filename = os.path.expanduser(self._config['key_file']))
 
-                remote_path = '/home/data/{0}'.format(remote_path)
-                cmd = "ls -al '{0}'".format(remote_path)
-                stdin, stdout, stderr = ssh.exec_command(cmd)
-                output_content = stdout.read()
-                if 'cannot access' in stderr.read():
-                    message = "Error: Folder '{0}' does not exists.".format(remote_path)
-                    return (False, message)
+            remote_path = '/home/data/{0}'.format(remote_path)
+            cmd = "ls -al '{0}'".format(remote_path)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            output_content = stdout.read()
+            if 'cannot access' in stderr.read():
+                message = "Error: Folder '{0}' does not exists.".format(remote_path)
+                return (False, message)
 
-                return (True, output_content)
+            return (True, output_content)
 
-        except Exception as e:
-            self._logger.error(e)
-            raise e
 
     def rm(self, remote_path):
         """
         Delete content of a folder on the on cluster
         """
-        try:
-            with paramiko.SSHClient() as ssh:
-                logging.getLogger('paramiko').setLevel(logging.WARNING)
-                ssh.load_system_host_keys()
-                ssh.connect(hostname = self._get_controller_ip(), username = 'root',
-                            key_filename = os.path.expanduser(self._config['key_file']))
+        with paramiko.SSHClient() as ssh:
+            logging.getLogger('paramiko').setLevel(logging.WARNING)
+            ssh.load_system_host_keys()
+            ssh.connect(hostname = self._get_controller_ip(), username = 'root',
+                        key_filename = os.path.expanduser(self._config['key_file']))
 
-                # check if folder exists
-                remote_path = '/home/data/{0}'.format(remote_path)
-                cmd = "ls -d '{0}'".format(remote_path)
-                stdin, stdout, stderr = ssh.exec_command(cmd)
-                output_content = stdout.read()
-                if 'cannot access' in stderr.read():
-                    message = "Error: Folder '{0}' does not exists.".format(remote_path)
-                    return (False, message)
+            # check if folder exists
+            remote_path = '/home/data/{0}'.format(remote_path)
+            cmd = "ls -d '{0}'".format(remote_path)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            output_content = stdout.read()
+            if 'cannot access' in stderr.read():
+                message = "Error: Folder '{0}' does not exists.".format(remote_path)
+                return (False, message)
 
-                cmd = "rm -fr '{0}'".format(remote_path)
-                stdin, stdout, stderr = ssh.exec_command(cmd)
-                output_content = stdout.read()
-                # TODO: More error checking may need to be added
-                if 'cannot access' in stderr.read():
-                    message = "Error: Failed to delete folder '{0}'.".format(remote_path)
-                    return (False, message)
+            cmd = "rm -fr '{0}'".format(remote_path)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            output_content = stdout.read()
+            # TODO: More error checking may need to be added
+            if 'cannot access' in stderr.read():
+                message = "Error: Failed to delete folder '{0}'.".format(remote_path)
+                return (False, message)
 
-                return (True, 'Ok')
+            return (True, 'Ok')
 
-        except Exception as e:
-            self._logger.error(e)
-            raise e
 
     def workon(self):
         """
         Sets a working cluster
         """
         # Getting cluster info
-        instances = self._get_instances(self._cluster_name)
+        instances = self._get_instances(self.cluster_name)
         data = {}
         for instance in instances:
-            if defaults.controller_name_format.format(self._cluster_name) in instance.tags['Name']:
+            if defaults.controller_name_format.format(self.cluster_name) in instance.tags['Name']:
                 data['controller']={'ip': str(instance.ip_address)}
-                data['cluster_name']=self._cluster_name
+                data['cluster_name']=self.cluster_name
 
         if not data:
-            return (False, 'Cluster "{0}" does not exist'.format(self._cluster_name))
+            return (False, 'Cluster "{0}" does not exist'.format(self.cluster_name))
 
         # Write cluster_info
         cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
@@ -478,7 +453,7 @@ class AWSCluster(Cluster):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
                     aws_secret_access_key=self._config['secret_access_key'])
-        instance_list = self._get_instances(self._cluster_name)
+        instance_list = self._get_instances(self.cluster_name)
         num_instances = len(instance_list)
         instances = [ i.id for i in instance_list ]
 
@@ -492,24 +467,24 @@ class AWSCluster(Cluster):
 
         success = retry_till_true(instances_terminated, 2)
         if not success:
-            self._logger.error('Timeout while trying to terminate instances in {0}'.format(self._cluster_name))
+            self._logger.error('Timeout while trying to terminate instances in {0}'.format(self.cluster_name))
         else:
             self._logger.debug('{0} instances terminated'.format(num_instances))
 
         # Delete EBS volume
-        volumes = conn.get_all_volumes(filters={'tag:Name':self._cluster_name})
+        volumes = conn.get_all_volumes(filters={'tag:Name':self.cluster_name})
         volumes_deleted = [ v.delete() for v in volumes ]
         volume_ids_str = ','.join([ v.id for v in volumes])
         if False in volumes_deleted:
-            self._logger.error('Unable to delete volume in {0}: {1}'.format(self._cluster_name, volume_ids_str))
+            self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, volume_ids_str))
         else:
             self._logger.debug('Deleted shared volume: {0}'.format(volume_ids_str))
 
         # Delete security group
-        sg = conn.get_all_security_groups(filters={'tag:Name':'{0}-sg'.format(self._cluster_name)})
+        sg = conn.get_all_security_groups(filters={'tag:Name':'{0}-sg'.format(self.cluster_name)})
         sg_deleted = [ g.delete() for g in sg ]
         if False in sg_deleted:
-            self._logger.error('Unable to delete security group for {0}'.format(self._cluster_name))
+            self._logger.error('Unable to delete security group for {0}'.format(self.cluster_name))
         else:
             self._logger.debug('Deleted security group')
 

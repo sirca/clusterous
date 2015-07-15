@@ -30,6 +30,8 @@ remote_host_vars_file = 'vars.yml'
 node_tag_status_uninitialized = 'uninitialized'
 node_tag_status_initialized = 'initialized'
 
+mesos_port = 5050
+
 # How many seconds to wait for all Marathon applications to reach "started" state
 app_launch_start_timeout = 600
 

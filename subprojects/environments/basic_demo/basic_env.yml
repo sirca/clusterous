@@ -19,14 +19,13 @@ environment:
       cmd: "/bin/bash /home/data/basic_python/launch_master.sh"
       ports: "31000"
 
-    notebook:
+    worker-thingy:
       machine: worker
       depends: master   # Marathon constrait; launch only after controller is running
-      cpu: 1
-      count: auto 
+      cpu: 0.6
+      count: auto
       image: registry:5000/basic-python
       cmd: "/bin/bash /home/data/basic_python/launch_worker.sh"
-      ports: "31001"
 
   expose_tunnel:      # create an ssh tunnel
     service: 31080:master:8080    # source port 31080 on master to 8080 on localhost

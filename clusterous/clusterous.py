@@ -174,16 +174,22 @@ class Clusterous(object):
 
     def terminate_cluster(self):
         cl = self.make_cluster_object()
-        self._logger.info('Terminating cluster {0}'.format(cl._cluster_name))
+        self._logger.info('Terminating cluster {0}'.format(cl.cluster_name))
         cl.terminate_cluster()
 
 
     def launch_environment(self, environment_file):
         cl = self.make_cluster_object()
 
-        env_file = environmentfile.EnvironmentFile(environment_file)
-        env = environment.Environment(env_file.spec, env_file.base_path, cl)
-        env.launch_from_spec()
+        try:
+            env_file = environmentfile.EnvironmentFile(environment_file)
+            env = environment.Environment(env_file.spec, env_file.base_path, cl)
+            env.launch_from_spec()
+        except environment.EnvironmentError as e:
+            self._logger.error(e)
+            self._logger.error('Failed to launch environment')
+            return False
+        return True
 
     def list_clusters(self, args):
         pass
