@@ -14,6 +14,7 @@
     go get github.com/tools/godep; \
     go get github.com/mesosphere/mesos-dns; \
     cd $GOPATH/src/github.com/mesosphere/mesos-dns; \
+    git checkout tags/v0.1.2; \
     make restoredeps build; \
     mv $GOPATH/src/github.com/mesosphere/mesos-dns /opt; \
     rm -fr /opt/go"
