@@ -8,9 +8,9 @@ security_group_name: "{{ cluster_name }}-sg"
 billing_tag: "BDKD+BDKD_CC+dev"
 
 # AMI
-ami_controller: "ami-ed4d08d7"
-ami_node: "ami-4b4d0871"
-ami_elk: "ami-494d0873"
+ami_controller: "ami-d3e4a3e9"
+ami_node: "ami-d1e4a3eb"
+ami_elk: "ami-d7e4a3ed"
 
 # Instances
 private_ip_controller: 10.0.80.40
