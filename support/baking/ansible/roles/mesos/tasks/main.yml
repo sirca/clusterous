@@ -7,7 +7,7 @@
   yum: name=http://repos.mesosphere.io/el/7/noarch/RPMS/mesosphere-el-repo-7-1.noarch.rpm state=present
   when: result.stat.exists == false
 - name: install the mesos package
-  yum: pkg=mesos state=present
+  yum: pkg=mesos-0.22.1 state=present
   when: result.stat.exists == false
 - name: init mesos-master off
   service: name=mesos-master state=stopped enabled=no
