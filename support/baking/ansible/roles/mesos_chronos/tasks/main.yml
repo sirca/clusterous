@@ -4,7 +4,7 @@
   stat: path=/usr/bin/chronos
   register: result
 - name: installing chronos
-  yum: pkg=chronos state=present
+  yum: pkg=chronos-2.3.4 state=present
   when: result.stat.exists == false
 - name: start chronos
   service: name=chronos state=started enabled=yes

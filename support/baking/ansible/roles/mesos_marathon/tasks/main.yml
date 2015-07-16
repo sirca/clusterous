@@ -4,7 +4,7 @@
   stat: path=/usr/bin/marathon
   register: result
 - name: installing marathon
-  yum: pkg=marathon state=present
+  yum: pkg=marathon-0.8.2 state=present
   when: result.stat.exists == false
 - name: start marathon
   service: name=marathon state=started enabled=yes
