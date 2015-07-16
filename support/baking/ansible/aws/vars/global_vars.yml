@@ -8,7 +8,7 @@ security_group_name: "{{ cluster_name }}-sg"
 billing_tag: "BDKD+BDKD_CC+dev"
 
 # Baking
-ami_version: "20150626"
+ami_version: "20150716"
 base_image: "ami-a38be799"
 instance_name_controller: "{{ cluster_name }}-controller"
 instance_name_node: "{{ cluster_name }}-node"
