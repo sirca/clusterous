@@ -152,10 +152,10 @@ class Clusterous(object):
             env_file = environmentfile.EnvironmentFile(environment_file)
             env = environment.Environment(env_file.spec, env_file.base_path, cl)
             success, message = env.launch_from_spec()
-        except environment.EnvironmentError as e:
+        except environment.Environment.LaunchError as e:
             self._logger.error(e)
             self._logger.error('Failed to launch environment')
-            return False
+            return False, ''
 
         return success, message
 

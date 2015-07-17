@@ -28,5 +28,5 @@ environment:
       cmd: "/bin/bash /home/data/basic_python/launch_worker.sh"
 
   expose_tunnel:      # create an ssh tunnel
-    service: 8888:master:31000    # source port 31080 on master to 8080 on localhost
+    service: 8888:master:31000    # source port 31000 on master to 8888 on localhost
     message: "To access the master, use this URL:"

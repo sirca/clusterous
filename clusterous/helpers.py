@@ -68,10 +68,16 @@ class SSHTunnel(object):
                 ssh_username=username, ssh_private_key=key_file,
                 remote_bind_address=('127.0.0.1', remote_port), logger=logger)
 
-    def __enter__(self):
+    def connect(self):
         self._server.start()
         self.local_port = self._server.local_bind_port
+
+    def close(self):
+        self._server.stop()
+
+    def __enter__(self):
+        self.connect()
         return self
 
     def __exit__(self, type, value, traceback):
-        self._server.stop()
+        self.close()

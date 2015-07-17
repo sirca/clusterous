@@ -199,6 +199,7 @@ class AWSCluster(Cluster):
 
         ssh_sock_file = '/tmp/clusterous_tunnel_%h_{0}.sock'.format(controller_port)
         create_cmd = ('ssh -4 -i {0} -f -N -M -S {1} -o ExitOnForwardFailure=yes ' +
+              '-o StrictHostKeyChecking=no ' +
               'root@{2} -L {3}:127.0.0.1:{4}').format(remote_key_path,
               ssh_sock_file, remote_host, controller_port,
               remote_port)
@@ -215,7 +216,6 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(destroy_cmd)
         # Create tunnel
         stdin, stdout, stderr = ssh.exec_command(create_cmd)
-
 
         ssh.close()
 

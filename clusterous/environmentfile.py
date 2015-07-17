@@ -86,7 +86,6 @@ class EnvironmentFile(object):
             component_schema = {
                                 'machine': (True,),
                                 'cpu': (True,),
-                                'mem': (False, 'auto'),
                                 'image': (True,),
                                 'cmd': (True,),
                                 'attach_volume': (False, 'yes'),
