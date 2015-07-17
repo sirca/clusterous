@@ -8,6 +8,8 @@ Module for storing default and static values
 DEFAULT_CONFIG_FILE = '~/.clusterous.yml'
 
 local_config_dir = '~/.clusterous'
+local_session_data_dir = local_config_dir + '/' + 'session'
+
 current_controller_ip_file = local_config_dir + '/' + 'current_controller'
 CLUSTER_INFO_FILE = local_config_dir + '/' + 'cluster_info.yml'
 

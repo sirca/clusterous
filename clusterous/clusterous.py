@@ -21,17 +21,11 @@ class Clusterous(object):
     Clusterous application
     """
 
-    class Verbosity:
-        DEBUG = 'DEBUG'
-        NORMAL = 'INFO'
-        QUIET = 'WARNING'
-
-    def __init__(self, config_file=defaults.DEFAULT_CONFIG_FILE, log_level=Verbosity.NORMAL):
+    def __init__(self, config_file=defaults.DEFAULT_CONFIG_FILE):
         self.clusters = []
         self._config = {}
 
-        self._configure_logger(log_level)
-        self._logger = logging.getLogger()
+        self._logger = logging.getLogger(__name__)
 
         try:
             self._read_config(config_file)
@@ -39,36 +33,9 @@ class Clusterous(object):
             self._logger.error(e)
             sys.exit(e)
 
-        logging.getLogger('boto').setLevel(logging.CRITICAL)
-
         conf_dir = os.path.expanduser(defaults.local_config_dir)
         if not os.path.exists(conf_dir):
             os.makedirs(conf_dir)
-
-    def _configure_logger(self, level):
-        logging_dict = {
-                            'version': 1,
-                            'disable_existing_loggers': False,
-                            'formatters': {
-                                'standard': {
-                                    'format': '%(message)s'
-                                },
-                            },
-                            'handlers': {
-                                'default': {
-                                    'level': level,
-                                    'class':'logging.StreamHandler',
-                                },
-                            },
-                            'loggers': {
-                                '': {
-                                    'handlers': ['default'],
-                                    'level': level,
-                                    'propagate': True
-                                },
-                            }
-                        }
-        logging.config.dictConfig(logging_dict)
 
     def _read_config(self, config_file):
         """
@@ -184,12 +151,13 @@ class Clusterous(object):
         try:
             env_file = environmentfile.EnvironmentFile(environment_file)
             env = environment.Environment(env_file.spec, env_file.base_path, cl)
-            env.launch_from_spec()
+            success, message = env.launch_from_spec()
         except environment.EnvironmentError as e:
             self._logger.error(e)
             self._logger.error('Failed to launch environment')
             return False
-        return True
+
+        return success, message
 
     def list_clusters(self, args):
         pass

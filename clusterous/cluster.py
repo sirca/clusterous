@@ -5,6 +5,7 @@ import os
 import yaml
 import logging
 import time
+import shutil
 import json
 
 import boto.ec2
@@ -42,7 +43,7 @@ class Cluster(object):
     def __init__(self, config, cluster_name=None, cluster_name_required=True):
         self._config = config
         self._running = False
-        self._logger = logging.getLogger()
+        self._logger = logging.getLogger(__name__)
         if cluster_name_required:
             if cluster_name is None:
                 cluster_name = self._get_working_cluster_name()
@@ -86,13 +87,8 @@ class Cluster(object):
     def launch_nodes(self, num_nodes, instance_type):
         pass
 
-    # TODO: do this properly when orchestration is implemented
-    def _create_controller_tunnel(self, remote_port, local_port, key_file):
-        args = ['ssh', '-i', key_file, '-N', '-f',
-                'root@{0}'.format(self._get_controller_ip()),
-                '-L', '{0}:127.0.0.1:{1}'.format(remote_port, local_port)]
-        subprocess.call(args)
-
+    def _ssh_to_controller(self):
+        raise NotImplementedError('SSH connections are specific to cloud providers')
 
 
 class AWSCluster(Cluster):
@@ -173,6 +169,20 @@ class AWSCluster(Cluster):
         instance_list = conn.get_only_instances(filters=instance_filters)
         return instance_list
 
+    def _ssh_to_controller(self):
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.load_system_host_keys()
+            ssh.connect(hostname = self._get_controller_ip(),
+                        username = 'root',
+                        key_filename = os.path.expanduser(self._config['key_file']))
+        except paramiko.AuthenticationException as e:
+            self._logger.error('Could not connect to controller')
+            raise e
+
+        return ssh
+
+
     def make_controller_tunnel(self, remote_port):
         """
         Returns helpers.SSHTunnel object connected to remote_port on controller
@@ -180,12 +190,78 @@ class AWSCluster(Cluster):
         return SSHTunnel(self._get_controller_ip(), 'root',
                 os.path.expanduser(self._config['key_file']), remote_port)
 
+    def make_tunnel_on_controller(self, controller_port, remote_host, remote_port):
+        """
+        Create an ssh tunnel from the controller to a cluster node. Note that this
+        doesn't expose a port on the local machine
+        """
+        remote_key_path = '/root/{0}'.format(os.path.basename(self._config['key_file']))
+
+        ssh_sock_file = '/tmp/clusterous_tunnel_%h_{0}.sock'.format(controller_port)
+        create_cmd = ('ssh -4 -i {0} -f -N -M -S {1} -o ExitOnForwardFailure=yes ' +
+              'root@{2} -L {3}:127.0.0.1:{4}').format(remote_key_path,
+              ssh_sock_file, remote_host, controller_port,
+              remote_port)
+
+
+        destroy_cmd = 'ssh -S {0} -O exit {1}'.format(ssh_sock_file, remote_host)
+
+        ssh = self._ssh_to_controller()
+        sftp = ssh.open_sftp()
+        sftp.put(os.path.expanduser(self._config['key_file']), remote_key_path)
+        sftp.close()
+
+        # First ensure that any previously created tunnel is destroyed
+        stdin, stdout, stderr = ssh.exec_command(destroy_cmd)
+        # Create tunnel
+        stdin, stdout, stderr = ssh.exec_command(create_cmd)
+
+
+        ssh.close()
+
+    def create_permanent_tunnel_to_controller(self, remote_port, local_port):
+        """
+        Creates a persistent  SSH tunnel from local machine to controller by running
+        the ssh command in the background
+        """
+
+        key_file = os.path.expanduser(self._config['key_file'])
+
+        # Temporary file containing ssh socket data
+        ssh_sock_file = '{0}/clusterous_tunnel_%h_{1}.sock'.format(
+                        os.path.expanduser(defaults.local_session_data_dir), local_port)
+
+        # Ensure that any previously created tunnel is destroyed
+        reset_cmd = ['ssh', '-S', ssh_sock_file, '-O', 'exit',
+                self._get_controller_ip()]
+
+        # Normal tunnel command
+        connect_cmd = ['ssh', '-i', key_file, '-N', '-f', '-M',
+                '-S', ssh_sock_file, '-o', 'ExitOnForwardFailure=yes',
+                'root@{0}'.format(self._get_controller_ip()),
+                '-L', '{0}:127.0.0.1:{1}'.format(local_port, remote_port)]
+
+
+        # If socket file doesn't exist, it will return with an error. This is normal
+        process = subprocess.Popen(reset_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
+        output, error = process.communicate()
+
+        return_code = subprocess.call(connect_cmd)
+
+        return True if return_code == 0 else False
 
     def init_cluster(self, cluster_name):
         """
         Initialise security group(s), cluster controller etc
         """
         self.cluster_name = cluster_name
+
+        # Create dirs
+        for directory in [defaults.local_config_dir, defaults.local_session_data_dir]:
+            d = os.path.expanduser(directory)
+            if not os.path.exists(d):
+                os.makedirs(d)
+
         vars_dict = self._ec2_vars_dict()
 
         vars_file = self._make_vars_file(vars_dict)
@@ -210,7 +286,7 @@ class AWSCluster(Cluster):
         self._logger.debug('Launched controller instance at {0}'.format(self._get_controller_ip()))
 
         # TODO: this is useful for debugging, but remove at a later stage
-        self._create_controller_tunnel(8080, 8080, os.path.expanduser(self._config['key_file']))
+        self.create_permanent_tunnel_to_controller(8080, 8080)
 
         # Set working cluster
         self.workon()
@@ -228,7 +304,7 @@ class AWSCluster(Cluster):
         vars_dict['instance_type'] = instance_type
         vars_dict['node_tag'] = node_tag
 
-        self._logger.debug('Adding {0} nodes tagged "{1}" to cluster...'.format(num_nodes, node_tag))
+        self._logger.debug('Adding {0} nodes named "{1}" to cluster...'.format(num_nodes, node_tag))
         self._run_remote(vars_dict, 'create_nodes.yml')
 
 
@@ -276,7 +352,6 @@ class AWSCluster(Cluster):
         image_info = {}
         # TODO: rewrite to use make HTTP calls directly
         with paramiko.SSHClient() as ssh:
-            logging.getLogger('paramiko').setLevel(logging.WARNING)
             ssh.load_system_host_keys()
             ssh.connect(hostname = self._get_controller_ip(),
                         username = 'root',
@@ -341,7 +416,6 @@ class AWSCluster(Cluster):
         # Check remote path
         remote_path = '/home/data/{0}'.format(remote_path)
         with paramiko.SSHClient() as ssh:
-            logging.getLogger('paramiko').setLevel(logging.WARNING)
             ssh.load_system_host_keys()
             ssh.connect(hostname = self._get_controller_ip(), username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
@@ -375,7 +449,6 @@ class AWSCluster(Cluster):
         List content of a folder on the on cluster
         """
         with paramiko.SSHClient() as ssh:
-            logging.getLogger('paramiko').setLevel(logging.WARNING)
             ssh.load_system_host_keys()
             ssh.connect(hostname = self._get_controller_ip(), username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
@@ -396,7 +469,6 @@ class AWSCluster(Cluster):
         Delete content of a folder on the on cluster
         """
         with paramiko.SSHClient() as ssh:
-            logging.getLogger('paramiko').setLevel(logging.WARNING)
             ssh.load_system_host_keys()
             ssh.connect(hostname = self._get_controller_ip(), username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
@@ -491,5 +563,6 @@ class AWSCluster(Cluster):
         # Delete cluster info
         os.remove(os.path.expanduser(defaults.CLUSTER_INFO_FILE))
         os.remove(os.path.expanduser(defaults.current_controller_ip_file))
+        shutil.rmtree(os.path.expanduser(defaults.local_session_data_dir))
 
         return True

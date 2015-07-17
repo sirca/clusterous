@@ -2,6 +2,7 @@ import sys
 import os
 import defaults
 import argparse
+import logging
 
 import clusterous
 from helpers import NoWorkingClusterException
@@ -13,6 +14,39 @@ class CLIParser(object):
 
     def __init__(self):
         pass
+
+    def _configure_logging(self, level='INFO'):
+        logging_dict = {
+                            'version': 1,
+                            'disable_existing_loggers': False,
+                            'formatters': {
+                                'standard': {
+                                    'format': '%(message)s'
+                                },
+                            },
+                            'handlers': {
+                                'default': {
+                                    'level': level,
+                                    'class':'logging.StreamHandler',
+                                },
+                            },
+                            'loggers': {
+                                '': {
+                                    'handlers': ['default'],
+                                    'level': level,
+                                    'propagate': True
+                                },
+                            }
+                        }
+
+        logging.config.dictConfig(logging_dict)
+
+        # Disable logging for various libraries
+        # TODO: is it possible to do this in a simpler way?
+        libs = ['boto', 'paramiko', 'requests', 'marathon']
+        for l in libs:
+            logging.getLogger(l).setLevel(logging.WARNING)
+
 
     def _create_args(self, parser):
         parser.add_argument('--verbose', dest='verbose', action='store_true',
@@ -65,10 +99,11 @@ class CLIParser(object):
     def _init_clusterous_object(self, args):
         app = None
         if args.verbose:
-            app = clusterous.Clusterous(log_level=clusterous.Clusterous.Verbosity.DEBUG)
+            self._configure_logging('DEBUG')
         else:
-            app = clusterous.Clusterous()
+            self._configure_logging('INFO')
 
+        app = clusterous.Clusterous()
         return app
 
     def _workon(self, args):
@@ -92,7 +127,11 @@ class CLIParser(object):
 
     def _launch_environment(self, args):
         app = self._init_clusterous_object(args)
-        success = app.launch_environment(args.environment_file)
+        success, message = app.launch_environment(args.environment_file)
+
+        if success and message:
+            print '\nMessage from environment:'
+            print message
 
         return 0 if success else 1
 
@@ -146,8 +185,6 @@ class CLIParser(object):
         args = parser.parse_args(argv)
 
         status = 0
-
-
         try:
             if args.subcmd == 'start':
                 app = self._init_clusterous_object(args)

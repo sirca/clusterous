@@ -25,12 +25,7 @@ class Environment(object):
         self._spec = spec
         self._base_path = base_path
         self._cluster = cluster
-        self._logger = logging.getLogger()
-
-        # Disable logging for other libraries
-        logging.getLogger('requests').setLevel(logging.WARNING)
-        logging.getLogger('marathon').setLevel(logging.WARNING)
-        logging.getLogger('paramiko').setLevel(logging.WARNING)
+        self._logger = logging.getLogger(__name__)
 
     def _get_path(self, rel_path):
         return os.path.join(self._base_path, rel_path)
@@ -76,10 +71,26 @@ class Environment(object):
                 raise EnvironmentError(message)
 
         # Do the final checks and perform actual launch
-        self._launch_components(component_resources)
+        success = self._launch_components(component_resources)
 
-        return True
+        # Launch wasn't (completely) succesful
+        if not success:
+            return False
 
+        message = ''
+        # Expose tunnel
+        if 'expose_tunnel' in self._spec['environment']:
+            message = self._expose_tunnel(self._spec['environment']['expose_tunnel'])
+
+        return True, message
+
+    def get_component_hostname(self, component_name):
+        """
+        Given a component name (corresponding to a Marathon "app" name),
+        returns a hostname that will be resolved by mesos-dns
+        """
+        stripped = component_name.strip('/')
+        return '{0}.marathon.mesos'.format(stripped)
 
     def _get_mesos_data(self):
         """
@@ -351,16 +362,52 @@ class Environment(object):
                 elapsed_time = time.time() - start_time
 
 
+            success = True
             launched = ', '.join(running_containers)
 
-            if elapsed_time >= defaults.app_launch_start_timeout:
-                self._logger.warning('Timed out waiting for components to launch')
-                self._logger.warning('One or more containers are either have problems '
-                                     'or are are taking very long to start')
+        if elapsed_time >= defaults.app_launch_start_timeout:
+            self._logger.warning('Timed out waiting for components to launch')
+            self._logger.warning('One or more containers are either have problems '
+                                 'or are are taking very long to start')
+            success = False
 
-            if len(running_containers) < expected_containers:
-                self._logger.warning('Could not launch all components')
+        if len(running_containers) < expected_containers:
+            self._logger.warning('Could not launch all components')
+            success = False
 
-            self._logger.info('Launched {0} components: {1}'.format(len(running_containers), launched))
+        self._logger.info('Launched {0} components: {1}'.format(len(running_containers), launched))
 
-            return True
+        return success
+
+
+    def _expose_tunnel(self, tunnel_info):
+        parts = tunnel_info['service'].split(':')
+
+        # Validate port value
+        if ( len(parts) != 3 or
+             not parts[0].isdigit() or
+             not parts[2].isdigit()):
+            raise EnvironmentError('Invalid syntax: "{0}" Tunnel service must be in '
+                                   'the format "localport:component:remoteport"'.format(
+                                   tunnel_info['service']))
+
+        local_port, component_name, remote_port = parts
+
+        hostname = self.get_component_hostname(component_name)
+
+        # Make tunnel from controller to node
+        self._cluster.make_tunnel_on_controller(remote_port, hostname, remote_port)
+
+        # Make tunnel from localhost to controller
+        success = self._cluster.create_permanent_tunnel_to_controller(remote_port, local_port)
+
+        if not success:
+            raise EnvironmentException('Could not create tunnel')
+
+        # Make message
+        message = ''
+        if 'message' in tunnel_info:
+            url = 'http://localhost:{0}'.format(local_port)
+            message = '{0} {1}'.format(tunnel_info['message'], url)
+
+        return message

@@ -56,16 +56,5 @@
     - name: add node name to mesos attributes file
       lineinfile: dest=/etc/mesos-slave/attributes line="name:{{ node_tag }}" create=yes
 
-    # Workaround to make sure mesos-slave recognises attributes
-    # Ideally at boot up, mesos-slave should be in stopped state and then started explicitly
-    - name: stop mesos slave
-      service: name=mesos-slave state=stopped
-
-    # This is necessary as the slave info for some reason changes when restarting
-    # Specifically, when running mesos slave for the second time, the slave hostname
-    # it picks up has changed from a full DNS name to a short one
-    - name: delete mesos slave checkpoint so that it can restart properly
-      shell: rm -rf /tmp/mesos/meta/slaves/latest
-
     - name: restart mesos-slave
       service: name=mesos-slave state=started

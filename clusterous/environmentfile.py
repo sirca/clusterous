@@ -51,7 +51,7 @@ class EnvironmentFile(object):
     """
 
     def __init__(self, env_file):
-        self._logger = logging.getLogger()
+        self._logger = logging.getLogger(__name__)
         self._env_filename = env_file
         yaml_data = self._read_yaml(self._env_filename)
 
@@ -104,6 +104,7 @@ class EnvironmentFile(object):
             parsed['environment'] = new_env
             parsed['environment']['image'] = data['environment']['image']
             parsed['environment']['copy'] = data['environment']['copy']
+            parsed['environment']['expose_tunnel'] = data['environment']['expose_tunnel']
 
         except ParseError as e:
             self._logger.error(e)
