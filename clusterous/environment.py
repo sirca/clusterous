@@ -453,7 +453,7 @@ class Environment(object):
         success = self._cluster.create_permanent_tunnel_to_controller(remote_port, local_port)
 
         if not success:
-            raise EnvironmentException('Could not create tunnel')
+            raise self.LaunchError('Could not create tunnel')
 
         # Make message
         message = ''
