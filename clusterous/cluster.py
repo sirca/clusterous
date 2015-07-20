@@ -7,6 +7,7 @@ import logging
 import time
 import shutil
 import json
+import stat
 
 import boto.ec2
 import paramiko
@@ -210,6 +211,7 @@ class AWSCluster(Cluster):
         ssh = self._ssh_to_controller()
         sftp = ssh.open_sftp()
         sftp.put(os.path.expanduser(self._config['key_file']), remote_key_path)
+        sftp.chmod(remote_key_path, stat.S_IRUSR | stat.S_IWUSR)
         sftp.close()
 
         # First ensure that any previously created tunnel is destroyed
