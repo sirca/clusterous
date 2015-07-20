@@ -11,7 +11,7 @@ local_config_dir = '~/.clusterous'
 current_controller_ip_file = local_config_dir + '/' + 'current_controller'
 CLUSTER_INFO_FILE = local_config_dir + '/' + 'cluster_info.yml'
 
-controller_ami_id = 'ami-99e9aea3'
+controller_ami_id = 'ami-2d6d2b17'
 node_ami_id = 'ami-47eaad7d'
 security_group_name_format = '{0}-sg'
 controller_name_format = '{0}_controller'
