@@ -8,7 +8,7 @@ security_group_name: "{{ cluster_name }}-sg"
 billing_tag: "BDKD+BDKD_CC+dev"
 
 # AMI
-ami_controller: "ami-99e9aea3"
+ami_controller: "ami-2d6d2b17"
 ami_node: "ami-47eaad7d"
 ami_elk: "ami-45eaad7f"
 
