@@ -2,12 +2,16 @@ import yaml
 import os
 import sys
 import logging
+import logging.config
 import boto
 
 import defaults
 import cluster
 import clusterbuilder
+import environmentfile
+import environment
 from helpers import AnsibleHelper
+
 
 class ParseError(Exception):
     pass
@@ -17,25 +21,17 @@ class Clusterous(object):
     Clusterous application
     """
 
-    class Verbosity:
-        DEBUG = logging.DEBUG
-        NORMAL = logging.INFO
-        QUIET = logging.WARNING
-
-    def __init__(self, config_file=defaults.DEFAULT_CONFIG_FILE, log_level=Verbosity.NORMAL):
+    def __init__(self, config_file=defaults.DEFAULT_CONFIG_FILE):
         self.clusters = []
         self._config = {}
 
-        logging.basicConfig(level=log_level, format='%(message)s')
-        self._logger = logging.getLogger()
+        self._logger = logging.getLogger(__name__)
 
         try:
             self._read_config(config_file)
         except Exception as e:
             self._logger.error(e)
             sys.exit(e)
-
-        logging.getLogger('boto').setLevel(logging.CRITICAL)
 
         conf_dir = os.path.expanduser(defaults.local_config_dir)
         if not os.path.exists(conf_dir):
@@ -76,7 +72,6 @@ class Clusterous(object):
         profile_contents = yaml.load(stream)[0]
         stream.close()
 
-
         # Init Cluster object
         cl = self.make_cluster_object(cluster_name_required=False)
 
@@ -90,15 +85,25 @@ class Clusterous(object):
         """
         Create a new docker image
         """
-        cl = self.make_cluster_object()
-        cl.docker_build_image(args)
+        full_path = os.path.abspath(args.dockerfile_folder)
 
-    def docker_image_info(self, args):
+        if not os.path.isdir(full_path):
+            self._logger.error("Error: Folder '{0}' does not exists.".format(full_path))
+            return False
+
+        if not os.path.exists("{0}/Dockerfile".format(full_path)):
+            self._logger.error("Error: Folder '{0}' does not have a Dockerfile.".format(full_path))
+            return False
+
+        cl = self.make_cluster_object()
+        cl.docker_build_image(full_path, args.image_name)
+
+    def docker_image_info(self, image_name):
         """
         Gets information of a Docker image
         """
         cl = self.make_cluster_object()
-        cl.docker_image_info(args)
+        return cl.docker_image_info(image_name)
 
     def sync_put(self, local_path, remote_path):
         """
@@ -136,8 +141,23 @@ class Clusterous(object):
 
     def terminate_cluster(self):
         cl = self.make_cluster_object()
-        self._logger.info('Terminating cluster {0}'.format(cl._cluster_name))
+        self._logger.info('Terminating cluster {0}'.format(cl.cluster_name))
         cl.terminate_cluster()
+
+
+    def launch_environment(self, environment_file):
+        cl = self.make_cluster_object()
+
+        try:
+            env_file = environmentfile.EnvironmentFile(environment_file)
+            env = environment.Environment(env_file.spec, env_file.base_path, cl)
+            success, message = env.launch_from_spec()
+        except environment.Environment.LaunchError as e:
+            self._logger.error(e)
+            self._logger.error('Failed to launch environment')
+            return False, ''
+
+        return success, message
 
     def list_clusters(self, args):
         pass

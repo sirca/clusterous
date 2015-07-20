@@ -1,0 +1,8 @@
+- AWS:
+    access_key_id: AKIADUMMYDUMMYDUMMY
+    secret_access_key: Dummy+234+Dummy
+    key_pair: bdkd-sirca
+    key_file: ~/dev/keys/bdkd-sirca.pem
+    vpc_id: vpc-18fd1f7d
+    subnet_id: subnet-f17e8f94
+    region: ap-southeast-2

@@ -2,6 +2,7 @@ import sys
 import os
 import defaults
 import argparse
+import logging
 
 import clusterous
 from helpers import NoWorkingClusterException
@@ -14,6 +15,39 @@ class CLIParser(object):
     def __init__(self):
         pass
 
+    def _configure_logging(self, level='INFO'):
+        logging_dict = {
+                            'version': 1,
+                            'disable_existing_loggers': False,
+                            'formatters': {
+                                'standard': {
+                                    'format': '%(message)s'
+                                },
+                            },
+                            'handlers': {
+                                'default': {
+                                    'level': level,
+                                    'class':'logging.StreamHandler',
+                                },
+                            },
+                            'loggers': {
+                                '': {
+                                    'handlers': ['default'],
+                                    'level': level,
+                                    'propagate': True
+                                },
+                            }
+                        }
+
+        logging.config.dictConfig(logging_dict)
+
+        # Disable logging for various libraries
+        # TODO: is it possible to do this in a simpler way?
+        libs = ['boto', 'paramiko', 'requests', 'marathon']
+        for l in libs:
+            logging.getLogger(l).setLevel(logging.WARNING)
+
+
     def _create_args(self, parser):
         parser.add_argument('--verbose', dest='verbose', action='store_true',
             default=False, help='Print verbose debug output')
@@ -24,7 +58,7 @@ class CLIParser(object):
         start = subparser.add_parser('start', help='Create a new cluster based on profile file')
         start.add_argument('profile_file', action='store')
 
-        # Build dokcer image
+        # Build Docker image
         build = subparser.add_parser('build-image', help='Build a new Docker image')
         build.add_argument('dockerfile_folder', action='store', help='Local folder name which contains the Dockerfile')
         build.add_argument('image_name', action='store', help='Name of the docker image to be created on the cluster')
@@ -59,13 +93,17 @@ class CLIParser(object):
         terminate.add_argument('--confirm', dest='no_prompt', action='store_true',
             default=False, help='Immediately terminate cluster without prompting for confirmation')
 
+        launch = subparser.add_parser('launch', help='Launch an environment from an environment file')
+        launch.add_argument('environment_file', action='store')
+
     def _init_clusterous_object(self, args):
         app = None
         if args.verbose:
-            app = clusterous.Clusterous(log_level=clusterous.Clusterous.Verbosity.DEBUG)
+            self._configure_logging('DEBUG')
         else:
-            app = clusterous.Clusterous()
+            self._configure_logging('INFO')
 
+        app = clusterous.Clusterous()
         return app
 
     def _workon(self, args):
@@ -78,17 +116,39 @@ class CLIParser(object):
         app = self._init_clusterous_object(args)
         cl = app.make_cluster_object()
         if not args.no_prompt:
-            prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(cl._cluster_name)
+            prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(cl.cluster_name)
             cont = raw_input(prompt_str)
             if cont.lower() != 'y' and cont.lower() != 'yes':
-                sys.exit(0)
+                return 1
 
         app = self._init_clusterous_object(args)
         app.terminate_cluster()
+        return 0
+
+    def _launch_environment(self, args):
+        app = self._init_clusterous_object(args)
+        success, message = app.launch_environment(args.environment_file)
+
+        if success and message:
+            print '\nMessage from environment:'
+            print message
+
+        return 0 if success else 1
+
+    def _docker_image_info(self, args):
+        app = self._init_clusterous_object(args)
+        info = app.docker_image_info(args.image_name)
+        if not info:
+            print 'Docker image "{0}" does not exist in the Docker registry'.format(args.image_name)
+            return 1
+        else:
+            print 'Docker image: {}:{}\nImage id: {}\nAuthor: {}\nCreated: {}'.format(
+                info['image_name'], info['tag_name'], info['image_id'], info['author'], info['created'])
+            return 0
 
     def _sync_put(self, args):
         app = self._init_clusterous_object(args)
-        success, message = app.sync_put(local_path = args.local_path, 
+        success, message = app.sync_put(local_path = args.local_path,
                                         remote_path = args.remote_path)
         if not success:
             print message
@@ -103,7 +163,7 @@ class CLIParser(object):
             print message
             return 1
         return 0
-    
+
     def _ls(self, args):
         app = self._init_clusterous_object(args)
         success, message = app.ls(remote_path = args.remote_path)
@@ -123,18 +183,22 @@ class CLIParser(object):
         self._create_subparsers(parser)
 
         args = parser.parse_args(argv)
+
+        status = 0
         try:
             if args.subcmd == 'start':
                 app = self._init_clusterous_object(args)
                 app.start_cluster(args)
             elif args.subcmd == 'terminate':
                 self._terminate_cluster(args)
+            elif args.subcmd == 'launch':
+                self._launch_environment(args)
             elif args.subcmd == 'build-image':
                 app = clusterous.Clusterous()
                 app.docker_build_image(args)
             elif args.subcmd == 'image-info':
                 app = clusterous.Clusterous()
-                app.docker_image_info(args)
+                self._docker_image_info(args)
             elif args.subcmd == 'put':
                 status = self._sync_put(args)
             elif args.subcmd == 'get':
@@ -145,11 +209,12 @@ class CLIParser(object):
                 status = self._rm(args)
             elif args.subcmd == 'workon':
                 status = self._workon(args)
+        # TODO: this exception should not be caught here
         except NoWorkingClusterException as e:
             pass
-        except Exception as e:
-            raise e
+
+        return status
 
 def main(argv=None):
     cli = CLIParser()
-    cli.main(argv)
+    return cli.main(argv)

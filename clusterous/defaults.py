@@ -8,6 +8,8 @@ Module for storing default and static values
 DEFAULT_CONFIG_FILE = '~/.clusterous.yml'
 
 local_config_dir = '~/.clusterous'
+local_session_data_dir = local_config_dir + '/' + 'session'
+
 current_controller_ip_file = local_config_dir + '/' + 'current_controller'
 CLUSTER_INFO_FILE = local_config_dir + '/' + 'cluster_info.yml'
 
@@ -19,6 +21,8 @@ controller_instance_type = 't2.small'
 node_name_format = '{0}_node'
 registry_s3_path = '/docker-registry'
 
+shared_volume_path = '/home/data/'
+
 remote_scripts_dir = 'ansible/remote'
 
 remote_host_scripts_dir = 'clusterous'
@@ -27,6 +31,12 @@ remote_host_vars_file = 'vars.yml'
 
 node_tag_status_uninitialized = 'uninitialized'
 node_tag_status_initialized = 'initialized'
+
+mesos_port = 5050
+
+# How many seconds to wait for all Marathon applications to reach "started" state
+# Currently 30 minutes
+app_launch_start_timeout = 1800
 
 def get_script(filename):
     """
