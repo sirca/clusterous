@@ -8,6 +8,10 @@ import time
 import shutil
 import json
 import stat
+from datetime import datetime
+from dateutil import parser
+from dateutil.relativedelta import relativedelta
+from environment import Environment
 
 import boto.ec2
 import paramiko
@@ -522,6 +526,70 @@ class AWSCluster(Cluster):
 
         return (True, 'Ok')
 
+    def cluster_status(self):
+        def cluster():
+            info = {'name': self._get_working_cluster_name(),
+                    'up_time': '',
+                    'controller_ip': '',
+                    }
+            instances = self._get_instances(self.cluster_name)
+            for instance in instances:
+                if defaults.controller_name_format.format(self.cluster_name) in instance.tags['Name']:
+                    info['controller_ip'] = str(instance.ip_address)
+                    launch_time = parser.parse(instance.launch_time)
+                    diff = relativedelta(datetime.now(launch_time.tzinfo), launch_time)
+                    up_time = ''
+                    if diff.years > 0: up_time += ' {0} years'.format(diff.years)
+                    if diff.months > 0: up_time += ' {0} months'.format(diff.months)
+                    if diff.days > 0: up_time += ' {0} days'.format(diff.days)
+                    if diff.hours > 0: up_time += ' {0} hours'.format(diff.hours)
+                    if diff.minutes > 0: up_time += ' {0} minutes'.format(diff.minutes)
+                    info['up_time'] = up_time
+            return info
+
+        def instances():
+            info = {}
+            instances = self._get_instances(self.cluster_name)
+            for instance in instances:
+                if instance.instance_type not in info:
+                    info[instance.instance_type] = 0
+                info[instance.instance_type] += 1
+            return info
+
+        def applications():
+            marathon_tunnel = self.make_controller_tunnel(8080)
+            marathon_tunnel.connect()
+            env = Environment(None, None, None)
+            info = env.get_applications_info(marathon_tunnel)
+            marathon_tunnel.close()
+            return info
+
+        def shared_volume():
+            info = {'total': '',
+                    'used': '',
+                    'free': ''}
+            with paramiko.SSHClient() as ssh:
+                ssh.load_system_host_keys()
+                ssh.connect(hostname = self._get_controller_ip(),
+                            username = 'root',
+                            key_filename = os.path.expanduser(self._config['key_file']))
+                cmd = 'df -h |grep {0}'.format(defaults.shared_volume_path[:-1])
+                stdin, stdout, stderr = ssh.exec_command(cmd)
+                volume_info = ' '.join(stdout.read().split()).split()
+                if volume_info:
+                    info['total'] = volume_info[1]
+                    info['used'] = '{0} ({1})'.format(volume_info[2], volume_info[4])
+                    info['free'] = volume_info[3]
+            return info
+
+        # Collect all info
+        all_info = {'cluster': cluster(),
+                'instances': instances(),
+                'applications': applications(),
+                'volume': shared_volume()
+                }
+
+        return (True, all_info)
 
     def terminate_cluster(self):
         conn = boto.ec2.connect_to_region(self._config['region'],

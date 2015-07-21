@@ -132,6 +132,11 @@ class Clusterous(object):
         """
         cl = self.make_cluster_object()
         return cl.rm(remote_path)
+
+    def cluster_status(self):
+        cl = self.make_cluster_object()
+        return cl.cluster_status()
+
     def workon(self, cluster_name):
         """
         Sets a working cluster
