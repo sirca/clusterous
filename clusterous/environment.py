@@ -108,6 +108,7 @@ class Environment(object):
             machine = component_resources[name]['machine']
             hostname = cluster_info[machine]['hostname']
         else:
+            print component_resources
             raise self.LaunchError('No hostname for component "{0}" could be found'.format(name))
 
         return hostname
@@ -335,7 +336,7 @@ class Environment(object):
                     if not depend_str in self._spec['environment']['components']:
                         raise self.LaunchError('Could not find dependency "{0}" as '
                                                 'specified in component "{1}"'.format(depend_str, name))
-                    dependencies.append(depend_str)
+                    dependencies.append('/{0}'.format(depend_str))
 
             docker = {  'image': c['image'], 'port_mappings': port_mappings,
                         'force_pull_image': True, 'network': 'BRIDGE', 'privileged': True}
