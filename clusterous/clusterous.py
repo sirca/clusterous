@@ -135,7 +135,12 @@ class Clusterous(object):
 
     def cluster_status(self):
         cl = self.make_cluster_object()
-        return cl.cluster_status()
+        all_info = {'cluster': cl.info_status(),
+                'instances': cl.info_instances(),
+                'applications': cl.info_applications(),
+                'volume': cl.info_shared_volume()
+                }
+        return (True, all_info)
 
     def workon(self, cluster_name):
         """
