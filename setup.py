@@ -13,7 +13,7 @@ setup(name='clusterous',
                     ]},
       install_requires=['pyyaml', 'pytest', 'mock', 'paramiko',
                         'boto', 'ansible', 'requests', 'marathon', 'sshtunnel',
-                        'dateutil'],
+                        'python-dateutil'],
       # Workaround because PyPi version of ssh tunnel is currently broken
       # https://github.com/pahaz/sshtunnel/issues/21
       # Remove when fixed version of sshtunnel is released
