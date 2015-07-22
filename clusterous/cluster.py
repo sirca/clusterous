@@ -11,7 +11,6 @@ import stat
 from datetime import datetime
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
-from environment import Environment
 
 import boto.ec2
 import paramiko
@@ -546,14 +545,6 @@ class AWSCluster(Cluster):
             if instance.instance_type not in info:
                 info[instance.instance_type] = 0
             info[instance.instance_type] += 1
-        return info
-
-    def info_applications(self):
-        marathon_tunnel = self.make_controller_tunnel(8080)
-        marathon_tunnel.connect()
-        env = Environment(None, None, None)
-        info = env.get_applications_info(marathon_tunnel)
-        marathon_tunnel.close()
         return info
 
     def info_shared_volume(self):
