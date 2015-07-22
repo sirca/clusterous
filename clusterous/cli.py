@@ -92,6 +92,8 @@ class CLIParser(object):
         terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
         terminate.add_argument('--confirm', dest='no_prompt', action='store_true',
             default=False, help='Immediately terminate cluster without prompting for confirmation')
+        # status
+        cluster_status = subparser.add_parser('status', help='Status of working cluster')
 
         launch = subparser.add_parser('launch', help='Launch an environment from an environment file')
         launch.add_argument('environment_file', action='store')
@@ -176,6 +178,51 @@ class CLIParser(object):
         print message
         return 0 if success else 1
 
+    def _cluster_status(self, args):
+        app = self._init_clusterous_object(args)
+        success, info = app.cluster_status()
+        if not success:
+            print info
+            return 1
+
+        # Formating
+        up_time=info.get('cluster',{}).get('up_time')
+        up_time_str = ''
+        if up_time.years > 0: up_time_str += ' {0} years'.format(up_time.years)
+        if up_time.months > 0: up_time_str += ' {0} months'.format(up_time.months)
+        if up_time.days > 0: up_time_str += ' {0} days'.format(up_time.days)
+        if up_time.hours > 0: up_time_str += ' {0} hours'.format(up_time.hours)
+        if up_time.minutes > 0: up_time_str += ' {0} minutes'.format(up_time.minutes)
+
+        output = """ 
+CLUSTER:
+Name: {cluster_name}
+Up time: {up_time}
+Controller IP: {controller_ip}
+
+INSTANCES:
+{instances}
+
+APPLICATIONS:
+{applications}
+
+SHARED VOLUME:
+Total: {volume_total}
+Used: {volume_used} ({volume_used_pct})
+Free: {volume_free}
+""".format(cluster_name=info.get('cluster',{}).get('name'),
+                       up_time=up_time_str,
+                       controller_ip=info.get('cluster',{}).get('controller_ip'),
+                       volume_total=info.get('volume',{}).get('total'),
+                       volume_used=info.get('volume',{}).get('used'),
+                       volume_used_pct=info.get('volume',{}).get('used_pct'),
+                       volume_free=info.get('volume',{}).get('free'),
+                       instances='\n'.join(['{0}: {1}'.format(k, str(v)) for k,v in info.get('instances').iteritems()]),
+                       applications='\n'.join(['{0}: {1}'.format(k, str(v)) for k,v in info.get('applications').iteritems()]),
+                       )
+        print output
+        return 0
+
     def main(self, argv=None):
         parser = argparse.ArgumentParser('clusterous', description='Tool to create and manage compute clusters')
 
@@ -209,6 +256,8 @@ class CLIParser(object):
                 status = self._rm(args)
             elif args.subcmd == 'workon':
                 status = self._workon(args)
+            elif args.subcmd == 'status':
+                status = self._cluster_status(args)
         # TODO: this exception should not be caught here
         except NoWorkingClusterException as e:
             pass

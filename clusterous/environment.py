@@ -276,6 +276,16 @@ class Environment(object):
         return running_components
 
 
+    def get_applications_info(self, marathon_tunnel):
+        marathon_url = urlparse('http://localhost:{0}'.format(marathon_tunnel.local_port))
+        client = marathon.MarathonClient(servers=marathon_url.geturl(),timeout=600)
+        app_list = client.list_apps()
+        info = {}
+        for app_name in [ a.id.strip('/') for a in app_list ]:
+            if app_name not in info:
+                info[app_name] = 0
+            info[app_name] += client.get_app(app_name).instances
+        return info
 
     def _launch_components(self, component_resources, tunnel):
         """

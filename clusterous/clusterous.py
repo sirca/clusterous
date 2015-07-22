@@ -132,6 +132,19 @@ class Clusterous(object):
         """
         cl = self.make_cluster_object()
         return cl.rm(remote_path)
+
+    def cluster_status(self):
+        cl = self.make_cluster_object()
+        env = environment.Environment(None, None, None)
+        marathon_tunnel = cl.make_controller_tunnel(8080)
+        marathon_tunnel.connect()
+        all_info = {'cluster': cl.info_status(),
+                'instances': cl.info_instances(),
+                'applications': env.get_applications_info(marathon_tunnel),
+                'volume': cl.info_shared_volume()
+                }
+        return (True, all_info)
+
     def workon(self, cluster_name):
         """
         Sets a working cluster
