@@ -193,17 +193,20 @@ class CLIParser(object):
         if up_time.days > 0: up_time_str += ' {0} days'.format(up_time.days)
         if up_time.hours > 0: up_time_str += ' {0} hours'.format(up_time.hours)
         if up_time.minutes > 0: up_time_str += ' {0} minutes'.format(up_time.minutes)
+        if len(info.get('applications')) == 0:
+            apps_str = '[No applications running]'
+        else:
+            apps_str = '\n'.join(['{0}: {1}'.format(k, str(v)) for k,v in info.get('applications').iteritems()])
 
-        output = """ 
-CLUSTER:
+        output = """CLUSTER:
 Name: {cluster_name}
-Up time: {up_time}
+Uptime: {up_time}
 Controller IP: {controller_ip}
 
 INSTANCES:
 {instances}
 
-APPLICATIONS:
+APPLICATION COMPONENTS:
 {applications}
 
 SHARED VOLUME:
@@ -218,7 +221,7 @@ Free: {volume_free}
                        volume_used_pct=info.get('volume',{}).get('used_pct'),
                        volume_free=info.get('volume',{}).get('free'),
                        instances='\n'.join(['{0}: {1}'.format(k, str(v)) for k,v in info.get('instances').iteritems()]),
-                       applications='\n'.join(['{0}: {1}'.format(k, str(v)) for k,v in info.get('applications').iteritems()]),
+                       applications=apps_str,
                        )
         print output
         return 0
