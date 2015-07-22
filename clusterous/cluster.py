@@ -8,6 +8,9 @@ import time
 import shutil
 import json
 import stat
+from datetime import datetime
+from dateutil import parser
+from dateutil.relativedelta import relativedelta
 
 import boto.ec2
 import paramiko
@@ -522,6 +525,47 @@ class AWSCluster(Cluster):
 
         return (True, 'Ok')
 
+    def info_status(self):
+        info = {'name': self._get_working_cluster_name(),
+                'up_time': '',
+                'controller_ip': '',
+                }
+        instances = self._get_instances(self.cluster_name)
+        for instance in instances:
+            if defaults.controller_name_format.format(self.cluster_name) in instance.tags['Name']:
+                info['controller_ip'] = str(instance.ip_address)
+                launch_time = parser.parse(instance.launch_time)
+                info['up_time'] = relativedelta(datetime.now(launch_time.tzinfo), launch_time)
+        return info
+
+    def info_instances(self):
+        info = {}
+        instances = self._get_instances(self.cluster_name)
+        for instance in instances:
+            if instance.instance_type not in info:
+                info[instance.instance_type] = 0
+            info[instance.instance_type] += 1
+        return info
+
+    def info_shared_volume(self):
+        info = {'total': '',
+                'used': '',
+                'used_pct': '',
+                'free': ''}
+        with paramiko.SSHClient() as ssh:
+            ssh.load_system_host_keys()
+            ssh.connect(hostname = self._get_controller_ip(),
+                        username = 'root',
+                        key_filename = os.path.expanduser(self._config['key_file']))
+            cmd = 'df -h |grep {0}'.format(defaults.shared_volume_path[:-1])
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            volume_info = ' '.join(stdout.read().split()).split()
+            if volume_info:
+                info['total'] = volume_info[1]
+                info['used'] =  volume_info[2]
+                info['used_pct'] = volume_info[4]
+                info['free'] = volume_info[3]
+        return info
 
     def terminate_cluster(self):
         conn = boto.ec2.connect_to_region(self._config['region'],
