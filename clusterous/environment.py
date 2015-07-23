@@ -470,6 +470,6 @@ class Environment(object):
         message = ''
         if 'message' in tunnel_info:
             url = 'http://localhost:{0}'.format(local_port)
-            message = '{0} {1}'.format(tunnel_info['message'], url)
+            message = '{0}{1}'.format(tunnel_info['message'], url)
 
         return message

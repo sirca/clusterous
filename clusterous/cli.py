@@ -132,7 +132,7 @@ class CLIParser(object):
         success, message = app.launch_environment(args.environment_file)
 
         if success and message:
-            print '\nMessage from environment:'
+            print '\nMessage for user:'
             print message
 
         return 0 if success else 1
