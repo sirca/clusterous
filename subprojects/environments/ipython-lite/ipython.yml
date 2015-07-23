@@ -1,0 +1,42 @@
+name: ipython-parallel    # environment name
+
+environment:    # change to "application"?
+  # Relative path to directory that will be copied to shared storage. Should contain
+  # files necessary to launch the application
+  copy:
+    - "ipython/"
+    - "notebook/"
+    - "launch_scripts/"
+    - "ipython_dir/"
+  image:
+    - dockerfile: "image/"   # location of Dockerfile to build associated Docker image
+      image_name: "ipython-lite"
+
+  components:
+    controller:     # name of the application component
+      machine: master   # machine on which the component will be run (mesos attribute)
+      cpu: auto    # mesos/marathon CPU (Docker's CPU arg)
+      image: "registry:5000/ipython-lite"   # docker image
+      cmd: "/bin/bash /home/data/launch_scripts/01_ipcontroller.sh"
+      attach_volume: yes    # (optional, default is yes) Whether to mount shared storage to container
+      ports: 31000,31001,31002,31003,31004,31005,31006,31007,31008,31009,31010,31011
+
+    notebook:
+      machine: master
+      depends: controller   # Marathon constrait; launch only after controller is running
+      cpu: auto
+      image: "registry:5000/ipython-lite"
+      cmd: "/bin/bash /home/data/launch_scripts/03_ipnotebook.sh"
+      ports: 31080:8888
+
+    engine:
+      machine: worker
+      depends: controller   # Marathon constrait; launch only after controller is running
+      cpu: 0.5
+      count: auto    # (default: 1) "auto" means as deploy as many as possible given available machines
+      image: "registry:5000/ipython-lite"
+      cmd: "/bin/bash /home/data/launch_scripts/02_ipengine.sh"
+
+  expose_tunnel:      # create an ssh tunnel
+    service: 8888:notebook:31080    # source port 31080 on master to 8888 on localhost
+    message: "To access IPython notebook, use this URL:"
