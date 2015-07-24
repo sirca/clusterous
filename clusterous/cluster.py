@@ -5,13 +5,15 @@ import os
 import yaml
 import logging
 import time
+import glob
 import shutil
 import json
 import stat
 from datetime import datetime
 from dateutil import parser
-from dateutil.relativedelta import relativedelta
 
+
+from dateutil.relativedelta import relativedelta
 import boto.ec2
 import paramiko
 
@@ -224,17 +226,21 @@ class AWSCluster(Cluster):
 
         ssh.close()
 
-    def create_permanent_tunnel_to_controller(self, remote_port, local_port):
+    def create_permanent_tunnel_to_controller(self, remote_port, local_port, prefix=''):
         """
-        Creates a persistent  SSH tunnel from local machine to controller by running
+        Creates a persistent SSH tunnel from local machine to controller by running
         the ssh command in the background
         """
 
         key_file = os.path.expanduser(self._config['key_file'])
 
+        # Useful to isolate user created sockets from our own
+        prefix_str = 'clusterous' if not prefix else prefix
+
         # Temporary file containing ssh socket data
-        ssh_sock_file = '{0}/clusterous_tunnel_%h_{1}.sock'.format(
-                        os.path.expanduser(defaults.local_session_data_dir), local_port)
+        ssh_sock_file = '{0}/{1}_tunnel_%h_{2}.sock'.format(
+                        os.path.expanduser(defaults.local_session_data_dir),
+                        prefix_str, local_port)
 
         # Ensure that any previously created tunnel is destroyed
         reset_cmd = ['ssh', '-S', ssh_sock_file, '-O', 'exit',
@@ -246,7 +252,6 @@ class AWSCluster(Cluster):
                 'root@{0}'.format(self._get_controller_ip()),
                 '-L', '{0}:127.0.0.1:{1}'.format(local_port, remote_port)]
 
-
         # If socket file doesn't exist, it will return with an error. This is normal
         process = subprocess.Popen(reset_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
         output, error = process.communicate()
@@ -254,6 +259,29 @@ class AWSCluster(Cluster):
         return_code = subprocess.call(connect_cmd)
 
         return True if return_code == 0 else False
+
+    def delete_all_permanent_tunnels(self):
+        """
+        Deletes all persistent SSH tunnels to the controller that were created by
+        create_permanent_tunnel_to_controller()
+        """
+        key_file = os.path.expanduser(self._config['key_file'])
+
+        sock_files = glob.glob('{0}/clusterous_tunnel_*.sock'.format(
+                        os.path.expanduser(defaults.local_session_data_dir)))
+
+        all_deleted = True
+        for sock in sock_files:
+            reset_cmd = ['ssh', '-S', sock, '-O', 'exit',
+                            self._get_controller_ip()]
+            process = subprocess.Popen(reset_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
+            output, error = process.communicate()
+
+            if process.returncode != 0:
+                self._logger.warning('Problem deleting SSH tunnel at {0}'.format(sock))
+                all_deleted = False
+
+        return all_deleted
 
     def init_cluster(self, cluster_name):
         """
@@ -290,13 +318,14 @@ class AWSCluster(Cluster):
                                    env=env)
         self._logger.debug('Launched controller instance at {0}'.format(self._get_controller_ip()))
 
-        # TODO: this is useful for debugging, but remove at a later stage
-        self.create_permanent_tunnel_to_controller(8080, 8080)
-
         # Set working cluster
         self.workon()
 
         vars_file.close()
+
+        # TODO: this is useful for debugging, but remove at a later stage
+        self.create_permanent_tunnel_to_controller(8080, 8080, prefix='marathon')
+
 
 
     def launch_nodes(self, num_nodes, instance_type, node_tag):
@@ -397,14 +426,14 @@ class AWSCluster(Cluster):
                 'dst_path': dst_path,
                 }
         vars_file = self._make_vars_file(vars_dict)
-        self._logger.info('Started sync folder')
+        self._logger.debug('Started sync folder')
         AnsibleHelper.run_playbook(defaults.get_script('ansible/file_01_sync_put.yml'),
                                    vars_file.name,
                                    self._config['key_file'],
                                    env=self._ansible_env_credentials(),
                                    hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
         vars_file.close()
-        self._logger.info('Finished sync folder')
+        self._logger.debug('Finished sync folder')
         return (True, 'Ok')
 
 
@@ -439,14 +468,14 @@ class AWSCluster(Cluster):
                 'dst_path': dst_path,
                 }
         vars_file = self._make_vars_file(vars_dict)
-        self._logger.info('Started sync folder')
+        self._logger.debug('Started sync folder')
         AnsibleHelper.run_playbook(defaults.get_script('ansible/file_02_sync_get.yml'),
                                    vars_file.name,
                                    self._config['key_file'],
                                    env=self._ansible_env_credentials(),
                                    hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
         vars_file.close()
-        self._logger.info('Finished sync folder')
+        self._logger.debug('Finished sync folder')
         return (True, 'Ok')
 
     def ls(self, remote_path):

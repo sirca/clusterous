@@ -1,10 +1,11 @@
 from setuptools import setup, find_packages
+from clusterous import __version__
 
 
 extra = {'scripts': ['bin/clusterous']}
 
 setup(name='clusterous',
-      version='0.1.0',
+      version=__version__,
       packages=['clusterous'],
       package_data={'clusterous': [
                         'scripts/ansible/*.yml',

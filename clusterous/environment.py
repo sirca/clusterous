@@ -10,6 +10,7 @@ from marathon.models.container import MarathonContainer
 from marathon.models.constraint import MarathonConstraint
 
 import helpers
+import environmentfile
 import defaults
 
 
@@ -20,28 +21,24 @@ class Environment(object):
     class LaunchError(Exception):
         pass
 
-    def __init__(self, spec, base_path, cluster):
-        self._spec = spec
-        self._base_path = base_path
+    def __init__(self, cluster):
+        if not cluster:
+            raise ValueError('Environment must be initialised with a Cluster object')
         self._cluster = cluster
         self._logger = logging.getLogger(__name__)
 
-    def _get_path(self, rel_path):
-        return os.path.join(self._base_path, rel_path)
-
-    def launch_from_spec(self):
+    def launch_from_spec(self, env_file):
         """
-        Launches an environment based on spec dictionary.
-        Assumes no application currently on cluster
+        Launches an environment based on environment file
         """
 
         # Get cluster info and validate resources
         self._logger.debug('Preparing to launch...')
         mesos_data = self._get_mesos_data()
         cluster_info = self._process_mesos_data(mesos_data)
-        component_resources = self._calculate_resources(cluster_info)
+        component_resources = self._calculate_resources(env_file.spec, cluster_info)
 
-        marathon_tunnel = self._cluster.make_controller_tunnel(8080)
+        marathon_tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
         marathon_tunnel.connect()
 
         running_components = self._check_for_running_components(component_resources.keys(), marathon_tunnel)
@@ -50,13 +47,13 @@ class Environment(object):
         if not running_components:
             success = False
             # Build image(s) if necessary
-            images = self._spec['environment']['image']
+            images = env_file.spec['environment']['image']
             build_list = []
             self._logger.info('Checking for Docker images...')
             for image in images:
                 info = self._cluster.docker_image_info(image['image_name'])
                 if not info:
-                    dockerfile_folder = self._get_path(image['dockerfile'])
+                    dockerfile_folder = env_file.get_full_path(image['dockerfile'])
                     if not os.path.isfile(os.path.join(dockerfile_folder, 'Dockerfile')):
                         raise self.LaunchError('Could not find a Dockerfile in {0}'.format(image['dockerfile']))
 
@@ -70,15 +67,15 @@ class Environment(object):
                     raise self.LaunchError('Problem building image from {0}'.format(item[0]))
 
             # Copy files
-            self._logger.debug('Copying files...')
-            for item in self._spec['environment']['copy']:
-                full_local_path = self._get_path(item)
+            self._logger.info('Copying files...')
+            for item in env_file.spec['environment']['copy']:
+                full_local_path = env_file.get_full_path(item)
                 status, message = self._cluster.sync_put(full_local_path, '')
                 if not status:
                     raise self.LaunchError(message)
 
             # Do the final checks and perform actual launch
-            success = self._launch_components(component_resources, marathon_tunnel)
+            success = self._launch_components(env_file.spec, component_resources, marathon_tunnel)
         else:
             self._logger.info('Environment already running, not launching anything')
             success = True
@@ -90,12 +87,54 @@ class Environment(object):
 
         message = ''
         # Expose tunnel
-        if 'expose_tunnel' in self._spec['environment']:
-            message = self._expose_tunnel(self._spec['environment']['expose_tunnel'], cluster_info, component_resources)
+        if 'expose_tunnel' in env_file.spec['environment']:
+            message = self._expose_tunnel(env_file.spec['environment']['expose_tunnel'], cluster_info, component_resources)
 
         return True, message
 
-    def get_component_hostname(self, component_name, cluster_info, component_resources):
+    def destroy(self):
+        """
+        Destroy any running Marathon applications
+        """
+        tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
+        tunnel.connect()
+        marathon_url = 'http://localhost:{0}'.format(tunnel.local_port)
+        client = marathon.MarathonClient(servers=marathon_url, timeout=600)
+        app_list = client.list_apps()
+
+        if not app_list:
+            self._logger.info('No application to destroy')
+            return True
+
+        component_count = len(app_list)
+
+        for app in app_list:
+            client.delete_app(app.id, force=True)
+
+        self._logger.debug('Sent delete requests, will wait until all destroyed')
+
+        start_time = time.time()
+        elapsed_time = 0
+        all_destroyed = False
+
+        while elapsed_time < defaults.app_destroy_timeout:
+            app_list = client.list_apps()
+            if not app_list:
+                all_destroyed = True
+                self._logger.debug('All apps destroyed')
+                break
+            time.sleep(2)
+            elapsed_time = time.time() - start_time
+
+        # If timed out without destroying
+        if not all_destroyed:
+            self._logger.warn('Could not delete all applications')
+            return False
+
+        self._logger.info('{0} running applications successfully destroyed'.format(component_count))
+        return True
+
+    def _get_component_hostname(self, component_name, cluster_info, component_resources):
         """
         Given a component name (corresponding to a Marathon "app" name), and cluster and
         component data, returns a hostname that will be resolved by mesos-dns
@@ -108,7 +147,6 @@ class Environment(object):
             machine = component_resources[name]['machine']
             hostname = cluster_info[machine]['hostname']
         else:
-            print component_resources
             raise self.LaunchError('No hostname for component "{0}" could be found'.format(name))
 
         return hostname
@@ -152,7 +190,7 @@ class Environment(object):
         return cluster_info
 
 
-    def _calculate_resources(self, cluster_info):
+    def _calculate_resources(self, spec, cluster_info):
         """
         Given information about the cluster, processes environment file spec and
         calculates exact resources. I.e. where the user has specified an "auto"
@@ -175,7 +213,7 @@ class Environment(object):
         component_resources = {}
 
         # Get requested resources for each machine
-        for component_name, vals in self._spec['environment']['components'].iteritems():
+        for component_name, vals in spec['environment']['components'].iteritems():
             # Ensure that machine name user has given is valid in this cluster
             if not vals['machine'] in cluster_info:
                 raise self.LaunchError('In component "{0}", machine "{1}" '
@@ -264,9 +302,8 @@ class Environment(object):
         any of the components are running.
         Returns list of those components found to be already running
         """
-        marathon_url = urlparse('http://localhost:{0}'.format(marathon_tunnel.local_port))
-        client = marathon.MarathonClient(servers=marathon_url.geturl(),
-                                         timeout=600)
+        marathon_url = 'http://localhost:{0}'.format(marathon_tunnel.local_port)
+        client = marathon.MarathonClient(servers=marathon_url, timeout=600)
         app_list = client.list_apps()
         running_components = []
         for app_name in [ a.id.strip('/') for a in app_list ]:
@@ -276,18 +313,25 @@ class Environment(object):
         return running_components
 
 
-    def get_applications_info(self, marathon_tunnel):
-        marathon_url = urlparse('http://localhost:{0}'.format(marathon_tunnel.local_port))
-        client = marathon.MarathonClient(servers=marathon_url.geturl(),timeout=600)
-        app_list = client.list_apps()
-        info = {}
-        for app_name in [ a.id.strip('/') for a in app_list ]:
-            if app_name not in info:
-                info[app_name] = 0
-            info[app_name] += client.get_app(app_name).instances
-        return info
+    def get_running_component_info(self):
+        """
+        Queries Marathon and gets names of each running component and number of instances
+        of each
+        """
+        tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
+        tunnel.connect()
 
-    def _launch_components(self, component_resources, tunnel):
+        marathon_url = 'http://localhost:{0}'.format(tunnel.local_port)
+        client = marathon.MarathonClient(servers=marathon_url, timeout=600)
+        app_list = client.list_apps()
+        app_counts = {}
+        for app_name in [ a.id.strip('/') for a in app_list ]:
+            if app_name not in app_counts:
+                app_counts[app_name] = 0
+            app_counts[app_name] += client.get_app(app_name).instances
+        return app_counts
+
+    def _launch_components(self, spec, component_resources, tunnel):
         """
         Takes processed component resources dictionary and performs final steps,
         prepares Marathon data structures and launches components.
@@ -312,7 +356,7 @@ class Environment(object):
                             'containerPath': defaults.shared_volume_path,
                             'hostPath': defaults.shared_volume_path}]
         app_containers = []
-        for name, c in self._spec['environment']['components'].iteritems():
+        for name, c in spec['environment']['components'].iteritems():
             # Create ports mappings
             port_mappings = []
 
@@ -343,7 +387,7 @@ class Environment(object):
             if c['depends']:
                 for d in c['depends'].split(','):
                     depend_str = d.strip()
-                    if not depend_str in self._spec['environment']['components']:
+                    if not depend_str in spec['environment']['components']:
                         raise self.LaunchError('Could not find dependency "{0}" as '
                                                 'specified in component "{1}"'.format(depend_str, name))
                     dependencies.append('/{0}'.format(depend_str))
@@ -363,9 +407,8 @@ class Environment(object):
 
         # Launch containers
 
-        marathon_url = urlparse('http://localhost:{0}'.format(tunnel.local_port))
-        client = marathon.MarathonClient(servers=marathon_url.geturl(),
-                                         timeout=600)
+        marathon_url = 'http://localhost:{0}'.format(tunnel.local_port)
+        client = marathon.MarathonClient(servers=marathon_url, timeout=600)
         for container in app_containers:
             # Check if app already exists
             app_list = client.list_apps()
@@ -454,7 +497,7 @@ class Environment(object):
 
         local_port, component_name, remote_port = parts
 
-        hostname = self.get_component_hostname(component_name, cluster_info, component_resources)
+        hostname = self._get_component_hostname(component_name, cluster_info, component_resources)
 
         # Make tunnel from controller to node. Note that this uses the same port for both
         # the node and for the controller for simplicity of implementation
