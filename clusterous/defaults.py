@@ -33,10 +33,13 @@ node_tag_status_uninitialized = 'uninitialized'
 node_tag_status_initialized = 'initialized'
 
 mesos_port = 5050
+marathon_port = 8080
 
 # How many seconds to wait for all Marathon applications to reach "started" state
 # Currently 30 minutes
 app_launch_start_timeout = 1800
+
+app_destroy_timeout = 60
 
 def get_script(filename):
     """

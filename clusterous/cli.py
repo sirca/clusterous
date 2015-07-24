@@ -3,8 +3,10 @@ import os
 import defaults
 import argparse
 import logging
+import textwrap
 
-import clusterous
+import clusterousmain
+from clusterous import __version__, __prog_name__
 from helpers import NoWorkingClusterException
 
 class CLIParser(object):
@@ -49,22 +51,26 @@ class CLIParser(object):
 
 
     def _create_args(self, parser):
-        parser.add_argument('--verbose', dest='verbose', action='store_true',
+        parser.add_argument('--verbose', '-v', dest='verbose', action='store_true',
             default=False, help='Print verbose debug output')
+        parser.add_argument('--version', action='version', version='%(prog)s {0}'.format(__version__))
 
     def _create_subparsers(self, parser):
         subparser = parser.add_subparsers(description='The following subcommands are available', dest='subcmd')
 
-        start = subparser.add_parser('start', help='Create a new cluster based on profile file')
+        start = subparser.add_parser('start', help='Create a new cluster based on profile file',
+                                        description='Create a new cluster based on profile file')
         start.add_argument('profile_file', action='store')
 
         # Build Docker image
-        build = subparser.add_parser('build-image', help='Build a new Docker image')
+        build = subparser.add_parser('build-image', help='Build a new Docker image',
+                                        description='Build a Docker image on the cluster from a Dockerfile')
         build.add_argument('dockerfile_folder', action='store', help='Local folder name which contains the Dockerfile')
         build.add_argument('image_name', action='store', help='Name of the docker image to be created on the cluster')
 
         # Docker image info
-        image_info = subparser.add_parser('image-info', help='Gets information of a Docker image')
+        image_info = subparser.add_parser('image-info', help='Get information on a Docker image',
+                                            description='Get information about a Docker image on the cluster')
         image_info.add_argument('image_name', action='store', help='Name of the docker image available on the cluster')
 
         # Sync: put
@@ -78,25 +84,42 @@ class CLIParser(object):
         sync_get.add_argument('local_path', action='store', help='Path to the local folder')
 
         # ls
-        ls = subparser.add_parser('ls', help='List content of the shared volume')
+        ls = subparser.add_parser('ls', help='List contents of the shared volume')
         ls.add_argument('remote_path', action='store', help='Path on the shared volume', nargs='?', default='')
 
         # rm
-        rm = subparser.add_parser('rm', help='Deletes a folder on the shared volume')
+        rm = subparser.add_parser('rm', help='Delete a folder on the shared volume')
         rm.add_argument('remote_path', action='store', help='Path on the shared volume')
 
         # workon
-        workon = subparser.add_parser('workon', help='Sets a working cluster')
+        workon = subparser.add_parser('workon', help='Set the working cluster',
+                                        description='Set the currently active cluster by name')
         workon.add_argument('cluster_name', action='store', help='Name of the cluster')
 
-        terminate = subparser.add_parser('terminate', help='Terminate an existing cluster')
+        # Terminate
+        terminate = subparser.add_parser('terminate', help='Terminate the working cluster',
+                                            description='Terminate the working cluster, destroying all resources')
         terminate.add_argument('--confirm', dest='no_prompt', action='store_true',
             default=False, help='Immediately terminate cluster without prompting for confirmation')
-        # status
-        cluster_status = subparser.add_parser('status', help='Status of working cluster')
 
-        launch = subparser.add_parser('launch', help='Launch an environment from an environment file')
+        # Status
+        cluster_status = subparser.add_parser('status', help='Status of the cluster',
+                                                description='Show information on the state of the cluster and any running application')
+
+        # Launch
+        launch = subparser.add_parser('launch', help='Launch an environment from an environment file',
+                                        description='Launch an environment on the cluster based on the specifications '
+                                                    'in an environment file')
         launch.add_argument('environment_file', action='store')
+
+        # Destroy
+        destroy = subparser.add_parser('destroy', help='Stop the running application',
+                                        description='Stops the running application containers on the'
+                                        ' cluster and removes any SSH tunnels to the application')
+        destroy.add_argument('--tunnel-only', dest='tunnel_only', action='store_true',
+                            default=False, help='Only destroy any SSH tunnels, do not stop application')
+        destroy.add_argument('--confirm', dest='no_prompt', action='store_true', default=False,
+                                help='Immediately destroy application without prompting for confirmation')
 
     def _init_clusterous_object(self, args):
         app = None
@@ -105,7 +128,7 @@ class CLIParser(object):
         else:
             self._configure_logging('INFO')
 
-        app = clusterous.Clusterous()
+        app = clusterousmain.Clusterous()
         return app
 
     def _workon(self, args):
@@ -121,6 +144,7 @@ class CLIParser(object):
             prompt_str = 'This will terminate the cluster {0}. Continue (y/n)? '.format(cl.cluster_name)
             cont = raw_input(prompt_str)
             if cont.lower() != 'y' and cont.lower() != 'yes':
+                print 'Doing nothing'
                 return 1
 
         app = self._init_clusterous_object(args)
@@ -198,22 +222,24 @@ class CLIParser(object):
         else:
             apps_str = '\n'.join(['{0}: {1}'.format(k, str(v)) for k,v in info.get('applications').iteritems()])
 
-        output = """CLUSTER:
-Name: {cluster_name}
-Uptime: {up_time}
-Controller IP: {controller_ip}
+        output_fmt = textwrap.dedent("""\
+                        CLUSTER:
+                        Name: {cluster_name}
+                        Uptime: {up_time}
+                        Controller IP: {controller_ip}
 
-INSTANCES:
-{instances}
+                        INSTANCES:
+                        {instances}
 
-APPLICATION COMPONENTS:
-{applications}
+                        APPLICATION COMPONENTS:
+                        {applications}
 
-SHARED VOLUME:
-Total: {volume_total}
-Used: {volume_used} ({volume_used_pct})
-Free: {volume_free}
-""".format(cluster_name=info.get('cluster',{}).get('name'),
+                        SHARED VOLUME:
+                        Total: {volume_total}
+                        Used: {volume_used} ({volume_used_pct})
+                        Free: {volume_free}\
+                        """)
+        output = output_fmt.format(cluster_name=info.get('cluster',{}).get('name'),
                        up_time=up_time_str,
                        controller_ip=info.get('cluster',{}).get('controller_ip'),
                        volume_total=info.get('volume',{}).get('total'),
@@ -226,8 +252,21 @@ Free: {volume_free}
         print output
         return 0
 
+    def _destroy(self, args):
+        # If the user specifies --tunnel-only, we don't prompt for confirmation
+        if not args.no_prompt and not args.tunnel_only:
+            cont = raw_input('This will destroy the running application. Continue (y/n)? ')
+            if cont.lower() != 'y' and cont.lower() != 'yes':
+                print 'Doing nothing'
+                return 1
+
+        app = self._init_clusterous_object(args)
+        result = app.destroy_environment(args.tunnel_only)
+
+        return 0 if result else 1
+
     def main(self, argv=None):
-        parser = argparse.ArgumentParser('clusterous', description='Tool to create and manage compute clusters')
+        parser = argparse.ArgumentParser(__prog_name__, description='Tool to create and manage compute clusters')
 
         self._create_args(parser)
         self._create_subparsers(parser)
@@ -244,10 +283,10 @@ Free: {volume_free}
             elif args.subcmd == 'launch':
                 self._launch_environment(args)
             elif args.subcmd == 'build-image':
-                app = clusterous.Clusterous()
+                app = self._init_clusterous_object(args)
                 app.docker_build_image(args)
             elif args.subcmd == 'image-info':
-                app = clusterous.Clusterous()
+                app = self._init_clusterous_object(args)
                 self._docker_image_info(args)
             elif args.subcmd == 'put':
                 status = self._sync_put(args)
@@ -261,6 +300,8 @@ Free: {volume_free}
                 status = self._workon(args)
             elif args.subcmd == 'status':
                 status = self._cluster_status(args)
+            elif args.subcmd == 'destroy':
+                status = self._destroy(args)
         # TODO: this exception should not be caught here
         except NoWorkingClusterException as e:
             pass

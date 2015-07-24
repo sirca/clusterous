@@ -135,14 +135,12 @@ class Clusterous(object):
 
     def cluster_status(self):
         cl = self.make_cluster_object()
-        env = environment.Environment(None, None, None)
-        marathon_tunnel = cl.make_controller_tunnel(8080)
-        marathon_tunnel.connect()
+        env = environment.Environment(cl)
         all_info = {'cluster': cl.info_status(),
-                'instances': cl.info_instances(),
-                'applications': env.get_applications_info(marathon_tunnel),
-                'volume': cl.info_shared_volume()
-                }
+                    'instances': cl.info_instances(),
+                    'applications': env.get_running_component_info(),
+                    'volume': cl.info_shared_volume()
+                    }
         return (True, all_info)
 
     def workon(self, cluster_name):
@@ -157,20 +155,33 @@ class Clusterous(object):
         self._logger.info('Terminating cluster {0}'.format(cl.cluster_name))
         cl.terminate_cluster()
 
-
     def launch_environment(self, environment_file):
         cl = self.make_cluster_object()
 
         try:
             env_file = environmentfile.EnvironmentFile(environment_file)
-            env = environment.Environment(env_file.spec, env_file.base_path, cl)
-            success, message = env.launch_from_spec()
+            env = environment.Environment(cl)
+            success, message = env.launch_from_spec(env_file)
         except environment.Environment.LaunchError as e:
             self._logger.error(e)
             self._logger.error('Failed to launch environment')
             return False, ''
 
         return success, message
+
+    def destroy_environment(self, tunnel_only=False):
+        cl = self.make_cluster_object()
+
+        success = True
+        if not tunnel_only:
+            # Destroy running apps
+            env = environment.Environment(cl)
+            success &= env.destroy()
+        else:
+            self._logger.info('Only removing any local SSH tunnels')
+
+        success &= cl.delete_all_permanent_tunnels()
+        return success
 
     def list_clusters(self, args):
         pass

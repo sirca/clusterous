@@ -61,6 +61,13 @@ class EnvironmentFile(object):
 
         self.spec = self._parse_environment_file(yaml_data)
 
+    def get_full_path(self, rel_path):
+        """
+        Given a relative path, returns the absolute path relative to the
+        environment file's base path
+        """
+        return os.path.join(self.base_path, rel_path)
+
     def _read_yaml(self, environment_file):
         """
         Loads environment file into yaml dictionary

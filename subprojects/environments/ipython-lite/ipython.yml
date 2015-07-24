@@ -37,7 +37,7 @@ environment:    # change to "application"?
   expose_tunnel:      # create an ssh tunnel
     service: 8888:notebook:31080    # source port 31080 on master to 8888 on localhost
     message: |
-          The IPython engines make take up to 30 seconds to become available.
+          The IPython engines may take up to 30 seconds to become available.
           The connection file is located at:
           /home/data/ipython/profile/security/ipcontroller-client.json
           To access IPython notebook, use this URL:
