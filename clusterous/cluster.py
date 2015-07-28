@@ -178,7 +178,7 @@ class AWSCluster(Cluster):
     def _ssh_to_controller(self):
         try:
             ssh = paramiko.SSHClient()
-            ssh.load_system_host_keys()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(hostname = self._get_controller_ip(),
                         username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
@@ -386,7 +386,7 @@ class AWSCluster(Cluster):
         image_info = {}
         # TODO: rewrite to use make HTTP calls directly
         with paramiko.SSHClient() as ssh:
-            ssh.load_system_host_keys()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(hostname = self._get_controller_ip(),
                         username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
@@ -450,7 +450,7 @@ class AWSCluster(Cluster):
         # Check remote path
         remote_path = '/home/data/{0}'.format(remote_path)
         with paramiko.SSHClient() as ssh:
-            ssh.load_system_host_keys()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())()
             ssh.connect(hostname = self._get_controller_ip(), username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
 
@@ -483,7 +483,7 @@ class AWSCluster(Cluster):
         List content of a folder on the on cluster
         """
         with paramiko.SSHClient() as ssh:
-            ssh.load_system_host_keys()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(hostname = self._get_controller_ip(), username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
 
@@ -503,7 +503,7 @@ class AWSCluster(Cluster):
         Delete content of a folder on the on cluster
         """
         with paramiko.SSHClient() as ssh:
-            ssh.load_system_host_keys()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(hostname = self._get_controller_ip(), username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
 
@@ -582,7 +582,7 @@ class AWSCluster(Cluster):
                 'used_pct': '',
                 'free': ''}
         with paramiko.SSHClient() as ssh:
-            ssh.load_system_host_keys()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(hostname = self._get_controller_ip(),
                         username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
