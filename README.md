@@ -42,7 +42,65 @@ vi democluster.yml
 clusterous --verbose start democluster.yml
 ```
 
+### Cluster status
+```
+clusterous status
+```
+
+### Set working cluster
+```
+clusterous workon democluster
+```
+
+### List files on shared volume
+```
+clusterous ls
+```
+
+### Upload files
+```
+clusterous put tests
+clusterous ls
+```
+
+### Download files
+```
+clusterous get tests /tmp
+ls -al /tmp/tests
+```
+
+### Remove files on shared volumen
+```
+clusterous rm tests
+clusterous ls
+```
+
+### Build docker image
+```
+cd subprojects/environments/basic_demo
+clusterous build-image image bdkd:sample_v1
+```
+
+### Get information of docker image
+```
+clusterous image-info bdkd:sample_v1
+```
+
+### Launch environment
+```
+cd subprojects/environments/basic_demo
+clusterous launch basic_env.yml
+clusterous status
+```
+
+### Destroy environment
+```
+clusterous destroy
+clusterous status
+```
+
 ### Terminate cluster
 ```
 clusterous --verbose terminate democluster
+clusterous status
 ```
