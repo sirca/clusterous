@@ -450,7 +450,7 @@ class AWSCluster(Cluster):
         # Check remote path
         remote_path = '/home/data/{0}'.format(remote_path)
         with paramiko.SSHClient() as ssh:
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(hostname = self._get_controller_ip(), username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
 
