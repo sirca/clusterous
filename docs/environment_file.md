@@ -92,7 +92,7 @@ The "cpu" field is mandatory and is either set to "auto" or an explicit number (
 
 The "count" field is optional, defaulting to 1 instance. If specified, the only value currently accepted is "auto", which means Clusterous will create as many instances as possible on the given machine type, ensuring maximum utilisation.
 
-There is currently no way to specify memory -- memory is assigned to each component (or instance) proportionally based, on the CPU.
+There is currently no way to specify memory: memory is assigned to each component (or instance) proportionally based, on the CPU.
 
 ### Count vs CPU: The limitations
 A key feature of Clusterous is that you don't directly specify how many instances of a component you want running. A component either has one running instance (which may run on the same machine as one or more components), or multiple instances, the exact number of which is automatically determined. In a typical application, this would mean that components such as a UI, master and queueing system would have a single instance each, whereas workers would have as many instances as possible given the cluster size.
