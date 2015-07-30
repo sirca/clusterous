@@ -17,7 +17,7 @@ An environment file is a special YAML file that provides Clusterous instructions
 
 This heavily annotated example demonstrates what an environment file looks like. It runs a simple 2-part Python application that displays a web page.
 
-```
+```YAML
 name: basic-python    # environment name
 environment:  # This is the main section where you describe the environment
   # Copy any necessary folders to the cluster shared storage.
@@ -77,13 +77,13 @@ Again, it is important to note that paths you specify inside the envirnment file
 ### Mapping Ports
 The "ports" field supports a few different syntax options for exposing the container's ports on the host. Multiple ports can be specified in the form:
 
-```
+```YAML
   ports: 31000,31001,31002
 ```
 
 The above example will map the three container ports to the same port on the host. If you want to specify a different port number for the container and the host, simply separate them with a colon, in the form host_port:container_port:
 
-```
+```YAML
   ports: 31000:8000,31001:8001,31002:8002
 ```
 
