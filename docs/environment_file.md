@@ -72,10 +72,10 @@ basic-python/
   --launch_engine.sh
 --basic-python-env.yml      # the environment file itself
 ```
-Again, it is important to note that paths you specify inside the envirnment file are relative to the location of the environment file itself. Therefore, the above environment file implies that folders are laid out in this way.
+Again, it is important to note that paths you specify inside the environment file are relative to the location of the environment file itself. Therefore, the above environment file implies that folders are laid out in this way.
 
 ### Mapping Ports
-The "ports" field supports a few different syntax options for exposing the container's ports on the host. Multiple ports can be specified in the form:
+The `ports` field supports a few different syntax options for exposing the container's ports on the host. Multiple ports can be specified in the form:
 
 ```YAML
   ports: 31000,31001,31002
@@ -88,13 +88,13 @@ The above example will map the three container ports to the same port on the hos
 ```
 
 ### CPU, Memory and Count
-The "cpu" field is mandatory and is either set to "auto" or an explicit number (decimals are allowed; 0.5 means half a CPU). Note that there are some limitations what you specify as described in the section Component Resources.
+The `cpu` field is mandatory and is either set to "auto" or an explicit number (decimals are allowed; 0.5 means half a CPU). Note that there are some limitations what you specify as described in the section Component Resources.
 
-The "count" field is optional, defaulting to 1 instance. If specified, the only value currently accepted is "auto", which means Clusterous will create as many instances as possible on the given machine type, ensuring maximum utilisation.
+The `count` field is optional, defaulting to 1 instance. If specified, the only value currently accepted is "auto", which means Clusterous will create as many instances as possible on the given machine type, ensuring maximum utilisation.
 
 There is currently no way to specify memory: memory is assigned to each component (or instance) proportionally based, on the CPU.
 
 ### Count vs CPU: The limitations
 A key feature of Clusterous is that you don't directly specify how many instances of a component you want running. A component either has one running instance (which may run on the same machine as one or more components), or multiple instances, the exact number of which is automatically determined. In a typical application, this would mean that components such as a UI, master and queueing system would have a single instance each, whereas workers would have as many instances as possible given the cluster size.
 
-A consequence of this is that when specifying the "cpu" field or "count" field for a component, there are certain combinations that are not permitted. For example, when running two different component on the same machine (like a UI and a queue), "cpu" for those components must be set to "auto", indicating that the CPU will be evenly divided among components. On the other hand, for a typical "worker" component, "count" will be "auto", and an explicit "cpu" must be specified.
+A consequence of this is that when specifying the `cpu` field or `count` field for a component, there are certain combinations that are not permitted. For example, when running two different component on the same machine (like a UI and a queue), `cpu` for those components must be set to "auto", indicating that the CPU will be evenly divided among components. On the other hand, for a typical "worker" component, `count` will be "auto", and an explicit `cpu` must be specified.
