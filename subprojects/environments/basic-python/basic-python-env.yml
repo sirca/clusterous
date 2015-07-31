@@ -1,0 +1,37 @@
+
+name: basic-python    # environment name
+environment:  # This is the main section where you describe the environment
+  # Copy any necessary folders to the cluster shared storage.
+  # The folder name is relative to the location of this environment file
+  copy:
+    - "launch_scripts/"
+  # Build one or more Docker images. If an image of the same name already exists
+  # in your private Docker registry, it won't be built.
+  # The folder is relative to the location of this environment file.
+  image:
+    - dockerfile: "image/"   # folder containing Dockerfile
+      image_name: "basic-python"
+  # Section that describes your application components
+  components:
+    master:     # A component named "master"
+      machine: master       # Run on the machine named "master"
+      cpu: auto             # Evenly share CPU with any other components running on this machine
+      image: registry:5000/basic-python   # Name of the Docker image to run
+      cmd: "/bin/bash /home/data/launch_scripts/launch_master.sh"   # The command to be run in the container
+      ports: "31000"        # Expose container port 31000 as 31000 on the host
+    engine:   # Component named "engine". These are the "worker" processes
+      machine: worker       # Run on machine(s) named "worker"
+      depends: master       # Run only after "master" component has been run
+      cpu: 0.5              # 0.5 CPU per running instance of this component
+      count: auto           # Automatically run as much as possible on all machines of this type
+      image: registry:5000/basic-python     # Name of the Docker image to run (same as master in this example)
+      cmd: "/bin/bash /home/data/launch_scripts/launch_engine.sh"   # Launch command
+  # Once the above environment is running, create an SSH tunnel to one of the
+  # components. This is typically used to expose a web UI or a queue on the local
+  # machine. This section is optional.
+  expose_tunnel:
+    # The component to connect to and the ports. In the format:
+    # local_port:component_name:source_port
+    service: 8888:master:31000
+    # An optional message to display to the user once the port is exposed
+    message: "To access the master, use this URL: "
