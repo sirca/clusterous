@@ -576,6 +576,90 @@ class AWSCluster(Cluster):
             info[instance.instance_type] += 1
         return info
 
+    def cluster_connect(self, app_name):
+        key_filename = os.path.expanduser(self._config['key_file'])
+        key_file_on_controller = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir, 
+                                                        defaults.remote_host_key_file)
+        # Copy key file
+        cmd = 'scp -i {0} {0} root@{1}:{2}'.format(key_filename, 
+                                                   self._get_controller_ip(), 
+                                                   key_file_on_controller)
+        process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
+        output, error = process.communicate()
+        if error:
+            message = "Error found:\n{0}".format(error)
+            return (False, message)
+    
+        # Get containers running on selected node
+        node = '{0}.marathon.mesos'.format(app_name)
+        docker_cmd = "docker ps|grep -v CONTAINER| awk '{{print $1}}'"
+        cmd='ssh -i {key_filename} -oStrictHostKeyChecking=no root@{controller_ip} \
+             ssh -i {key_file_on_controller} -oStrictHostKeyChecking=no {node} \
+             {docker_cmd}'.format(
+                          key_filename=key_filename,
+                          controller_ip=self._get_controller_ip(),
+                          key_file_on_controller=key_file_on_controller,
+                          node=node,
+                          docker_cmd=docker_cmd)
+        process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
+        output, error = process.communicate()
+        if error:
+            message = "Error found:\n{0}".format(error)
+            return (False, message)
+
+        # Get the right container_id
+        container_id = None
+        for container in output.split():
+            docker_cmd = 'docker inspect {0}| grep MARATHON_APP_ID=/{1}'.format(container, app_name)
+            cmd='ssh -i {key_filename} -oStrictHostKeyChecking=no root@{controller_ip} \
+                 ssh -i {key_file_on_controller} -oStrictHostKeyChecking=no {node} \
+                 {docker_cmd}'.format(
+                              key_filename=key_filename,
+                              controller_ip=self._get_controller_ip(),
+                              key_file_on_controller=key_file_on_controller,
+                              node=node,
+                              docker_cmd=docker_cmd)
+    
+            process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
+            output, error = process.communicate()
+            if error:
+                message = "Error found:\n{0}".format(error)
+                return (False, message)
+            
+            if output:
+                container_id = container
+                break
+
+        if container_id is None:
+            message = "Could not find docker container where '{0}' is running".format(app_name)
+            return (False, message)
+
+        # Shell
+        docker_cmd = 'docker exec -ti {container_id} bash'.format(container_id=container_id)
+        cmd='ssh -i {key_filename} -oStrictHostKeyChecking=no -A -t root@{controller_ip} \
+             ssh -i {key_file_on_controller} -oStrictHostKeyChecking=no -A -t {node} \
+             {docker_cmd}'.format(
+                              key_filename=key_filename,
+                              controller_ip=self._get_controller_ip(),
+                              key_file_on_controller=key_file_on_controller,
+                              node=node,
+                              docker_cmd=docker_cmd)
+        os.system(cmd)
+
+        # Remove keys
+        cmd='ssh -i {key_filename} -oStrictHostKeyChecking=no root@{controller_ip} \
+             rm -fr {key_file_on_controller}'.format(
+                              key_filename=key_filename,
+                              controller_ip=self._get_controller_ip(),
+                              key_file_on_controller=key_file_on_controller)
+        process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
+        output, error = process.communicate()
+        if error:
+            message = "Error found:\n{0}".format(error)
+            return (False, message)
+
+        return (True, 'Ok')
+
     def info_shared_volume(self):
         info = {'total': '',
                 'used': '',

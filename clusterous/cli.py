@@ -120,6 +120,10 @@ class CLIParser(object):
                             default=False, help='Only destroy any SSH tunnels, do not stop application')
         destroy.add_argument('--confirm', dest='no_prompt', action='store_true', default=False,
                                 help='Immediately destroy application without prompting for confirmation')
+        # Connect
+        connect = subparser.add_parser('connect', help='Gets an interactive shell within a docker container',
+                                description='Connects to a docker container and gets an interactive shell')
+        connect.add_argument('app_name', action='store', help='Name of the application (component on the environment file)')
 
     def _init_clusterous_object(self, args):
         app = None
@@ -201,6 +205,14 @@ class CLIParser(object):
         success, message = app.rm(remote_path = args.remote_path)
         print message
         return 0 if success else 1
+
+    def _cluster_connect(self, args):
+        app = self._init_clusterous_object(args)
+        success, message = app.cluster_connect(app_name = args.app_name)
+        if not success:
+            print message
+            return 1
+        return 0
 
     def _cluster_status(self, args):
         app = self._init_clusterous_object(args)
@@ -300,6 +312,8 @@ class CLIParser(object):
                 status = self._workon(args)
             elif args.subcmd == 'status':
                 status = self._cluster_status(args)
+            elif args.subcmd == 'connect':
+                status = self._cluster_connect(args)
             elif args.subcmd == 'destroy':
                 status = self._destroy(args)
         # TODO: this exception should not be caught here
