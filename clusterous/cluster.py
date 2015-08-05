@@ -576,7 +576,7 @@ class AWSCluster(Cluster):
             info[instance.instance_type] += 1
         return info
 
-    def cluster_connect(self, app_name):
+    def cluster_connect(self, component_name):
         key_filename = os.path.expanduser(self._config['key_file'])
         key_file_on_controller = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir, 
                                                         defaults.remote_host_key_file)
@@ -591,7 +591,7 @@ class AWSCluster(Cluster):
             return (False, message)
     
         # Get containers running on selected node
-        node = '{0}.marathon.mesos'.format(app_name)
+        node = '{0}.marathon.mesos'.format(component_name)
         docker_cmd = "docker ps|grep -v CONTAINER| awk '{{print $1}}'"
         cmd='ssh -i {key_filename} -oStrictHostKeyChecking=no root@{controller_ip} \
              ssh -i {key_file_on_controller} -oStrictHostKeyChecking=no {node} \
@@ -610,7 +610,7 @@ class AWSCluster(Cluster):
         # Get the right container_id
         container_id = None
         for container in output.split():
-            docker_cmd = 'docker inspect {0}| grep MARATHON_APP_ID=/{1}'.format(container, app_name)
+            docker_cmd = 'docker inspect {0}| grep MARATHON_APP_ID=/{1}'.format(container, component_name)
             cmd='ssh -i {key_filename} -oStrictHostKeyChecking=no root@{controller_ip} \
                  ssh -i {key_file_on_controller} -oStrictHostKeyChecking=no {node} \
                  {docker_cmd}'.format(
@@ -631,7 +631,7 @@ class AWSCluster(Cluster):
                 break
 
         if container_id is None:
-            message = "Could not find docker container where '{0}' is running".format(app_name)
+            message = "Could not find docker container where '{0}' is running".format(component_name)
             return (False, message)
 
         # Shell

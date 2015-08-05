@@ -133,21 +133,21 @@ class Clusterous(object):
         cl = self.make_cluster_object()
         return cl.rm(remote_path)
 
-    def cluster_connect(self, app_name):
+    def cluster_connect(self, component_name):
         # Check if component_name exists
         cl = self.make_cluster_object()
         env = environment.Environment(cl)
         runnin_apps = env.get_running_component_info()
-        app = runnin_apps.get(app_name)
+        app = runnin_apps.get(component_name)
         if app is None:
-            message = "Application '{0}' does not exist".format(app_name)
+            message = "Component '{0}' does not exist".format(component_name)
             return (False, message)
 
         if app > 1:
-            message = "Cannot connect to '{0}' because there is more than one instance running on the cluster".format(app_name)
+            message = "Cannot connect to '{0}' because there is more than one instance running on the cluster".format(component_name)
             return (False, message)
 
-        return cl.cluster_connect(app_name)
+        return cl.cluster_connect(component_name)
 
     def cluster_status(self):
         cl = self.make_cluster_object()

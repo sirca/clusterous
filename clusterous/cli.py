@@ -123,7 +123,7 @@ class CLIParser(object):
         # Connect
         connect = subparser.add_parser('connect', help='Gets an interactive shell within a docker container',
                                 description='Connects to a docker container and gets an interactive shell')
-        connect.add_argument('app_name', action='store', help='Name of the application (component on the environment file)')
+        connect.add_argument('component_name', action='store', help='Name of the component (see environment file)')
 
     def _init_clusterous_object(self, args):
         app = None
@@ -208,7 +208,7 @@ class CLIParser(object):
 
     def _cluster_connect(self, args):
         app = self._init_clusterous_object(args)
-        success, message = app.cluster_connect(app_name = args.app_name)
+        success, message = app.cluster_connect(component_name = args.component_name)
         if not success:
             print message
             return 1
