@@ -8,12 +8,12 @@ import boto
 import defaults
 import cluster
 import clusterbuilder
-import environmentfile
+from environmentfile import EnvironmentFile
 import environment
 from helpers import AnsibleHelper
 
 
-class ParseError(Exception):
+class ClusterousError(Exception):
     pass
 
 class Clusterous(object):
@@ -48,11 +48,49 @@ class Clusterous(object):
 
         # Validate
         if len(contents) < 1:
-            raise ParseError('Could not find configuration information in {0}'
+            raise ClusterousError('Could not find configuration information in {0}'
                              .format(defaults.DEFAULT_CONFIG_FILE))
 
         # TODO: validate properly by sending to provisioner
         self._config = contents[0]
+
+    def _read_profile(self, profile_file):
+        """
+        Given user supplied file path, read in and validate profile file.
+        Return dictionary contents
+        """
+        full_path = os.path.abspath(os.path.expanduser(profile_file))
+        if not os.path.isfile(full_path):
+            raise ClusterousError('Cannot open file "{0}"'.format(profile_file))
+        stream = open(full_path, 'r')
+        try:
+            contents = yaml.load(stream)
+        except yaml.YAMLError as e:
+            raise ClusterousError('Error processing YAML file {0}'.format(e))
+
+        # Validate profile file
+        validated = {}
+        try:
+            validated['cluster_name'] = contents['cluster_name']
+        except KeyError as e:
+            raise ClusterousError('No "cluster_name" field in "{0}"'.format(profile_file))
+
+        validated['parameters'] = contents.get('parameters', {})
+
+        environment_file = None
+        if 'environment_file' in contents:
+            # Get absolute path of environment file
+            # The given file path is assumed to be relative to the location of the profile file
+            base_path = os.path.dirname(full_path)
+            environment_file = os.path.join(base_path, contents['environment_file'])
+
+        validated['environment_file'] = environment_file
+
+        for key in contents.keys():
+            if key not in validated.keys():
+                raise ClusterousError('Unknown field "{0}" in profile file "{1}"'.format(key, profile_file))
+
+        return validated
 
     def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
         cl = None
@@ -60,26 +98,80 @@ class Clusterous(object):
             cl = cluster.AWSCluster(self._config['AWS'], cluster_name, cluster_name_required)
         else:
             self._logger.error('Unknown cloud type')
-            raise ValueError('Unknown cloud type')
+            raise ClusterousError('Unknown cloud type')
 
         return cl
 
-    def start_cluster(self, args):
+    def start_cluster(self, profile_file, launch_env=True):
         """
         Create a new cluster from profile file
         """
-        stream = open(os.path.expanduser(args.profile_file), 'r')
-        profile_contents = yaml.load(stream)[0]
-        stream.close()
+        profile = self._read_profile(profile_file)
+        env_file = None
+        cluster_spec = None
+        if profile['environment_file']:
+            env_file = EnvironmentFile(profile['environment_file'], profile['parameters'])
+
+        # If necessary, obtain cluster spec
+        if not env_file or (not env_file.spec['cluster']):
+            default_file_path = defaults.get_script(defaults.default_cluster_def_filename)
+            cluster_env_file = EnvironmentFile(default_file_path, profile['parameters'])
+            cluster_spec = cluster_env_file.spec['cluster']
+        else:
+            cluster_spec = env_file.spec['cluster']
+
+        self._logger.debug('Actual cluster spec: {0}'.format(cluster_spec))
 
         # Init Cluster object
         cl = self.make_cluster_object(cluster_name_required=False)
-
-        # Create Cluster Builder, passing in profile and Cluster
-        builder = clusterbuilder.DefaultClusterBuilder(profile_contents, cl)
+        builder = clusterbuilder.ClusterBuilder(cl, profile['cluster_name'], cluster_spec)
         self._logger.info('Starting cluster')
         builder.start_cluster()
-        self._logger.info('Started cluster')
+        self._logger.info('Cluster "{0}" started'.format(profile['cluster_name']))
+
+        message = ''
+        # Launch environment if environment file is available
+        if env_file:
+            self._logger.info('Launching environment')
+            try:
+                env = environment.Environment(cl)
+                # Launch environment (but wait 10 seconds for Mesos to init)
+                success, message = env.launch_from_spec(env_file, 10)
+                self._logger.info('Environment launched')
+            except environment.Environment.LaunchError as e:
+                self._logger.error(e)
+                self._logger.error('Failed to launch environment')
+                return False, message
+
+        return True, message
+
+    def launch_environment(self, environment_file):
+        cl = self.make_cluster_object()
+
+        try:
+            env_file = EnvironmentFile(environment_file)
+            env = environment.Environment(cl)
+            success, message = env.launch_from_spec(env_file)
+        except environment.Environment.LaunchError as e:
+            self._logger.error(e)
+            self._logger.error('Failed to launch environment')
+            return False, ''
+
+        return success, message
+
+    def destroy_environment(self, tunnel_only=False):
+        cl = self.make_cluster_object()
+
+        success = True
+        if not tunnel_only:
+            # Destroy running apps
+            env = environment.Environment(cl)
+            success &= env.destroy()
+        else:
+            self._logger.info('Only removing any local SSH tunnels')
+
+        success &= cl.delete_all_permanent_tunnels()
+        return success
 
     def docker_build_image(self, args):
         """
@@ -154,40 +246,3 @@ class Clusterous(object):
         cl = self.make_cluster_object()
         self._logger.info('Terminating cluster {0}'.format(cl.cluster_name))
         cl.terminate_cluster()
-
-    def launch_environment(self, environment_file):
-        cl = self.make_cluster_object()
-
-        try:
-            env_file = environmentfile.EnvironmentFile(environment_file)
-            env = environment.Environment(cl)
-            success, message = env.launch_from_spec(env_file)
-        except environment.Environment.LaunchError as e:
-            self._logger.error(e)
-            self._logger.error('Failed to launch environment')
-            return False, ''
-
-        return success, message
-
-    def destroy_environment(self, tunnel_only=False):
-        cl = self.make_cluster_object()
-
-        success = True
-        if not tunnel_only:
-            # Destroy running apps
-            env = environment.Environment(cl)
-            success &= env.destroy()
-        else:
-            self._logger.info('Only removing any local SSH tunnels')
-
-        success &= cl.delete_all_permanent_tunnels()
-        return success
-
-    def list_clusters(self, args):
-        pass
-
-    def get_cluster(self, cluser_name):
-        """
-        Get a Cluster object by name
-        """
-        pass

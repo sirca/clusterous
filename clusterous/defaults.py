@@ -25,6 +25,8 @@ shared_volume_path = '/home/data/'
 
 remote_scripts_dir = 'ansible/remote'
 
+default_cluster_def_filename = 'default_cluster.yml'
+
 remote_host_scripts_dir = 'clusterous'
 remote_host_key_file = 'key.pem'
 remote_host_vars_file = 'vars.yml'
