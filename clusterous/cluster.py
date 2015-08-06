@@ -576,6 +576,59 @@ class AWSCluster(Cluster):
             info[instance.instance_type] += 1
         return info
 
+    def connect_to_container(self, component_name):
+        key_file_local = os.path.expanduser(self._config['key_file'])
+        key_file_remote = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir, defaults.remote_host_key_file)
+        container_id_script_local = defaults.get_script(defaults.container_id_script_file)
+        container_id_script_remote = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir,defaults.container_id_script_file)
+        container_id_script_node = '/tmp/{0}'.format(defaults.container_id_script_file)
+        node = '{0}.marathon.mesos'.format(component_name)
+        
+        # SSH controller
+        with self._ssh_to_controller() as ssh:
+            # Copy files to controller
+            sftp = ssh.open_sftp()
+            sftp.put(key_file_local, key_file_remote)
+            sftp.put(container_id_script_local, container_id_script_remote)
+            sftp.chmod(key_file_remote, stat.S_IRUSR | stat.S_IWUSR)
+            sftp.close()
+
+            # Copy script to node
+            cmd='scp -i {0} -oStrictHostKeyChecking=no {1} {2}:{3}'.format(key_file_remote, 
+                                                                           container_id_script_remote, node, container_id_script_node)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            if stderr.readlines():
+                message = "Error found:\n{0}".format(stderr.readlines())
+                return (False, message)
+
+            # Get container id
+            cmd='ssh -i {0} -oStrictHostKeyChecking=no {1} source {2} {3}'.format(key_file_remote, 
+                                                                                  node, container_id_script_node, component_name)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            if stderr.readlines():
+                message = "Error found:\n{0}".format(stderr.readlines())
+                return (False, message)
+
+            container_id = stdout.readline().replace('\n','')
+            
+        # Shell
+        node = '{0}.marathon.mesos'.format(component_name)
+        cmd='ssh -i {0} -oStrictHostKeyChecking=no -A -t root@{1} \
+             ssh -i {2} -oStrictHostKeyChecking=no -A -t {3} \
+             docker exec -ti {4} bash'.format(key_file_local, self._get_controller_ip(),
+                         key_file_remote, node, container_id)
+        os.system(cmd)
+
+        # Remove keys
+        with self._ssh_to_controller() as ssh:
+            cmd='rm -fr {0}'.format(key_file_remote)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            if stderr.readlines():
+                message = "Error found:\n{0}".format(stderr.readlines())
+                return (False, message)
+            
+        return (True, 'Ok')
+
     def info_shared_volume(self):
         info = {'total': '',
                 'used': '',
