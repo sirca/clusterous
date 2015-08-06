@@ -576,88 +576,57 @@ class AWSCluster(Cluster):
             info[instance.instance_type] += 1
         return info
 
-    def cluster_connect(self, component_name):
-        key_filename = os.path.expanduser(self._config['key_file'])
-        key_file_on_controller = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir, 
-                                                        defaults.remote_host_key_file)
-        # Copy key file
-        cmd = 'scp -i {0} {0} root@{1}:{2}'.format(key_filename, 
-                                                   self._get_controller_ip(), 
-                                                   key_file_on_controller)
-        process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
-        output, error = process.communicate()
-        if error:
-            message = "Error found:\n{0}".format(error)
-            return (False, message)
-    
-        # Get containers running on selected node
+    def connect_to_container(self, component_name):
+        key_file_local = os.path.expanduser(self._config['key_file'])
+        key_file_remote = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir, defaults.remote_host_key_file)
+        container_id_script_local = defaults.get_script(defaults.container_id_script_file)
+        container_id_script_remote = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir,defaults.container_id_script_file)
+        container_id_script_node = '/tmp/{0}'.format(defaults.container_id_script_file)
         node = '{0}.marathon.mesos'.format(component_name)
-        docker_cmd = "docker ps|grep -v CONTAINER| awk '{{print $1}}'"
-        cmd='ssh -i {key_filename} -oStrictHostKeyChecking=no root@{controller_ip} \
-             ssh -i {key_file_on_controller} -oStrictHostKeyChecking=no {node} \
-             {docker_cmd}'.format(
-                          key_filename=key_filename,
-                          controller_ip=self._get_controller_ip(),
-                          key_file_on_controller=key_file_on_controller,
-                          node=node,
-                          docker_cmd=docker_cmd)
-        process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
-        output, error = process.communicate()
-        if error:
-            message = "Error found:\n{0}".format(error)
-            return (False, message)
+        
+        # SSH controller
+        with self._ssh_to_controller() as ssh:
+            # Copy files to controller
+            sftp = ssh.open_sftp()
+            sftp.put(key_file_local, key_file_remote)
+            sftp.put(container_id_script_local, container_id_script_remote)
+            sftp.chmod(key_file_remote, stat.S_IRUSR | stat.S_IWUSR)
+            sftp.close()
 
-        # Get the right container_id
-        container_id = None
-        for container in output.split():
-            docker_cmd = 'docker inspect {0}| grep MARATHON_APP_ID=/{1}'.format(container, component_name)
-            cmd='ssh -i {key_filename} -oStrictHostKeyChecking=no root@{controller_ip} \
-                 ssh -i {key_file_on_controller} -oStrictHostKeyChecking=no {node} \
-                 {docker_cmd}'.format(
-                              key_filename=key_filename,
-                              controller_ip=self._get_controller_ip(),
-                              key_file_on_controller=key_file_on_controller,
-                              node=node,
-                              docker_cmd=docker_cmd)
-    
-            process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
-            output, error = process.communicate()
-            if error:
-                message = "Error found:\n{0}".format(error)
+            # Copy script to node
+            cmd='scp -i {0} -oStrictHostKeyChecking=no {1} {2}:{3}'.format(key_file_remote, 
+                                                                           container_id_script_remote, node, container_id_script_node)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            if stderr.readlines():
+                message = "Error found:\n{0}".format(stderr.readlines())
                 return (False, message)
+
+            # Get container id
+            cmd='ssh -i {0} -oStrictHostKeyChecking=no {1} source {2} {3}'.format(key_file_remote, 
+                                                                                  node, container_id_script_node, component_name)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            if stderr.readlines():
+                message = "Error found:\n{0}".format(stderr.readlines())
+                return (False, message)
+
+            container_id = stdout.readline().replace('\n','')
             
-            if output:
-                container_id = container
-                break
-
-        if container_id is None:
-            message = "Could not find docker container where '{0}' is running".format(component_name)
-            return (False, message)
-
         # Shell
-        docker_cmd = 'docker exec -ti {container_id} bash'.format(container_id=container_id)
-        cmd='ssh -i {key_filename} -oStrictHostKeyChecking=no -A -t root@{controller_ip} \
-             ssh -i {key_file_on_controller} -oStrictHostKeyChecking=no -A -t {node} \
-             {docker_cmd}'.format(
-                              key_filename=key_filename,
-                              controller_ip=self._get_controller_ip(),
-                              key_file_on_controller=key_file_on_controller,
-                              node=node,
-                              docker_cmd=docker_cmd)
+        node = '{0}.marathon.mesos'.format(component_name)
+        cmd='ssh -i {0} -oStrictHostKeyChecking=no -A -t root@{1} \
+             ssh -i {2} -oStrictHostKeyChecking=no -A -t {3} \
+             docker exec -ti {4} bash'.format(key_file_local, self._get_controller_ip(),
+                         key_file_remote, node, container_id)
         os.system(cmd)
 
         # Remove keys
-        cmd='ssh -i {key_filename} -oStrictHostKeyChecking=no root@{controller_ip} \
-             rm -fr {key_file_on_controller}'.format(
-                              key_filename=key_filename,
-                              controller_ip=self._get_controller_ip(),
-                              key_file_on_controller=key_file_on_controller)
-        process = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
-        output, error = process.communicate()
-        if error:
-            message = "Error found:\n{0}".format(error)
-            return (False, message)
-
+        with self._ssh_to_controller() as ssh:
+            cmd='rm -fr {0}'.format(key_file_remote)
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            if stderr.readlines():
+                message = "Error found:\n{0}".format(stderr.readlines())
+                return (False, message)
+            
         return (True, 'Ok')
 
     def info_shared_volume(self):

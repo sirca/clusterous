@@ -28,6 +28,7 @@ remote_scripts_dir = 'ansible/remote'
 remote_host_scripts_dir = 'clusterous'
 remote_host_key_file = 'key.pem'
 remote_host_vars_file = 'vars.yml'
+container_id_script_file = 'container_id.sh'
 
 node_tag_status_uninitialized = 'uninitialized'
 node_tag_status_initialized = 'initialized'

@@ -123,7 +123,7 @@ class CLIParser(object):
         # Connect
         connect = subparser.add_parser('connect', help='Gets an interactive shell within a docker container',
                                 description='Connects to a docker container and gets an interactive shell')
-        connect.add_argument('component_name', action='store', help='Name of the component (see environment file)')
+        connect.add_argument('component_name', action='store', help='Name of the component (see status command)')
 
     def _init_clusterous_object(self, args):
         app = None
@@ -206,9 +206,9 @@ class CLIParser(object):
         print message
         return 0 if success else 1
 
-    def _cluster_connect(self, args):
+    def _connect_to_container(self, args):
         app = self._init_clusterous_object(args)
-        success, message = app.cluster_connect(component_name = args.component_name)
+        success, message = app.connect_to_container(component_name = args.component_name)
         if not success:
             print message
             return 1
@@ -313,7 +313,7 @@ class CLIParser(object):
             elif args.subcmd == 'status':
                 status = self._cluster_status(args)
             elif args.subcmd == 'connect':
-                status = self._cluster_connect(args)
+                status = self._connect_to_container(args)
             elif args.subcmd == 'destroy':
                 status = self._destroy(args)
         # TODO: this exception should not be caught here
