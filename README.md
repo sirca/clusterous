@@ -69,7 +69,7 @@ clusterous get tests /tmp
 ls -al /tmp/tests
 ```
 
-### Remove files on shared volumes
+### Remove files on shared volume
 ```
 clusterous rm tests
 clusterous ls
