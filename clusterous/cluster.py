@@ -615,7 +615,7 @@ class AWSCluster(Cluster):
             success, stdout = _retry(cmd)
             if not success:
                 self._logger.debug("Fail to copy scripts to controller")
-                message = "Fail connecting '{0}' component, try later".format(component_name)
+                message = "Fail to connect to '{0}' component, try later".format(component_name)
                 return (False, message)
 
             # Get container id
@@ -624,7 +624,7 @@ class AWSCluster(Cluster):
             success, stdout = _retry(cmd)
             if not success:
                 self._logger.debug("Fail to get container id for '{0}' component".format(component_name))
-                message = "Fail connecting '{0}' component, try later".format(component_name)
+                message = "Fail to connect to '{0}' component, try later".format(component_name)
                 return (False, message)
 
             container_id = stdout.readline().replace('\n','')
