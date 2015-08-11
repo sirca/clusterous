@@ -1,4 +1,6 @@
-- IPython:
-    cluster_name: testcluster
-    num_instances: 2
-    instance_type: t2.micro
+cluster_name: testcluster
+#environment_file: something.yml
+parameters:
+    master_instance_type: t2.micro
+    worker_instance_type: t2.micro
+    instance_count: 3

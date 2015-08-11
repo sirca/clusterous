@@ -27,15 +27,18 @@ class Environment(object):
         self._cluster = cluster
         self._logger = logging.getLogger(__name__)
 
-    def launch_from_spec(self, env_file):
+    def launch_from_spec(self, env_file, mesos_wait_time=0):
         """
         Launches an environment based on environment file
+        mesos_wait_time is the number of seconds to wait for Mesos to make cluster data
+        available immediately after cluster creation
         """
 
         # Get cluster info and validate resources
         self._logger.debug('Preparing to launch...')
-        mesos_data = self._get_mesos_data()
+        mesos_data = self._get_mesos_data(mesos_wait_time)
         cluster_info = self._process_mesos_data(mesos_data)
+
         component_resources = self._calculate_resources(env_file.spec, cluster_info)
 
         marathon_tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
@@ -151,10 +154,11 @@ class Environment(object):
 
         return hostname
 
-    def _get_mesos_data(self):
+    def _get_mesos_data(self, mesos_wait_time):
         """
         Queries Mesos API and obtains information about cluster. Returns raw Mesos data
         """
+        time.sleep(mesos_wait_time)
         mesos_data = None
         with self._cluster.make_controller_tunnel(defaults.mesos_port) as tunnel:
             r = requests.get('http://localhost:{0}/master/state.json'.format(tunnel.local_port))

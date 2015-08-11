@@ -58,9 +58,11 @@ class CLIParser(object):
     def _create_subparsers(self, parser):
         subparser = parser.add_subparsers(description='The following subcommands are available', dest='subcmd')
 
-        start = subparser.add_parser('start', help='Create a new cluster based on profile file',
-                                        description='Create a new cluster based on profile file')
-        start.add_argument('profile_file', action='store')
+        start = subparser.add_parser('start', help='Create a new cluster',
+                                        description='Create a new cluster and launch any specified environment')
+        start.add_argument('--no-launch', dest='launch', action='store_false', default=True,
+                            help='Do not launch environment (if specified), just create a bare cluster')
+        start.add_argument('profile_file', action='store', help='File containing cluster start parameters')
 
         # Build Docker image
         build = subparser.add_parser('build-image', help='Build a new Docker image',
@@ -154,6 +156,16 @@ class CLIParser(object):
         app = self._init_clusterous_object(args)
         app.terminate_cluster()
         return 0
+
+    def _start_cluster(self, args):
+        app = self._init_clusterous_object(args)
+        success, message = app.start_cluster(args.profile_file, args.launch)
+
+        if success and message:
+            print '\nMessage for user:'
+            print message
+
+        return 0 if success else 1
 
     def _launch_environment(self, args):
         app = self._init_clusterous_object(args)
@@ -288,8 +300,7 @@ class CLIParser(object):
         status = 0
         try:
             if args.subcmd == 'start':
-                app = self._init_clusterous_object(args)
-                app.start_cluster(args)
+                status = self._start_cluster(args)
             elif args.subcmd == 'terminate':
                 self._terminate_cluster(args)
             elif args.subcmd == 'launch':

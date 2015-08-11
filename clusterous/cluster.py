@@ -302,7 +302,7 @@ class AWSCluster(Cluster):
         # Run ansible
 
         env = self._ansible_env_credentials()
-        self._logger.debug('Creating security group')
+        self._logger.info('Creating security group')
         AnsibleHelper.run_playbook(get_script('ansible/init_01_create_sg.yml'),
                                    vars_file.name, self._config['key_file'],
                                    env=env)
@@ -312,7 +312,7 @@ class AWSCluster(Cluster):
                                    vars_file.name, self._config['key_file'],
                                    env=env)
 
-        self._logger.debug('Creating and configuring controller instance...')
+        self._logger.info('Creating and configuring controller instance...')
         AnsibleHelper.run_playbook(get_script('ansible/init_03_create_controller.yml'),
                                    vars_file.name, self._config['key_file'],
                                    env=env)
@@ -338,7 +338,8 @@ class AWSCluster(Cluster):
         vars_dict['instance_type'] = instance_type
         vars_dict['node_tag'] = node_tag
 
-        self._logger.debug('Adding {0} nodes named "{1}" to cluster...'.format(num_nodes, node_tag))
+        node_txt = 'node' if num_nodes == 1 else 'nodes'
+        self._logger.info('Creating {0} {1} named "{2}" to cluster...'.format(num_nodes, node_txt, node_tag))
         self._run_remote(vars_dict, 'create_nodes.yml')
 
 
