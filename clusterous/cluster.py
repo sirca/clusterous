@@ -578,6 +578,9 @@ class AWSCluster(Cluster):
         return info
 
     def connect_to_container(self, component_name):
+        '''
+        Connects to a docker container and gets an interactive shell
+        '''
         key_file_local = os.path.expanduser(self._config['key_file'])
         key_file_remote = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir, defaults.remote_host_key_file)
         container_id_script_local = defaults.get_script(defaults.container_id_script_file)
@@ -587,6 +590,7 @@ class AWSCluster(Cluster):
         
         # SSH controller
         with self._ssh_to_controller() as ssh:
+            self._logger.info("Connecting to '{0}' component".format(component_name))
             # Copy files to controller
             sftp = ssh.open_sftp()
             sftp.put(key_file_local, key_file_remote)
@@ -594,24 +598,37 @@ class AWSCluster(Cluster):
             sftp.chmod(key_file_remote, stat.S_IRUSR | stat.S_IWUSR)
             sftp.close()
 
+            def _retry(cmd):
+                retry = 0
+                while retry < 3:
+                    stdin, stdout, stderr = ssh.exec_command(cmd)
+                    if not stderr.readlines():
+                        break
+                    retry += 1
+                    self._logger.info('Retry: {0}'.format(retry))
+                    time.sleep(3)
+                return (retry <3 ), stdout
+
             # Copy script to node
             cmd='scp -i {0} -oStrictHostKeyChecking=no {1} {2}:{3}'.format(key_file_remote, 
                                                                            container_id_script_remote, node, container_id_script_node)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            if stderr.readlines():
-                message = "Error found:\n{0}".format(stderr.readlines())
+            success, stdout = _retry(cmd)
+            if not success:
+                self._logger.debug("Failed to copy scripts to controller")
+                message = "Failed to connect to '{0}' component, try later".format(component_name)
                 return (False, message)
 
             # Get container id
             cmd='ssh -i {0} -oStrictHostKeyChecking=no {1} source {2} {3}'.format(key_file_remote, 
                                                                                   node, container_id_script_node, component_name)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            if stderr.readlines():
-                message = "Error found:\n{0}".format(stderr.readlines())
+            success, stdout = _retry(cmd)
+            if not success:
+                self._logger.debug("Failed to get container id for '{0}' component".format(component_name))
+                message = "Failed to connect to '{0}' component, try later".format(component_name)
                 return (False, message)
 
             container_id = stdout.readline().replace('\n','')
-            
+
         # Shell
         node = '{0}.marathon.mesos'.format(component_name)
         cmd='ssh -i {0} -oStrictHostKeyChecking=no -A -t root@{1} \
@@ -623,9 +640,10 @@ class AWSCluster(Cluster):
         # Remove keys
         with self._ssh_to_controller() as ssh:
             cmd='rm -fr {0}'.format(key_file_remote)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            if stderr.readlines():
-                message = "Error found:\n{0}".format(stderr.readlines())
+            success, stdout = _retry(cmd)
+            if not success:
+                message = 'Failed to remove keys from controller'
+                self._logger.debug(message)
                 return (False, message)
             
         return (True, 'Ok')
