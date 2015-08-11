@@ -614,8 +614,8 @@ class AWSCluster(Cluster):
                                                                            container_id_script_remote, node, container_id_script_node)
             success, stdout = _retry(cmd)
             if not success:
-                self._logger.debug("Fail to copy scripts to controller")
-                message = "Fail to connect to '{0}' component, try later".format(component_name)
+                self._logger.debug("Failed to copy scripts to controller")
+                message = "Failed to connect to '{0}' component, try later".format(component_name)
                 return (False, message)
 
             # Get container id
@@ -623,8 +623,8 @@ class AWSCluster(Cluster):
                                                                                   node, container_id_script_node, component_name)
             success, stdout = _retry(cmd)
             if not success:
-                self._logger.debug("Fail to get container id for '{0}' component".format(component_name))
-                message = "Fail to connect to '{0}' component, try later".format(component_name)
+                self._logger.debug("Failed to get container id for '{0}' component".format(component_name))
+                message = "Failed to connect to '{0}' component, try later".format(component_name)
                 return (False, message)
 
             container_id = stdout.readline().replace('\n','')
@@ -642,7 +642,7 @@ class AWSCluster(Cluster):
             cmd='rm -fr {0}'.format(key_file_remote)
             success, stdout = _retry(cmd)
             if not success:
-                message = 'Fail to remove keys from controller'
+                message = 'Failed to remove keys from controller'
                 self._logger.debug(message)
                 return (False, message)
             
