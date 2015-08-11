@@ -1,0 +1,12 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  user: vagrant
+  sudo: yes
+  roles:
+    - roles/mesos_master
+    - roles/mesos_marathon
+    - roles/mesos_chronos
+    - roles/mesos_dns
+    - roles/docker
+    - roles/ansible
