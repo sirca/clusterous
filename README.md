@@ -89,7 +89,7 @@ clusterous image-info bdkd:sample_v1
 ### Launch environment
 ```
 cd subprojects/environments/basic_demo
-clusterous launch basic_env.yml
+clusterous launch basic-python-env.yml
 clusterous status
 ```
 
@@ -101,6 +101,6 @@ clusterous status
 
 ### Terminate cluster
 ```
-clusterous --verbose terminate democluster
+clusterous --verbose terminate
 clusterous status
 ```
