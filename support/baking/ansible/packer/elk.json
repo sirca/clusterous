@@ -1,6 +1,6 @@
 {
   "push": {
-    "name": "controller",
+    "name": "elk",
     "base_dir": "../",
     "exclude": [
       "aws/*",
