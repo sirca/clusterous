@@ -1,9 +1,8 @@
 {
   "push": {
     "name": "controller",
-    "vcs": true,
     "base_dir": "../",
-    "include": ["roles", "packer"]
+    "exclude": ["aws/*", "gce/*", "vagrant/*", "packer/*box", "packer/packer_cache"]
   },
   "variables": {
     "atlas_username": "{{env `ATLAS_USERNAME`}}",
