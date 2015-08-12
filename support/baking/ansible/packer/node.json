@@ -1,6 +1,6 @@
 {
   "push": {
-    "name": "controller",
+    "name": "node",
     "base_dir": "../",
     "exclude": [
       "aws/*",
