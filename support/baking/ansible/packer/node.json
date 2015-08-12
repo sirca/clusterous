@@ -7,7 +7,7 @@
   "variables": {
     "atlas_username": "{{env `ATLAS_USERNAME`}}",
     "atlas_name": "{{env `ATLAS_NAME`}}",
-    "atlas_token": "{{ env `ATLAS_TOKEN`}}"
+    "atlas_token": "{{env `ATLAS_TOKEN`}}"
   },
   "provisioners": [
     {
@@ -38,8 +38,10 @@
     },
     {
       "type": "ansible-local",
-      "playbook_file": "packer/playbooks/3_install_controller.yml",
-      "role_paths": [ "roles/"] 
+      "playbook_file": "packer/playbooks/3_install_node.yml",
+      "role_paths": [
+        "roles/"
+      ]
     }
   ],
   "post-processors": [

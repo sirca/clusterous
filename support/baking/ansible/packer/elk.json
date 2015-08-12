@@ -38,7 +38,7 @@
     },
     {
       "type": "ansible-local",
-      "playbook_file": "packer/playbooks/3_install_controller.yml",
+      "playbook_file": "packer/playbooks/3_install_elk.yml",
       "role_paths": [ "roles/"] 
     }
   ],
@@ -52,9 +52,9 @@
       "only": [
         "vmware-iso"
       ],
+      "token": "{{user `atlas_token`}}",
       "artifact": "{{user `atlas_username`}}/{{user `atlas_name`}}",
       "artifact_type": "vagrant.box",
-      "token": "{{user `atlas_token`}}",
       "metadata": {
         "provider": "vmware_desktop",
         "created_at": "{{timestamp}}"
@@ -65,9 +65,9 @@
       "only": [
         "virtualbox-iso"
       ],
+      "token": "{{user `atlas_token`}}",
       "artifact": "{{user `atlas_username`}}/{{user `atlas_name`}}",
       "artifact_type": "vagrant.box",
-      "token": "{{user `atlas_token`}}",
       "metadata": {
         "provider": "virtualbox",
         "created_at": "{{timestamp}}"
