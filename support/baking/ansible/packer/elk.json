@@ -2,7 +2,13 @@
   "push": {
     "name": "controller",
     "base_dir": "../",
-    "exclude": ["aws/*", "gce/*", "vagrant/*", "packer/*box", "packer/packer_cache"]
+    "exclude": [
+      "aws/*",
+      "gce/*",
+      "vagrant/*",
+      "packer/*box",
+      "packer/packer_cache"
+    ]
   },
   "variables": {
     "atlas_username": "{{env `ATLAS_USERNAME`}}",
@@ -39,40 +45,44 @@
     {
       "type": "ansible-local",
       "playbook_file": "packer/playbooks/3_install_elk.yml",
-      "role_paths": [ "roles/"] 
+      "role_paths": [
+        "roles/"
+      ]
     }
   ],
   "post-processors": [
-    {
-      "type": "vagrant",
-      "keep_input_artifact": false
-    },
-    {
-      "type": "atlas",
-      "only": [
-        "vmware-iso"
-      ],
-      "token": "{{user `atlas_token`}}",
-      "artifact": "{{user `atlas_username`}}/{{user `atlas_name`}}",
-      "artifact_type": "vagrant.box",
-      "metadata": {
-        "provider": "vmware_desktop",
-        "created_at": "{{timestamp}}"
+    [
+      {
+        "type": "vagrant",
+        "keep_input_artifact": false
+      },
+      {
+        "type": "atlas",
+        "only": [
+          "vmware-iso"
+        ],
+        "token": "{{user `atlas_token`}}",
+        "artifact": "{{user `atlas_username`}}/{{user `atlas_name`}}",
+        "artifact_type": "vagrant.box",
+        "metadata": {
+          "provider": "vmware_desktop",
+          "created_at": "{{timestamp}}"
+        }
+      },
+      {
+        "type": "atlas",
+        "only": [
+          "virtualbox-iso"
+        ],
+        "token": "{{user `atlas_token`}}",
+        "artifact": "{{user `atlas_username`}}/{{user `atlas_name`}}",
+        "artifact_type": "vagrant.box",
+        "metadata": {
+          "provider": "virtualbox",
+          "created_at": "{{timestamp}}"
+        }
       }
-    },
-    {
-      "type": "atlas",
-      "only": [
-        "virtualbox-iso"
-      ],
-      "token": "{{user `atlas_token`}}",
-      "artifact": "{{user `atlas_username`}}/{{user `atlas_name`}}",
-      "artifact_type": "vagrant.box",
-      "metadata": {
-        "provider": "virtualbox",
-        "created_at": "{{timestamp}}"
-      }
-    }
+    ]
   ],
   "builders": [
     {
@@ -90,7 +100,7 @@
       "ssh_username": "vagrant",
       "ssh_password": "vagrant",
       "ssh_port": 22,
-      "ssh_wait_timeout": "10000s",
+      "ssh_wait_timeout": "20000s",
       "shutdown_command": "echo '/sbin/halt -h -p' > /tmp/shutdown.sh; echo 'vagrant'|sudo -S sh '/tmp/shutdown.sh'",
       "guest_additions_path": "VBoxGuestAdditions_{{.Version}}.iso",
       "virtualbox_version_file": ".vbox_version",
@@ -124,7 +134,7 @@
       "ssh_username": "vagrant",
       "ssh_password": "vagrant",
       "ssh_port": 22,
-      "ssh_wait_timeout": "10000s",
+      "ssh_wait_timeout": "20000s",
       "shutdown_command": "echo '/sbin/halt -h -p' > /tmp/shutdown.sh; echo 'vagrant'|sudo -S sh '/tmp/shutdown.sh'",
       "tools_upload_flavor": "linux",
       "vmx_data": {
