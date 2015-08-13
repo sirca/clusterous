@@ -118,7 +118,10 @@ class AWSCluster(Cluster):
                 'registry_s3_path': defaults.registry_s3_path,
                 'current_controller_ip_file': defaults.current_controller_ip_file,
                 'remote_scripts_dir': defaults.get_remote_dir(),
-                'remote_host_scripts_dir': defaults.remote_host_scripts_dir
+                'remote_host_scripts_dir': defaults.remote_host_scripts_dir,
+                'central_logging_instance_name': defaults.central_logging_name_format.format(self.cluster_name),
+                'central_logging_ami_id': defaults.central_logging_ami_id,
+                'central_logging_instance_type': defaults.central_logging_instance_type,
                 }
 
     def _ansible_env_credentials(self):
@@ -169,7 +172,8 @@ class AWSCluster(Cluster):
         # Delete instances
         instance_filters = { 'tag:Name':
                         ['{0}_controller'.format(cluster_name),
-                        '{0}_node'.format(cluster_name)],
+                        '{0}_node'.format(cluster_name),
+                        '{0}_central_logging'.format(cluster_name),],
                         'instance-state-name': ['running', 'pending']
                         }
         instance_list = conn.get_only_instances(filters=instance_filters)
@@ -188,6 +192,17 @@ class AWSCluster(Cluster):
 
         return ssh
 
+    def _get_central_logging_ip(self):
+        instances = self._get_instances(self.cluster_name)
+        ip = None
+        for instance in instances:
+            if defaults.central_logging_name_format.format(self.cluster_name) in instance.tags['Name']:
+                ip = str(instance.private_ip_address)
+                break
+
+        if ip is None:
+            raise ValueError('Cannot find the IP of the centralized logging system for {0}'.format(self.cluster_name))
+        return ip
 
     def make_controller_tunnel(self, remote_port):
         """
@@ -312,6 +327,15 @@ class AWSCluster(Cluster):
                                    vars_file.name, self._config['key_file'],
                                    env=env)
 
+        self._logger.info('Creating and configuring centralized logging instance...')
+        AnsibleHelper.run_playbook(get_script('ansible/init_04_create_central_logging.yml'),
+                                   vars_file.name, self._config['key_file'],
+                                   env=env)
+
+        vars_dict['central_logging_ip'] = self._get_central_logging_ip()
+        vars_file = self._make_vars_file(vars_dict)
+
+
         self._logger.info('Creating and configuring controller instance...')
         AnsibleHelper.run_playbook(get_script('ansible/init_03_create_controller.yml'),
                                    vars_file.name, self._config['key_file'],
@@ -337,6 +361,8 @@ class AWSCluster(Cluster):
         vars_dict['num_nodes'] = num_nodes
         vars_dict['instance_type'] = instance_type
         vars_dict['node_tag'] = node_tag
+
+        vars_dict['central_logging_ip'] = self._get_central_logging_ip()
 
         node_txt = 'node' if num_nodes == 1 else 'nodes'
         self._logger.info('Creating {0} {1} named "{2}" to cluster...'.format(num_nodes, node_txt, node_tag))
@@ -647,6 +673,22 @@ class AWSCluster(Cluster):
                 return (False, message)
             
         return (True, 'Ok')
+
+    def central_logging(self):
+        """
+        Creates an SSH tunnel to the logging system
+        """
+        central_logging_port = defaults.central_logging_port
+        self.make_tunnel_on_controller(central_logging_port, self._get_central_logging_ip(), central_logging_port)
+        success = self.create_permanent_tunnel_to_controller(central_logging_port, central_logging_port)
+
+        if not success:
+            message = 'Failed create tunnel to centralized logging system'
+            self._logger.debug(message)
+            return (False, message)
+
+        message = 'To access the centralized logging system, use this URL http://localhost:{0}'.format(central_logging_port)
+        return (True, message)
 
     def info_shared_volume(self):
         info = {'total': '',

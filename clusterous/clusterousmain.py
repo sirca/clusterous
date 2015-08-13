@@ -122,6 +122,9 @@ class Clusterous(object):
 
         self._logger.debug('Actual cluster spec: {0}'.format(cluster_spec))
 
+        if profile.get('logging_system_level'):
+            logging_system_level = profile.get('logging_system_level')
+
         # Init Cluster object
         cl = self.make_cluster_object(cluster_name_required=False)
         builder = clusterbuilder.ClusterBuilder(cl, profile['cluster_name'], cluster_spec)
@@ -240,6 +243,10 @@ class Clusterous(object):
             return (False, message)
 
         return cl.connect_to_container(component_name)
+
+    def central_logging(self):
+        cl = self.make_cluster_object()
+        return cl.central_logging()
 
     def cluster_status(self):
         cl = self.make_cluster_object()
