@@ -26,8 +26,7 @@
             "packer/scripts/vagrant.sh",
             "packer/scripts/virtualbox.sh",
             "packer/scripts/cleanup.sh",
-            "packer/scripts/ansible.sh",
-            "packer/scripts/zerodisk.sh"
+            "packer/scripts/ansible.sh"
           ]
         },
         "vmware-iso": {
@@ -36,8 +35,7 @@
             "packer/scripts/vagrant.sh",
             "packer/scripts/vmware.sh",
             "packer/scripts/cleanup.sh",
-            "packer/scripts/ansible.sh",
-            "packer/scripts/zerodisk.sh"
+            "packer/scripts/ansible.sh"
           ]
         }
       }
