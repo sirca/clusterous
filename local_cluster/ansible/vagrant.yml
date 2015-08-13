@@ -82,8 +82,6 @@
   sudo: yes
 
   tasks:
-    - debug:
-        var: hostvars['controller']
 
     - name: add entry to hosts file
       lineinfile: 
