@@ -1,0 +1,48 @@
+# -*- mode: ruby -*-
+# vim: ft=ruby
+
+
+# ---- Configuration variables ----
+
+GUI               = false # Enable/Disable GUI
+RAM               = 256  # Default memory size in MB
+
+# Network configuration
+DOMAIN            = ".local"
+NETWORK           = "192.168.50."
+NETMASK           = "255.255.255.0"
+
+HOSTS = {
+   "controller" => [NETWORK+"10", RAM, GUI, "knservis/controller"],
+   "elk" => [NETWORK+"11", RAM, GUI, "knservis/elk"],
+   "node1" => [NETWORK+"12", RAM, GUI, "knservis/node"],
+   "node2" => [NETWORK+"13", RAM, GUI, "knservis/node"],
+}
+
+# ---- Vagrant configuration ----
+
+Vagrant.configure(2) do |config|
+  HOSTS.each do | (name, cfg) |
+    ipaddr, ram, gui, box = cfg
+
+    config.vm.define name do |machine|
+      machine.vm.box     = box
+      machine.vm.provider "virtualbox" do |vbox|
+        vbox.gui    = gui
+        vbox.memory = ram
+      end
+
+      machine.vm.hostname = name + DOMAIN
+      machine.vm.network :private_network, ip: ipaddr, netmask: NETMASK
+    end
+  end
+
+  config.vm.provision "ansible" do |ansible|
+    ansible.limit = 'all'
+    ansible.playbook = "ansible/vagrant.yml"
+    # ansible.groups = HOSTS.inject({}) {|h, (k,v)| h[k]=v[0]; h}
+    ansible.groups = {
+      "nodes" => HOSTS.select{ |k,v| k.include? "node"}.collect{|k,v| k}
+    }
+  end
+end

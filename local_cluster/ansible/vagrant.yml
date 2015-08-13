@@ -1,0 +1,129 @@
+---
+- name: collect facts
+  hosts: all
+  user: vagrant
+  sudo: yes
+  tasks: []
+
+- name: configure controller
+  gather_facts: no
+  hosts: controller
+  user: vagrant
+  sudo: yes
+  tasks:
+    - name: add entry to hosts file
+      lineinfile: 
+        dest: /etc/hosts 
+        line: "127.0.0.1 controller registry"
+
+    - name: create dir for docker registry
+      file:
+        path: /docker_registry
+        state: directory
+
+    - name: docker private registry
+      # shell: docker run -d -v /docker_registry:/tmp/registry-dev -p 5000:5000 registry
+      docker:
+        name: registry
+        image: registry
+        ports: 
+          - "5000:5000"
+        state: started
+        volumes:
+          - "/docker_registry:/tmp/registry-dev"
+
+    - file: 
+        path: /home/data 
+        state: directory 
+        mode: 0755
+
+    # NFS share
+    - name: nfs share
+      lineinfile: 
+        dest: /etc/exports 
+        line: "/home/data            *(rw,sync,no_root_squash,no_all_squash)"
+
+    - name: restart nfs
+      service:
+        name: nfs-server
+        state: restarted
+
+    # DNS
+    - name: get default DNS resolver ip
+      shell: "grep 'nameserver' /etc/resolv.conf | awk '{ print $2 }'"
+      register: default_dns_ip
+
+    - name: Add default DNS resolver to mesos-dns
+
+      lineinfile:
+        dest: /opt/mesos-dns/config.json
+        regexp: '"resolvers": ["8.8.8.8"],'
+        line: '"resolvers": ["{{ default_dns_ip.stdout }}", "8.8.8.8"],'
+        state: present
+        backup: yes
+
+    - name: mesos-dns start
+      service:
+        name: mesos-dns
+        state: started
+
+    # Use its own DNS resolver
+    - name: mesos-dns
+      lineinfile: 
+        dest: /etc/resolv.conf 
+        regexp: '^nameserver' 
+        line: "nameserver {{ ansible_enp0s8.ipv4.address }}" 
+        mode: 0755
+
+- name: configure nodes
+  gather_facts: no
+  hosts: nodes
+  user: vagrant
+  sudo: yes
+
+  tasks:
+    - debug:
+        var: hostvars['controller']
+
+    - name: add entry to hosts file
+      lineinfile: 
+        dest: /etc/hosts 
+        line: "{{ hostvars['controller']['ansible_enp0s8']['ipv4']['address'] }} controller registry"
+
+    - name: add mesos-dns to resolv.conf
+      lineinfile: 
+        dest: /etc/resolv.conf 
+        regexp: '^nameserver'
+        line: "nameserver {{ hostvars['controller']['ansible_enp0s8']['ipv4']['address'] }}" 
+        mode: 0755
+
+    - name: set up NFS
+      lineinfile: 
+        dest: /etc/fstab 
+        regexp: "^controller:/home/data" 
+        line: "controller:/home/data  /home/data  ndf defaults  0 0" 
+        owner: root 
+        group: root 
+        mode: 0644
+
+    - name: mount volume
+      file: 
+        path: /home/data 
+        state: directory 
+        mode: 0755
+    - mount: 
+        name: /home/data 
+        src: controller:/home/data 
+        fstype: nfs 
+        state: mounted
+
+    - name: add node name to mesos attributes file
+      lineinfile: 
+        dest: /etc/mesos-slave/attributes 
+        line: "name:{{ ansible_hostname }}" 
+        create: yes
+
+    - name: restart mesos-slave
+      service: 
+        name: mesos-slave 
+        state: started
