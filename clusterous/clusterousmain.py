@@ -92,10 +92,10 @@ class Clusterous(object):
 
         return validated
 
-    def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
+    def make_cluster_object(self, cluster_name=None, cluster_name_required=True, profile_args=None):
         cl = None
         if 'AWS' in self._config:
-            cl = cluster.AWSCluster(self._config['AWS'], cluster_name, cluster_name_required)
+            cl = cluster.AWSCluster(self._config['AWS'], cluster_name, cluster_name_required, profile_args)
         else:
             self._logger.error('Unknown cloud type')
             raise ClusterousError('Unknown cloud type')
@@ -122,11 +122,8 @@ class Clusterous(object):
 
         self._logger.debug('Actual cluster spec: {0}'.format(cluster_spec))
 
-        if profile.get('logging_system_level'):
-            logging_system_level = profile.get('logging_system_level')
-
         # Init Cluster object
-        cl = self.make_cluster_object(cluster_name_required=False)
+        cl = self.make_cluster_object(cluster_name_required=False, profile_args=profile)
         builder = clusterbuilder.ClusterBuilder(cl, profile['cluster_name'], cluster_spec)
         self._logger.info('Starting cluster')
         builder.start_cluster()
