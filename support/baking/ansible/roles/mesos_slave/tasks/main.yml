@@ -1,7 +1,7 @@
 # MESOS SLAVE
 ---
 - name: mesos slave config
-  copy: src=files/mesos-slave.txt dest=/etc/default/mesos-slave mode=0755
+  copy: src=mesos-slave.txt dest=/etc/default/mesos-slave mode=0755
 - name: mesos slave using docker
   lineinfile: dest=/etc/mesos-slave/containerizers line="docker,mesos" create=yes
 - name: mesos slave timeout
