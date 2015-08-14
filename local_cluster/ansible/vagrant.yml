@@ -54,26 +54,17 @@
       register: default_dns_ip
 
     - name: Add default DNS resolver to mesos-dns
-
       lineinfile:
         dest: /opt/mesos-dns/config.json
-        regexp: '"resolvers": ["8.8.8.8"],'
-        line: '"resolvers": ["{{ default_dns_ip.stdout }}", "8.8.8.8"],'
+        regexp: '"resolvers": \[.*"8.8.8.8".*\],'
+        line: '  "resolvers": ["{{ default_dns_ip.stdout }}", "8.8.8.8"],'
         state: present
         backup: yes
 
     - name: mesos-dns start
       service:
         name: mesos-dns
-        state: started
-
-    # Use its own DNS resolver
-    - name: mesos-dns
-      lineinfile: 
-        dest: /etc/resolv.conf 
-        regexp: '^nameserver' 
-        line: "nameserver {{ ansible_enp0s8.ipv4.address }}" 
-        mode: 0755
+        state: restarted
 
 - name: configure nodes
   gather_facts: no
