@@ -19,7 +19,9 @@ class ClusterBuilder(object):
             return False
 
         self._logger.debug('Cluster params={0}'.format(self._cluster_args))
-        self._cluster.init_cluster(self._cluster_name)
+        nodes_info = []
         for name, params in self._cluster_args.iteritems():
-            self._cluster.launch_nodes(params['count'], params['type'], name)
+            nodes_info.append((params['count'], params['type'], name))
+
+        self._cluster.init_cluster(self._cluster_name, nodes_info)
         self._launched = True

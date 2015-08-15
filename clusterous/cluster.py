@@ -15,6 +15,7 @@ from dateutil import parser
 
 from dateutil.relativedelta import relativedelta
 import boto.ec2
+import boto.s3.connection
 import paramiko
 
 import defaults
@@ -50,35 +51,45 @@ class Cluster(object):
         self._config = config
         self._running = False
         self._logger = logging.getLogger(__name__)
-        if cluster_name_required:
-            if cluster_name is None:
-                cluster_name = self._get_working_cluster_name()
-                if cluster_name is None:
-                    message = 'No working cluster has been set.'
-                    self._logger.error(message)
-                    raise NoWorkingClusterException(message)
+        self._controller_ip = ''
+        if cluster_name_required and not cluster_name:
+            name = self._get_working_cluster_name()
+            if not name:
+                message = 'No working cluster has been set.'
+                self._logger.error(message)
+                raise NoWorkingClusterException(message)
+            self.cluster_name = name
+        elif cluster_name:
             self.cluster_name = cluster_name
 
-    def _get_working_cluster_name(self):
+
+    def _get_cluster_info(self):
         cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
         if not os.path.isfile(cluster_info_file):
             return None
 
-        with open(os.path.expanduser(cluster_info_file), 'r') as stream:
-            cluster_info = yaml.load(stream)
+        f = open(os.path.expanduser(cluster_info_file), 'r')
+        cluster_info = yaml.load(f)
+        return cluster_info
 
+
+    def _get_working_cluster_name(self):
+        cluster_info = self._get_cluster_info()
+        if not cluster_info:
+            return None
         return cluster_info.get('cluster_name')
 
 
     def _get_controller_ip(self):
-        ip = None
-        ip_file = os.path.expanduser(defaults.current_controller_ip_file)
-        if os.path.isfile(ip_file):
-            f = open(ip_file, 'r')
-            ip = f.read().strip()
-            f.close
-        else:
-            raise ValueError('Cannot find controller IP: {0}'.format(ip_file))
+        if self._controller_ip:
+            return self._controller_ip
+
+        info = self._get_cluster_info()
+        if not 'controller' in info or not 'ip' in info['controller']:
+            return None
+        ip = info['controller']['ip']
+        self._controller_ip = ip
+
         return ip
 
     def controller_tunnel(self, remote_port):
@@ -99,24 +110,12 @@ class Cluster(object):
 
 class AWSCluster(Cluster):
 
-    def _ec2_vars_dict(self):
+    def _controller_vars_dict(self):
         return {
                 'AWS_KEY': self._config['access_key_id'],
                 'AWS_SECRET': self._config['secret_access_key'],
-                'region': self._config['region'],
-                'keypair': self._config['key_pair'],
-                'vpc_id': self._config['vpc_id'],
-                'vpc_subnet_id': self._config['subnet_id'],
-                'cluster_name': self.cluster_name,
-                'security_group_name': defaults.security_group_name_format.format(self.cluster_name),
-                'controller_ami_id': defaults.controller_ami_id,
-                'controller_instance_name': defaults.controller_name_format.format(self.cluster_name),
-                'controller_instance_type': defaults.controller_instance_type,
-                'node_name': defaults.node_name_format.format(self.cluster_name),
-                'node_ami_id': defaults.node_ami_id,
                 'clusterous_s3_bucket': self._config['clusterous_s3_bucket'],
                 'registry_s3_path': defaults.registry_s3_path,
-                'current_controller_ip_file': defaults.current_controller_ip_file,
                 'remote_scripts_dir': defaults.get_remote_dir(),
                 'remote_host_scripts_dir': defaults.remote_host_scripts_dir
                 }
@@ -127,30 +126,26 @@ class AWSCluster(Cluster):
                 'AWS_SECRET_ACCESS_KEY': self._config['secret_access_key']
                 }
 
-    def _run_remote_vars_dict(self):
-        return {
-                'controller_ip': self._get_controller_ip(),
-                'key_file_src': self._config['key_file'],
-                'key_file_name': defaults.remote_host_key_file,
-                'vars_file_src': None,  # must be filled in
-                'vars_file_name': defaults.remote_host_vars_file,
-                'remote_dir': defaults.remote_host_scripts_dir,
-                'playbook_file': None
-                }
-
     def _make_vars_file(self, vars_dict):
+        if not vars_dict:
+            vars_d = {}
+        else:
+            vars_d = vars_dict
         vars_file = tempfile.NamedTemporaryFile()
-        vars_file.write(yaml.dump(vars_dict, default_flow_style=False))
+        vars_file.write(yaml.dump(vars_d, default_flow_style=False))
         vars_file.flush()
         return vars_file
 
-    def _run_remote(self, vars_dict, playbook):
+    def _run_on_controller(self, playbook, hosts_file):
 
-        vars_file = self._make_vars_file(vars_dict)
-
-        local_vars = self._run_remote_vars_dict()
-        local_vars['vars_file_src'] = vars_file.name
-        local_vars['playbook_file'] = playbook
+        local_vars = {
+                'key_file_src': self._config['key_file'],
+                'key_file_name': defaults.remote_host_key_file,
+                'hosts_file_src': hosts_file,
+                'hosts_file_name': os.path.basename(hosts_file),
+                'remote_dir': defaults.remote_host_scripts_dir,
+                'playbook_file': playbook
+                }
 
         local_vars_file = self._make_vars_file(local_vars)
 
@@ -159,7 +154,6 @@ class AWSCluster(Cluster):
                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
 
         local_vars_file.close()
-        vars_file.close()
 
     def _get_instances(self, cluster_name):
         conn = boto.ec2.connect_to_region(self._config['region'],
@@ -167,9 +161,8 @@ class AWSCluster(Cluster):
                     aws_secret_access_key=self._config['secret_access_key'])
 
         # Delete instances
-        instance_filters = { 'tag:Name':
-                        ['{0}_controller'.format(cluster_name),
-                        '{0}_node'.format(cluster_name)],
+        instance_filters = { 'tag:{0}'.format(defaults.instance_tag_key):
+                        [cluster_name],
                         'instance-state-name': ['running', 'pending']
                         }
         instance_list = conn.get_only_instances(filters=instance_filters)
@@ -283,7 +276,79 @@ class AWSCluster(Cluster):
 
         return all_deleted
 
-    def init_cluster(self, cluster_name):
+    def _create_security_group(self, cluster_name, conn):
+        """
+        Given a cluster name and Boto EC2 connection, creates a
+        cluster security group (before deleting any existing one)
+        and returns the SG id
+        """
+        sg_name = defaults.security_group_name_format.format(cluster_name)
+        descr = 'Security group for {0}'.format(cluster_name)
+        for s in conn.get_all_security_groups():
+            if s.name == sg_name:
+                self._logger.debug('First deleting existing security group "{0}"'.format(sg_name))
+                s.delete()
+        sg = conn.create_security_group(sg_name, descr, vpc_id = self._config['vpc_id'])
+        sg.add_tag(key='Name', value=sg_name)
+        sg.add_tag(key=defaults.instance_tag_key, value=cluster_name)
+        sg.authorize(ip_protocol='tcp', from_port='22', to_port='22', cidr_ip='0.0.0.0/0')
+        sg.authorize(ip_protocol='tcp', from_port='80', to_port='80', cidr_ip='0.0.0.0/0')
+        # Boto documentation is misleading: need to specify protocol to -1 to mean all protocols
+        sg.authorize(ip_protocol=-1, src_group=sg)
+        return sg.id
+
+    def _wait_and_tag_instance_reservations(self, tag_and_inst_list, sleep_interval=5):
+        launched = {}
+        launched_ids = {}
+        inst_list = []
+        inst_to_tag = {}
+        for (label, tag, insts) in tag_and_inst_list:
+            inst_list.extend(insts)
+            for i in insts:
+                inst_to_tag[i.id] = (label, tag)
+
+        while len(launched_ids) < len(inst_list):
+            time.sleep(sleep_interval)
+            for inst in inst_list:
+                if inst.state == 'running' and inst.id not in launched_ids:
+                    if inst.ip_address:
+                        launched_ids[inst.id] = True
+                        label, tags = inst_to_tag[inst.id]
+                        # Add default "clusterous" tag
+                        t = tags.copy()
+                        clusterous_tag = {defaults.instance_tag_key: self.cluster_name}
+                        t.update(clusterous_tag)
+                        inst.add_tags(t)
+                        if not label in launched:
+                            launched[label] = []
+                        launched[label].append(inst.ip_address)
+                        self._logger.debug('Running {0} {1} {2}'.format(inst.ip_address, tags, inst.id))
+                # There is no good reason for this to happen in practice
+                elif inst.state in ('terminated', 'stopped', 'stopping'):
+                    self._logger.error('Instance {0} is in state "{1}"'.format(inst.id, inst.state))
+                    self.logger.error('Problem creating instance')
+                    # Unrecoverable error, exit to prevent infinite loop
+                    return None
+                else:
+                    # Refresh instance data
+                    inst.update()
+
+        return launched
+
+    def _write_to_hosts_file(self, filename, ips, group_name='', overwrite=False):
+        """
+        Given a destination absolute filename, a list of IPs, and a group name,
+        create an Ansible inventory file, returning True on success
+        """
+        mode = 'w' if overwrite else 'a'
+        with open(filename, mode) as f:
+            if group_name:
+                f.write('[{0}]\n'.format(group_name.strip()))
+            for ip in ips:
+                f.write('{0}\n'.format(ip.strip()))
+        return True
+
+    def init_cluster(self, cluster_name, nodes_info=[]):
         """
         Initialise security group(s), cluster controller etc
         """
@@ -295,53 +360,119 @@ class AWSCluster(Cluster):
             if not os.path.exists(d):
                 os.makedirs(d)
 
-        vars_dict = self._ec2_vars_dict()
+        c = self._config
 
-        vars_file = self._make_vars_file(vars_dict)
+        # Create registry bucket if it doesn't already exist
+        s3conn = boto.s3.connection.S3Connection(c['access_key_id'], c['secret_access_key'])
+        if not s3conn.lookup(c['clusterous_s3_bucket']):
+            s3conn.create_bucket(c['clusterous_s3_bucket'], location=c['region'])
 
-        # Run ansible
 
-        env = self._ansible_env_credentials()
+        conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
+                                            aws_secret_access_key=c['secret_access_key'])
+
+
+        # Create Security group
         self._logger.info('Creating security group')
-        AnsibleHelper.run_playbook(get_script('ansible/init_01_create_sg.yml'),
-                                   vars_file.name, self._config['key_file'],
-                                   env=env)
+        sg_id = self._create_security_group(cluster_name, conn)
 
-        self._logger.debug('Ensuring Docker registry bucket exists')
-        AnsibleHelper.run_playbook(get_script('ansible/init_02_create_s3_bucket.yml'),
-                                   vars_file.name, self._config['key_file'],
-                                   env=env)
+        # Launch all instances
+        controller_tags_and_res = []
 
-        self._logger.info('Creating and configuring controller instance...')
-        AnsibleHelper.run_playbook(get_script('ansible/init_03_create_controller.yml'),
-                                   vars_file.name, self._config['key_file'],
-                                   env=env)
-        self._logger.debug('Launched controller instance at {0}'.format(self._get_controller_ip()))
+        # Launch controller
+        self._logger.info('Starting controller')
+        block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
+        root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True)
+        root_vol.size = 20
 
-        # Set working cluster
-        self.workon()
+        block_devices['/dev/sda1'] = root_vol
+        controller_res = conn.run_instances(defaults.controller_ami_id, min_count=1,
+                                        key_name=c['key_pair'], instance_type=defaults.controller_instance_type,
+                                        subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
 
-        vars_file.close()
+        controller_tags = {'Name': defaults.controller_name_format.format(cluster_name)}
+        controller_tags_and_res.append(('controller', controller_tags, controller_res.instances))
+
+        # Loop through node groups and launch all
+        self._logger.info('Starting all nodes')
+        node_tags_and_res = []
+        for num_nodes, instance_type, node_tag in nodes_info:
+            res = conn.run_instances(defaults.node_ami_id, min_count=num_nodes, max_count=num_nodes,
+                                key_name=c['key_pair'], instance_type=instance_type,
+                                subnet_id=c['subnet_id'], security_group_ids=[sg_id])
+            node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag)}
+            node_tags_and_res.append((node_tag, node_tags, res.instances))
+
+
+        # Wait for controller to launch
+        controller = self._wait_and_tag_instance_reservations(controller_tags_and_res)
+
+        # Create and attach shared volume
+        self._logger.info('Creating shared volume')
+        shared_vol = conn.create_volume(20, zone=controller_res.instances[0].placement)
+        while shared_vol.status != 'available':
+            time.sleep(2)
+            shared_vol.update()
+        self._logger.debug('Shared volume {0} created'.format(shared_vol.id))
+        conn.create_tags([shared_vol.id], {'Name': defaults.controller_name_format.format(cluster_name),
+                                           defaults.instance_tag_key: cluster_name})
+
+        attach = shared_vol.attach(controller_res.instances[0].id, '/dev/sdf')
+        while shared_vol.attachment_state() != 'attached':
+            time.sleep(3)
+            shared_vol.update()
+
+        # Configure controller
+        controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
+        self._write_to_hosts_file(controller_inventory, [controller.values()[0][0]], 'controller', overwrite=True)
+
+        controller_vars_dict = self._controller_vars_dict()
+        controller_vars_file = self._make_vars_file(controller_vars_dict)
+
+        self._logger.info('Configuring controller instance...')
+        AnsibleHelper.run_playbook(get_script('ansible/01_configure_controller.yml'),
+                                   controller_vars_file.name, self._config['key_file'],
+                                   hosts_file=controller_inventory)
+
+        controller_vars_file.close()
+
+        # Configure nodes
+        if node_tags_and_res:
+            self._configure_nodes(nodes_info, node_tags_and_res, controller.values()[0][0])
+
+        # Create cluster info file
+        self._set_cluster_info(cluster_name, controller.values()[0][0])
 
         # TODO: this is useful for debugging, but remove at a later stage
         self.create_permanent_tunnel_to_controller(8080, 8080, prefix='marathon')
 
 
+    def _configure_nodes(self, nodes_info, node_tags_and_res, controller_ip):
+        nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
 
-    def launch_nodes(self, num_nodes, instance_type, node_tag):
+        nodes_inventory = tempfile.NamedTemporaryFile()
+        for num_nodes, instance_type, node_tag in nodes_info:
+            self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag], node_tag, overwrite=False)
+        nodes_inventory.flush()
+        self._logger.info('Configuring nodes...')
+        self._run_on_controller('configure_nodes.yml', nodes_inventory.name)
+        nodes_inventory.close()
+        return
+
+    def _set_cluster_info(self, cluster_name, controller_ip):
         """
-        Launch a group of application nodes of the same type.
-        node_name is the Mesos tag by which the application can find a node
+        Writes cluster information to cluster info file in YAML format
         """
-        vars_dict = self._ec2_vars_dict()
-        vars_dict['num_nodes'] = num_nodes
-        vars_dict['instance_type'] = instance_type
-        vars_dict['node_tag'] = node_tag
+        data = {}
+        data['controller'] = {'ip': controller_ip}
+        data['cluster_name'] = cluster_name
 
-        node_txt = 'node' if num_nodes == 1 else 'nodes'
-        self._logger.info('Creating {0} {1} named "{2}" to cluster...'.format(num_nodes, node_txt, node_tag))
-        self._run_remote(vars_dict, 'create_nodes.yml')
+        # Write cluster_info
+        cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
+        with open(cluster_info_file,'w+') as f:
+            f.write(yaml.dump(data, default_flow_style=False))
 
+        return True
 
     def docker_build_image(self, full_path, image_name):
         """
@@ -534,24 +665,21 @@ class AWSCluster(Cluster):
         """
         # Getting cluster info
         instances = self._get_instances(self.cluster_name)
-        data = {}
+        controller_ip = None
+        cluster_name = None
         for instance in instances:
             if defaults.controller_name_format.format(self.cluster_name) in instance.tags['Name']:
-                data['controller']={'ip': str(instance.ip_address)}
-                data['cluster_name']=self.cluster_name
+                controller_ip = instance.ip_address
+                cluster_name = self.cluster_name
 
-        if not data:
+        if not controller_ip:
             return (False, 'Cluster "{0}" does not exist'.format(self.cluster_name))
 
-        # Write cluster_info
-        cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
-        with open(cluster_info_file,'w+') as fw:
-            fw.write(yaml.dump(data, default_flow_style=False))
+        self._set_cluster_info(cluster_name, controller_ip)
 
         # Write controller_ip
         ip_file = os.path.expanduser(defaults.current_controller_ip_file)
-        with open(ip_file,'w+') as fw:
-            fw.write(data.get('controller',{}).get('ip'))
+        self._write_to_hosts_file(ip_file, [controller_ip], 'controller', overwrite=True)
 
         return (True, 'Ok')
 
@@ -587,7 +715,7 @@ class AWSCluster(Cluster):
         container_id_script_remote = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir,defaults.container_id_script_file)
         container_id_script_node = '/tmp/{0}'.format(defaults.container_id_script_file)
         node = '{0}.marathon.mesos'.format(component_name)
-        
+
         # SSH controller
         with self._ssh_to_controller() as ssh:
             self._logger.info("Connecting to '{0}' component".format(component_name))
@@ -610,7 +738,7 @@ class AWSCluster(Cluster):
                 return (retry <3 ), stdout
 
             # Copy script to node
-            cmd='scp -i {0} -oStrictHostKeyChecking=no {1} {2}:{3}'.format(key_file_remote, 
+            cmd='scp -i {0} -oStrictHostKeyChecking=no {1} {2}:{3}'.format(key_file_remote,
                                                                            container_id_script_remote, node, container_id_script_node)
             success, stdout = _retry(cmd)
             if not success:
@@ -619,7 +747,7 @@ class AWSCluster(Cluster):
                 return (False, message)
 
             # Get container id
-            cmd='ssh -i {0} -oStrictHostKeyChecking=no {1} source {2} {3}'.format(key_file_remote, 
+            cmd='ssh -i {0} -oStrictHostKeyChecking=no {1} source {2} {3}'.format(key_file_remote,
                                                                                   node, container_id_script_node, component_name)
             success, stdout = _retry(cmd)
             if not success:
@@ -645,7 +773,7 @@ class AWSCluster(Cluster):
                 message = 'Failed to remove keys from controller'
                 self._logger.debug(message)
                 return (False, message)
-            
+
         return (True, 'Ok')
 
     def info_shared_volume(self):
@@ -691,7 +819,7 @@ class AWSCluster(Cluster):
             self._logger.debug('{0} instances terminated'.format(num_instances))
 
         # Delete EBS volume
-        volumes = conn.get_all_volumes(filters={'tag:Name':self.cluster_name})
+        volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
         volumes_deleted = [ v.delete() for v in volumes ]
         volume_ids_str = ','.join([ v.id for v in volumes])
         if False in volumes_deleted:
@@ -700,7 +828,7 @@ class AWSCluster(Cluster):
             self._logger.debug('Deleted shared volume: {0}'.format(volume_ids_str))
 
         # Delete security group
-        sg = conn.get_all_security_groups(filters={'tag:Name':'{0}-sg'.format(self.cluster_name)})
+        sg = conn.get_all_security_groups(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
         sg_deleted = [ g.delete() for g in sg ]
         if False in sg_deleted:
             self._logger.error('Unable to delete security group for {0}'.format(self.cluster_name))
@@ -710,6 +838,7 @@ class AWSCluster(Cluster):
         # Delete cluster info
         os.remove(os.path.expanduser(defaults.CLUSTER_INFO_FILE))
         os.remove(os.path.expanduser(defaults.current_controller_ip_file))
-        shutil.rmtree(os.path.expanduser(defaults.local_session_data_dir))
+        if os.path.exists(os.path.expanduser(defaults.local_session_data_dir)):
+            shutil.rmtree(os.path.expanduser(defaults.local_session_data_dir))
 
         return True

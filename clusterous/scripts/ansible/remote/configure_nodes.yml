@@ -1,0 +1,39 @@
+- name: get info about local machine
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+
+- name: wait for ssh to come up on controller
+  hosts: all
+  user: root
+  sudo: True
+  gather_facts: False
+  tasks:
+    - local_action:
+        module: wait_for
+        host: "{{ inventory_hostname }}"
+        port: 22
+        delay: 0
+        timeout: 300
+        state: started
+
+    - name: add entry to hosts file
+      lineinfile: dest=/etc/hosts line="{{ hostvars.localhost.ansible_default_ipv4.address }} controller registry"
+
+    - name: add mesos-dns to resolv.conf
+      lineinfile: >
+        dest=/etc/resolv.conf regexp='^nameserver'
+        line="nameserver {{ hostvars.localhost.ansible_default_ipv4.address }}" mode=0755
+
+    - name: set up NFS
+      lineinfile: dest=/etc/fstab regexp="^controller:/home/data" line="controller:/home/data  /home/data  ndf defaults  0 0" owner=root group=root mode=0644
+
+    - name: mount volume
+      file: path=/home/data state=directory mode=0755
+    - mount: name=/home/data src=controller:/home/data fstype=nfs state=mounted
+
+    - name: add node name to mesos attributes file
+      lineinfile: dest=/etc/mesos-slave/attributes line="name:{{ group_names[0] }}" create=yes
+
+    - name: start mesos-slave
+      service: name=mesos-slave state=started
