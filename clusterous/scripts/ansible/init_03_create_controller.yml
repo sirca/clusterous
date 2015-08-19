@@ -67,12 +67,10 @@
   user: root
   sudo: True
   vars:
-    logging_system_level: "{{ logging_system_level }}"
+    central_logging_level: '{{ central_logging_level }}'
   tasks:
     - name: add entry to hosts file
       lineinfile: dest=/etc/hosts line="127.0.0.1 controller registry"
-    - lineinfile: dest=/etc/hosts line="{{ central_logging_ip }} central_logging"
-      when: logging_system_level == 'cluster'
 
     - name: check if registry is running
       shell: curl -I http://registry:5000/
@@ -128,15 +126,16 @@
     - copy: src={{ remote_scripts_dir }}/ansible.cfg dest=/root/.ansible.cfg
 
     # Central logging
+    - lineinfile: dest=/etc/hosts line="{{ central_logging_ip }} central_logging"
+      when: central_logging_level > 1
     - name: check if rsyslog is forwarding to logstash
       shell: cat /etc/rsyslog.conf| grep 5514
       register: result
       ignore_errors: True
-      when: logging_system_level == 'cluster'
+      when: central_logging_level > 1
     - name: Rsyslog to logstash
       shell: echo '*.* @central_logging:5514' >> /etc/rsyslog.conf
-      when: logging_system_level == 'cluster' and result.stdout.find('5514') == -1
+      when: central_logging_level > 1 and result.stdout.find('5514') == -1
     - name: Restart rsyslog
       shell: service rsyslog restart
-      when: logging_system_level == 'cluster' and result.stdout.find('5514') == -1
-    
+      when: central_logging_level > 1

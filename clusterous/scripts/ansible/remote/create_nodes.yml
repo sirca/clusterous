@@ -37,13 +37,11 @@
   user: root
   sudo: yes
   vars:
-    logging_system_level: "{{ logging_system_level }}"
+    central_logging_level: '{{ central_logging_level }}'
 
   tasks:
     - name: add entry to hosts file
       lineinfile: dest=/etc/hosts line="{{ hostvars['localhost']['ansible_ec2_local_ipv4'] }} controller registry"
-    - lineinfile: dest=/etc/hosts line="{{ central_logging_ip }} central_logging"
-      when: logging_system_level == 'cluster'
 
     - name: add mesos-dns to resolv.conf
       lineinfile: >
@@ -64,15 +62,16 @@
       service: name=mesos-slave state=started
 
     # Central logging
+    - lineinfile: dest=/etc/hosts line="{{ central_logging_ip }} central_logging"
+      when: central_logging_level > 1
     - name: check if rsyslog is forwarding to logstash
       shell: cat /etc/rsyslog.conf| grep 5514
       register: result
       ignore_errors: True
-      when: logging_system_level == 'cluster'
+      when: central_logging_level > 1
     - name: Rsyslog to logstash
       shell: echo '*.* @central_logging:5514' >> /etc/rsyslog.conf
-      when: logging_system_level == 'cluster' and result.stdout.find('5514') == -1
+      when: central_logging_level > 1 and result.stdout.find('5514') == -1
     - name: Restart rsyslog
       shell: service rsyslog restart
-      when: logging_system_level == 'cluster' and result.stdout.find('5514') == -1
-      
+      when: central_logging_level > 1 and result.stdout.find('5514') == -1

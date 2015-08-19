@@ -285,6 +285,10 @@ class AWSCluster(Cluster):
 
         all_deleted = True
         for sock in sock_files:
+            # Leave central logging tunnel
+            if '_{0}.sock'.format(defaults.central_logging_port) in sock:
+                continue
+
             reset_cmd = ['ssh', '-S', sock, '-O', 'exit',
                             self._get_controller_ip()]
             process = subprocess.Popen(reset_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
@@ -324,13 +328,12 @@ class AWSCluster(Cluster):
                                    vars_file.name, self._config['key_file'],
                                    env=env)
 
-        vars_dict['logging_system_level'] = ''
-        logging_system_level = self._profile_args.get('parameters',{}).get('logging_system_level')
-        if logging_system_level and logging_system_level in ['application','cluster']:
+        central_logging_level = self._profile_args.get('parameters',{}).get('central_logging_level',0)
+        vars_dict['central_logging_level'] = central_logging_level
+        if central_logging_level > 0:
             self._logger.info('Creating and configuring centralized logging instance...')
             AnsibleHelper.run_playbook(get_script('ansible/init_04_create_central_logging.yml'),
                                        vars_file.name, self._config['key_file'],env=env)
-            vars_dict['logging_system_level'] = logging_system_level
             vars_dict['central_logging_ip'] = self._get_central_logging_ip()
 
         vars_file = self._make_vars_file(vars_dict)
@@ -361,10 +364,9 @@ class AWSCluster(Cluster):
         vars_dict['instance_type'] = instance_type
         vars_dict['node_tag'] = node_tag
 
-        vars_dict['logging_system_level'] = ''
-        logging_system_level = self._profile_args.get('parameters',{}).get('logging_system_level')
-        if logging_system_level and logging_system_level in ['application','cluster']:
-            vars_dict['logging_system_level'] = logging_system_level
+        central_logging_level = self._profile_args.get('parameters',{}).get('central_logging_level',0)
+        vars_dict['central_logging_level'] = central_logging_level
+        if central_logging_level > 0 :
             vars_dict['central_logging_ip'] = self._get_central_logging_ip()
 
         node_txt = 'node' if num_nodes == 1 else 'nodes'

@@ -40,7 +40,7 @@ node_tag_status_initialized = 'initialized'
 
 mesos_port = 5050
 marathon_port = 8080
-central_logging_port = 8081
+central_logging_port = 8999
 
 # How many seconds to wait for all Marathon applications to reach "started" state
 # Currently 30 minutes
