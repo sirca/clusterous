@@ -400,7 +400,7 @@ class Environment(object):
             parameters = []
             central_logging_ip = self._cluster.get_central_logging_ip()
             if central_logging_ip:
-                parameters.append({ "key": "add-host", "value": 'central_logging:{0}'.format(central_logging_ip) })
+                parameters.append({ "key": "add-host", "value": 'central-logging:{0}'.format(central_logging_ip) })
 
             docker = {  'image': c['image'], 'port_mappings': port_mappings,
                         'force_pull_image': True, 'network': 'BRIDGE', 'privileged': True,

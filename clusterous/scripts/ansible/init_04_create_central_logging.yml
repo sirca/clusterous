@@ -43,11 +43,11 @@
   tasks:
     # HOSTNAMES
     - name: add entry to hosts file
-      lineinfile: dest=/etc/hosts line="127.0.0.1 central_logging"
+      lineinfile: dest=/etc/hosts line="127.0.0.1 central-logging"
 
     # ELASTICSEARCH
     - name: check if elasticsearch is running
-      shell: curl -I http://central_logging:9200/
+      shell: curl -I http://central-logging:9200/
       register: result
       ignore_errors: True
     - name: elasticsearch start
@@ -56,7 +56,7 @@
 
     # KIBANA
     - name: check if kibana is running
-      shell: curl -I http://central_logging:5601/
+      shell: curl -I http://central-logging:5601/
       register: result
       ignore_errors: True
     - name: kibana start
@@ -65,7 +65,7 @@
 
     # NGINX
     - name: check if nginx is running
-      shell: curl -I http://central_logging:8081/
+      shell: curl -I http://central-logging:8081/
       register: result
       ignore_errors: True
     - name: nginx start

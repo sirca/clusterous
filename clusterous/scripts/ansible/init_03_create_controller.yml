@@ -126,7 +126,7 @@
     - copy: src={{ remote_scripts_dir }}/ansible.cfg dest=/root/.ansible.cfg
 
     # Central logging
-    - lineinfile: dest=/etc/hosts line="{{ central_logging_ip }} central_logging"
+    - lineinfile: dest=/etc/hosts line="{{ central_logging_ip }} central-logging"
       when: central_logging_level > 1
     - name: check if rsyslog is forwarding to logstash
       shell: cat /etc/rsyslog.conf| grep 5514
@@ -134,7 +134,7 @@
       ignore_errors: True
       when: central_logging_level > 1
     - name: Rsyslog to logstash
-      shell: echo '*.* @central_logging:5514' >> /etc/rsyslog.conf
+      shell: echo '*.* @central-logging:5514' >> /etc/rsyslog.conf
       when: central_logging_level > 1 and result.stdout.find('5514') == -1
     - name: Restart rsyslog
       shell: service rsyslog restart
