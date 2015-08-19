@@ -90,7 +90,7 @@ class Environment(object):
 
         message = ''
         # Expose tunnel
-        if  env_file.spec['environment'].get('expose_tunnel'):
+        if env_file.spec['environment'].get('expose_tunnel'):
             message = self._expose_tunnel(env_file.spec['environment']['expose_tunnel'], cluster_info, component_resources)
 
         return True, message
