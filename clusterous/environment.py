@@ -398,7 +398,7 @@ class Environment(object):
                     dependencies.append('/{0}'.format(depend_str))
 
             parameters = []
-            central_logging_ip = self._cluster._get_central_logging_ip()
+            central_logging_ip = self._cluster.get_central_logging_ip()
             if central_logging_ip:
                 parameters.append({ "key": "add-host", "value": 'central_logging:{0}'.format(central_logging_ip) })
 

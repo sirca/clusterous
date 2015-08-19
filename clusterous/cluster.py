@@ -193,7 +193,7 @@ class AWSCluster(Cluster):
 
         return ssh
 
-    def _get_central_logging_ip(self):
+    def get_central_logging_ip(self):
         instances = self._get_instances(self.cluster_name)
         ip = None
         for instance in instances:
@@ -334,7 +334,7 @@ class AWSCluster(Cluster):
             self._logger.info('Creating and configuring centralized logging instance...')
             AnsibleHelper.run_playbook(get_script('ansible/init_04_create_central_logging.yml'),
                                        vars_file.name, self._config['key_file'],env=env)
-            vars_dict['central_logging_ip'] = self._get_central_logging_ip()
+            vars_dict['central_logging_ip'] = self.get_central_logging_ip()
 
         vars_file = self._make_vars_file(vars_dict)
 
@@ -367,7 +367,7 @@ class AWSCluster(Cluster):
         central_logging_level = self._profile_args.get('parameters',{}).get('central_logging_level',0)
         vars_dict['central_logging_level'] = central_logging_level
         if central_logging_level > 0 :
-            vars_dict['central_logging_ip'] = self._get_central_logging_ip()
+            vars_dict['central_logging_ip'] = self.get_central_logging_ip()
 
         node_txt = 'node' if num_nodes == 1 else 'nodes'
         self._logger.info('Creating {0} {1} named "{2}" to cluster...'.format(num_nodes, node_txt, node_tag))
@@ -683,12 +683,12 @@ class AWSCluster(Cluster):
         """
         Creates an SSH tunnel to the logging system
         """
-        if not self._get_central_logging_ip():
+        if not self.get_central_logging_ip():
             message = 'No logging system has been set'
             return (True, message)
             
         central_logging_port = defaults.central_logging_port
-        self.make_tunnel_on_controller(central_logging_port, self._get_central_logging_ip(), central_logging_port)
+        self.make_tunnel_on_controller(central_logging_port, self.get_central_logging_ip(), central_logging_port)
         success = self.create_permanent_tunnel_to_controller(central_logging_port, central_logging_port)
 
         if not success:
