@@ -12,9 +12,9 @@ setup(name='clusterous',
                         'scripts/ansible/hosts',
                         'scripts/ansible/remote/*'
                     ]},
-      install_requires=['pyyaml', 'pytest', 'mock', 'paramiko',
-                        'boto', 'ansible', 'requests', 'marathon', 'sshtunnel',
-                        'python-dateutil'],
+      install_requires=['pyyaml', 'pytest', 'mock', 'paramiko>=1.15.2',
+                        'boto', 'ansible', 'requests>=2.0', 'marathon>=0.7.1', 'sshtunnel>=0.0.4.1',
+                        'python-dateutil>=2.4.1', 'setuptools>=17.1'],
       # Workaround because PyPi version of ssh tunnel is currently broken
       # https://github.com/pahaz/sshtunnel/issues/21
       # Remove when fixed version of sshtunnel is released
