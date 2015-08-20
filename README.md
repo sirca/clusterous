@@ -27,19 +27,19 @@ vi ~/.clusterous.yml
 
 ### Setup cluster profile
 ```
-vi democluster.yml
+vi testcluster.yml
 ```
 
 ```yaml
 - Default:
-    cluster_name: democluster
+    cluster_name: testcluster
     num_instances: 1
     instance_type: t2.micro
 ```
 
 ### Start cluster
 ```
-clusterous --verbose start democluster.yml
+clusterous --verbose start testcluster.yml
 ```
 
 ### Cluster status
@@ -49,7 +49,7 @@ clusterous status
 
 ### Set working cluster
 ```
-clusterous workon democluster
+clusterous workon testcluster
 ```
 
 ### List files on shared volume
@@ -69,7 +69,7 @@ clusterous get tests /tmp
 ls -al /tmp/tests
 ```
 
-### Remove files on shared volumen
+### Remove files on shared volume
 ```
 clusterous rm tests
 clusterous ls
@@ -77,7 +77,7 @@ clusterous ls
 
 ### Build docker image
 ```
-cd subprojects/environments/basic_demo
+cd subprojects/environments/basic-python
 clusterous build-image image bdkd:sample_v1
 ```
 
@@ -88,8 +88,8 @@ clusterous image-info bdkd:sample_v1
 
 ### Launch environment
 ```
-cd subprojects/environments/basic_demo
-clusterous launch basic_env.yml
+cd subprojects/environments/basic-python
+clusterous launch basic-python-env.yml
 clusterous status
 ```
 
@@ -101,6 +101,6 @@ clusterous status
 
 ### Terminate cluster
 ```
-clusterous --verbose terminate democluster
+clusterous --verbose terminate testcluster
 clusterous status
 ```
