@@ -35,6 +35,14 @@ class AnsibleHelper(object):
         if 'ANSIBLE_HOST_KEY_CHECKING' not in run_env:
             run_env['ANSIBLE_HOST_KEY_CHECKING']='False'
 
+        if 'LOCAL_ANSIBLE_PYTHON_INTERPRETER' not in run_env:
+            for python_version in ['python2', 'python']:
+                process = subprocess.Popen(['which',python_version], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                output, error = process.communicate()
+                if output:
+                    run_env['ANSIBLE_HOST_KEY_CHECKING']=output
+                    break
+
         args = ['ansible-playbook', '-i', hosts_file,
                 '--private-key', key_file,
                 '-c', 'ssh',
