@@ -127,9 +127,9 @@ class EnvironmentFile(object):
             validated_fields = validator.validate(fields)
             new_env['components'][component] = validated_fields
 
-        new_env['image'] = env['image']
-        new_env['copy'] = env['copy']
-        new_env['expose_tunnel'] = env['expose_tunnel']
+        new_env['image'] = env.get('image',{})
+        new_env['copy'] = env.get('copy',{})
+        new_env['expose_tunnel'] = env.get('expose_tunnel',{})
         return new_env
 
     def _parse_cluster_section(self, cluster, params):

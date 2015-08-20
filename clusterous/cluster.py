@@ -117,7 +117,10 @@ class AWSCluster(Cluster):
                 'clusterous_s3_bucket': self._config['clusterous_s3_bucket'],
                 'registry_s3_path': defaults.registry_s3_path,
                 'remote_scripts_dir': defaults.get_remote_dir(),
-                'remote_host_scripts_dir': defaults.remote_host_scripts_dir
+                'remote_host_scripts_dir': defaults.remote_host_scripts_dir,
+                'central_logging_instance_name': defaults.central_logging_name_format.format(self.cluster_name),
+                'central_logging_ami_id': defaults.central_logging_ami_id,
+                'central_logging_instance_type': defaults.central_logging_instance_type,
                 }
 
     def _ansible_env_credentials(self):
@@ -160,7 +163,7 @@ class AWSCluster(Cluster):
                     aws_access_key_id=self._config['access_key_id'],
                     aws_secret_access_key=self._config['secret_access_key'])
 
-        # Delete instances
+        # Get instances
         instance_filters = { 'tag:{0}'.format(defaults.instance_tag_key):
                         [cluster_name],
                         'instance-state-name': ['running', 'pending']
@@ -181,6 +184,14 @@ class AWSCluster(Cluster):
 
         return ssh
 
+    def _get_central_logging_ip(self):
+        instances = self._get_instances(self.cluster_name)
+        ip = None
+        for instance in instances:
+            if defaults.central_logging_name_format.format(self.cluster_name) in instance.tags['Name']:
+                ip = str(instance.private_ip_address)
+                break
+        return ip
 
     def make_controller_tunnel(self, remote_port):
         """
@@ -265,6 +276,10 @@ class AWSCluster(Cluster):
 
         all_deleted = True
         for sock in sock_files:
+            # Leave central logging tunnel
+            if '_{0}.sock'.format(defaults.central_logging_port) in sock:
+                continue
+
             reset_cmd = ['ssh', '-S', sock, '-O', 'exit',
                             self._get_controller_ip()]
             process = subprocess.Popen(reset_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
@@ -348,7 +363,7 @@ class AWSCluster(Cluster):
                 f.write('{0}\n'.format(ip.strip()))
         return True
 
-    def init_cluster(self, cluster_name, nodes_info=[]):
+    def init_cluster(self, cluster_name, nodes_info=[], logging_level=0):
         """
         Initialise security group(s), cluster controller etc
         """
@@ -377,7 +392,6 @@ class AWSCluster(Cluster):
         sg_id = self._create_security_group(cluster_name, conn)
 
         # Launch all instances
-        controller_tags_and_res = []
 
         # Launch controller
         self._logger.info('Starting controller')
@@ -391,7 +405,7 @@ class AWSCluster(Cluster):
                                         subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
 
         controller_tags = {'Name': defaults.controller_name_format.format(cluster_name)}
-        controller_tags_and_res.append(('controller', controller_tags, controller_res.instances))
+        controller_tags_and_res = [('controller', controller_tags, controller_res.instances)]
 
         # Loop through node groups and launch all
         self._logger.info('Starting all nodes')
@@ -402,6 +416,16 @@ class AWSCluster(Cluster):
                                 subnet_id=c['subnet_id'], security_group_ids=[sg_id])
             node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag)}
             node_tags_and_res.append((node_tag, node_tags, res.instances))
+
+        # Launch logging instance if necessary
+        logging_tags_and_res = []
+        if logging_level > 0:
+            self._logger.info('Creating central logging instance...')
+            logging_res = conn.run_instances(defaults.central_logging_ami_id, min_count=1,
+                                            key_name=c['key_pair'], instance_type=defaults.central_logging_instance_type,
+                                            subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
+            logging_tags = {'Name': defaults.central_logging_name_format.format(cluster_name)}
+            logging_tags_and_res = [('central-logging', controller_tags, controller_res.instances)]
 
 
         # Wait for controller to launch
@@ -422,11 +446,21 @@ class AWSCluster(Cluster):
             time.sleep(3)
             shared_vol.update()
 
+        # Wait for logging instance to launch and configure
+        if logging_tags_and_res:
+            central_logging = self._wait_and_tag_instance_reservations(logging_tags_and_res)
+            self._logger.info('Configuring central logging...')
+            logging_inventory = tempfile.NamedTemporaryFile()
+            self._write_to_hosts_file(logging_inventory.name, central_logging.values()[0][0], 'central-logging', overwrite=True)
+            self._run_on_controller('configure_central_logging.yml', logging_inventory.name)
+
+
         # Configure controller
         controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
         self._write_to_hosts_file(controller_inventory, [controller.values()[0][0]], 'controller', overwrite=True)
 
         controller_vars_dict = self._controller_vars_dict()
+        controller_vars_dict['central_logging_level'] = logging_level
         controller_vars_file = self._make_vars_file(controller_vars_dict)
 
         self._logger.info('Configuring controller instance...')
@@ -471,6 +505,7 @@ class AWSCluster(Cluster):
         cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
         with open(cluster_info_file,'w+') as f:
             f.write(yaml.dump(data, default_flow_style=False))
+
 
         return True
 
@@ -775,6 +810,26 @@ class AWSCluster(Cluster):
                 return (False, message)
 
         return (True, 'Ok')
+
+    def central_logging(self):
+        """
+        Creates an SSH tunnel to the logging system
+        """
+        if not self._get_central_logging_ip():
+            message = 'No logging system has been set'
+            return (True, message)
+
+        central_logging_port = defaults.central_logging_port
+        self.make_tunnel_on_controller(central_logging_port, self._get_central_logging_ip(), central_logging_port)
+        success = self.create_permanent_tunnel_to_controller(central_logging_port, central_logging_port)
+
+        if not success:
+            message = 'Failed create tunnel to centralized logging system'
+            self._logger.debug(message)
+            return (False, message)
+
+        message = 'To access the centralized logging system, use this URL http://localhost:{0}'.format(central_logging_port)
+        return (True, message)
 
     def info_shared_volume(self):
         info = {'total': '',

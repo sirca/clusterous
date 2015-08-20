@@ -5,7 +5,8 @@ class ClusterBuilder(object):
     """
     Builds a cluster
     """
-    def __init__(self, cluster, cluster_name, cluster_args):
+    def __init__(self, cluster, cluster_name, cluster_args, logging_system_level=0):
+        self._logging_system_level = logging_system_level
         self._cluster_args = cluster_args
         self._cluster_name = cluster_name
         self._cluster = cluster
@@ -23,5 +24,5 @@ class ClusterBuilder(object):
         for name, params in self._cluster_args.iteritems():
             nodes_info.append((params['count'], params['type'], name))
 
-        self._cluster.init_cluster(self._cluster_name, nodes_info)
+        self._cluster.init_cluster(self._cluster_name, nodes_info, self._logging_system_level)
         self._launched = True

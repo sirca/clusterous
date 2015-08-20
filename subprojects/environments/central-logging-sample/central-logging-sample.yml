@@ -1,0 +1,10 @@
+name: central-logging-sample
+environment:
+  copy:
+    - "launch_scripts/"
+  components:
+    master:
+      machine: master
+      cpu: auto
+      image: ubuntu
+      cmd: "/bin/bash -c 'cd /home/data/launch_scripts; source enable_logging.sh; source test_logging.sh'"   # Sends TESTING to the central logging system every 10 seconds

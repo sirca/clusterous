@@ -127,6 +127,10 @@ class CLIParser(object):
                                 description='Connects to a docker container and gets an interactive shell')
         connect.add_argument('component_name', action='store', help='Name of the component (see status command)')
 
+        # Central logging
+        central_logging = subparser.add_parser('logging', help='Creates an SSH tunnel to the logging system',
+                                                description='Creates an SSH tunnel to the centralized logging system and presents the URL to access it')
+
     def _init_clusterous_object(self, args):
         app = None
         if args.verbose:
@@ -225,6 +229,12 @@ class CLIParser(object):
             print message
             return 1
         return 0
+
+    def _central_logging(self, args):
+        app = self._init_clusterous_object(args)
+        success, message = app.central_logging()
+        print message
+        return 0 if success else 1
 
     def _cluster_status(self, args):
         app = self._init_clusterous_object(args)
@@ -325,6 +335,8 @@ class CLIParser(object):
                 status = self._cluster_status(args)
             elif args.subcmd == 'connect':
                 status = self._connect_to_container(args)
+            elif args.subcmd == 'logging':
+                status = self._central_logging(args)
             elif args.subcmd == 'destroy':
                 status = self._destroy(args)
         # TODO: this exception should not be caught here
