@@ -8,11 +8,15 @@
     - name: copy hosts file
       copy: src={{ hosts_file_src }} dest={{ remote_dir }}/{{ hosts_file_name }}
 
+    - name: copy vars file
+      copy: src={{ vars_file_src }} dest={{ remote_dir }}/{{ vars_file_name }}
+
     - name: run remote ansible
-      shell: ansible-playbook -i {{ hosts_file_name }} --private-key {{ key_file_name }} {{ playbook_file }}
+      shell: ansible-playbook -i {{ hosts_file_name }} --extra-vars '@{{ vars_file_name }}' --private-key {{ key_file_name }} {{ playbook_file }}
       args:
         chdir: "{{ remote_dir }}"
 
-    - name: delete key file and hosts file
+    - name: delete key file, vars file, and hosts file
       file: path={{ remote_dir }}/{{ key_file_name }} state=absent
     - file: path={{ remote_dir }}/{{ hosts_file_name }} state=absent
+    - file: path={{ remote_dir }}/{{ vars_file_name }} state=absent

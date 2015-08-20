@@ -127,7 +127,9 @@ class Clusterous(object):
         cl = self.make_cluster_object(cluster_name_required=False)
         builder = clusterbuilder.ClusterBuilder(cl, profile['cluster_name'], cluster_spec, profile['logging_system_level'])
         self._logger.info('Starting cluster')
-        builder.start_cluster()
+        started = builder.start_cluster()
+        if not started:
+            return False, ''
         self._logger.info('Cluster "{0}" started'.format(profile['cluster_name']))
 
         message = ''

@@ -40,6 +40,12 @@ def retry_till_true(func, sleep_interval, timeout_secs=300):
 
     return success
 
+class ClusterException(Exception):
+    """
+    Unrecoverable error, e.g. when creating a cluster
+    """
+    pass
+
 class Cluster(object):
     """
     Represents infrastrucure aspects of the cluster. Includes high level operations
@@ -135,17 +141,21 @@ class AWSCluster(Cluster):
         else:
             vars_d = vars_dict
         vars_file = tempfile.NamedTemporaryFile()
-        vars_file.write(yaml.dump(vars_d, default_flow_style=False))
+        vars_file.write(yaml.safe_dump(vars_d, default_flow_style=False))
         vars_file.flush()
         return vars_file
 
-    def _run_on_controller(self, playbook, hosts_file):
+    def _run_on_controller(self, playbook, hosts_file, remote_vars={}):
+
+        remote_vars_file = self._make_vars_file(remote_vars)
 
         local_vars = {
                 'key_file_src': self._config['key_file'],
                 'key_file_name': defaults.remote_host_key_file,
                 'hosts_file_src': hosts_file,
                 'hosts_file_name': os.path.basename(hosts_file),
+                'vars_file_src': remote_vars_file.name,
+                'vars_file_name': os.path.basename(remote_vars_file.name),
                 'remote_dir': defaults.remote_host_scripts_dir,
                 'playbook_file': playbook
                 }
@@ -157,6 +167,7 @@ class AWSCluster(Cluster):
                       hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
 
         local_vars_file.close()
+        remote_vars_file.close()
 
     def _get_instances(self, cluster_name):
         conn = boto.ec2.connect_to_region(self._config['region'],
@@ -166,7 +177,7 @@ class AWSCluster(Cluster):
         # Get instances
         instance_filters = { 'tag:{0}'.format(defaults.instance_tag_key):
                         [cluster_name],
-                        'instance-state-name': ['running', 'pending']
+                        'instance-state-name': ['running', 'pending', 'stopping', 'shutting-down']
                         }
         instance_list = conn.get_only_instances(filters=instance_filters)
         return instance_list
@@ -184,7 +195,7 @@ class AWSCluster(Cluster):
 
         return ssh
 
-    def _get_central_logging_ip(self):
+    def get_central_logging_ip(self):
         instances = self._get_instances(self.cluster_name)
         ip = None
         for instance in instances:
@@ -264,7 +275,7 @@ class AWSCluster(Cluster):
 
         return True if return_code == 0 else False
 
-    def delete_all_permanent_tunnels(self):
+    def delete_all_permanent_tunnels(self, delete_logging_tunnel=False):
         """
         Deletes all persistent SSH tunnels to the controller that were created by
         create_permanent_tunnel_to_controller()
@@ -278,7 +289,8 @@ class AWSCluster(Cluster):
         for sock in sock_files:
             # Leave central logging tunnel
             if '_{0}.sock'.format(defaults.central_logging_port) in sock:
-                continue
+                if not delete_logging_tunnel:
+                    continue
 
             reset_cmd = ['ssh', '-S', sock, '-O', 'exit',
                             self._get_controller_ip()]
@@ -301,8 +313,8 @@ class AWSCluster(Cluster):
         descr = 'Security group for {0}'.format(cluster_name)
         for s in conn.get_all_security_groups():
             if s.name == sg_name:
-                self._logger.debug('First deleting existing security group "{0}"'.format(sg_name))
-                s.delete()
+                self._logger.debug('Security group "{0}" already exists'.format(sg_name))
+                return s.id
         sg = conn.create_security_group(sg_name, descr, vpc_id = self._config['vpc_id'])
         sg.add_tag(key='Name', value=sg_name)
         sg.add_tag(key=defaults.instance_tag_key, value=cluster_name)
@@ -341,7 +353,7 @@ class AWSCluster(Cluster):
                 # There is no good reason for this to happen in practice
                 elif inst.state in ('terminated', 'stopped', 'stopping'):
                     self._logger.error('Instance {0} is in state "{1}"'.format(inst.id, inst.state))
-                    self.logger.error('Problem creating instance')
+                    self._logger.error('Problem creating instance')
                     # Unrecoverable error, exit to prevent infinite loop
                     return None
                 else:
@@ -377,10 +389,22 @@ class AWSCluster(Cluster):
 
         c = self._config
 
+        # Check if cluster by this name is already running
+        if self._get_instances(cluster_name):
+            self._logger.error('A cluster by the name "{0}" is already running, cannot start'.format(cluster_name))
+            raise ClusterException('Another cluster by the same name is running')
+
         # Create registry bucket if it doesn't already exist
         s3conn = boto.s3.connection.S3Connection(c['access_key_id'], c['secret_access_key'])
         if not s3conn.lookup(c['clusterous_s3_bucket']):
-            s3conn.create_bucket(c['clusterous_s3_bucket'], location=c['region'])
+            try:
+                self._logger.info('Creating S3 bucket')
+                s3conn.create_bucket(c['clusterous_s3_bucket'], location=c['region'])
+            except boto.exception.S3CreateError as e:
+                self._logger.error('Unable to create S3 bucket due to an AWS conflict. Try again later.')
+                self._logger.error(e)
+                raise ClusterException('Unrecoverable error while trying to start cluster')
+
 
 
         conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
@@ -391,7 +415,9 @@ class AWSCluster(Cluster):
         self._logger.info('Creating security group')
         sg_id = self._create_security_group(cluster_name, conn)
 
+        #
         # Launch all instances
+        #
 
         # Launch controller
         self._logger.info('Starting controller')
@@ -420,16 +446,22 @@ class AWSCluster(Cluster):
         # Launch logging instance if necessary
         logging_tags_and_res = []
         if logging_level > 0:
-            self._logger.info('Creating central logging instance...')
+            self._logger.info('Starting central logging instance')
             logging_res = conn.run_instances(defaults.central_logging_ami_id, min_count=1,
                                             key_name=c['key_pair'], instance_type=defaults.central_logging_instance_type,
                                             subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
             logging_tags = {'Name': defaults.central_logging_name_format.format(cluster_name)}
-            logging_tags_and_res = [('central-logging', controller_tags, controller_res.instances)]
+            logging_tags_and_res = [('central-logging', logging_tags, logging_res.instances)]
 
 
         # Wait for controller to launch
         controller = self._wait_and_tag_instance_reservations(controller_tags_and_res)
+
+        # Create cluster info file, so that user immediately has a working cluster set
+        self._set_cluster_info(cluster_name, controller.values()[0][0])
+        controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
+        self._write_to_hosts_file(controller_inventory, [controller.values()[0][0]], 'controller', overwrite=True)
+
 
         # Create and attach shared volume
         self._logger.info('Creating shared volume')
@@ -446,42 +478,42 @@ class AWSCluster(Cluster):
             time.sleep(3)
             shared_vol.update()
 
-        # Wait for logging instance to launch and configure
-        if logging_tags_and_res:
-            central_logging = self._wait_and_tag_instance_reservations(logging_tags_and_res)
-            self._logger.info('Configuring central logging...')
-            logging_inventory = tempfile.NamedTemporaryFile()
-            self._write_to_hosts_file(logging_inventory.name, central_logging.values()[0][0], 'central-logging', overwrite=True)
-            self._run_on_controller('configure_central_logging.yml', logging_inventory.name)
-
+        # Variables needed by nodes for configuring central logging
+        logging_vars = {'central_logging_level': logging_level, 'central_logging_ip': ''}
 
         # Configure controller
-        controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
-        self._write_to_hosts_file(controller_inventory, [controller.values()[0][0]], 'controller', overwrite=True)
-
         controller_vars_dict = self._controller_vars_dict()
-        controller_vars_dict['central_logging_level'] = logging_level
+        controller_vars_dict.update(logging_vars)
         controller_vars_file = self._make_vars_file(controller_vars_dict)
 
         self._logger.info('Configuring controller instance...')
-        AnsibleHelper.run_playbook(get_script('ansible/01_configure_controller.yml'),
+        AnsibleHelper.run_playbook(defaults.get_script('ansible/01_configure_controller.yml'),
                                    controller_vars_file.name, self._config['key_file'],
                                    hosts_file=controller_inventory)
 
         controller_vars_file.close()
 
+
+        # Wait for logging instance to launch and configure
+        if logging_tags_and_res:
+            central_logging = self._wait_and_tag_instance_reservations(logging_tags_and_res)
+            logging_vars['central_logging_ip'] = central_logging.values()[0][0]
+            self._logger.info('Configuring central logging...')
+            logging_inventory = tempfile.NamedTemporaryFile()
+            self._write_to_hosts_file(logging_inventory.name, [central_logging.values()[0][0]], 'central-logging', overwrite=True)
+            logging_inventory.flush()
+            self._run_on_controller('configure_central_logging.yml', logging_inventory.name)
+            logging_inventory.close()
+
         # Configure nodes
         if node_tags_and_res:
-            self._configure_nodes(nodes_info, node_tags_and_res, controller.values()[0][0])
-
-        # Create cluster info file
-        self._set_cluster_info(cluster_name, controller.values()[0][0])
+            self._configure_nodes(nodes_info, node_tags_and_res, controller.values()[0][0], logging_vars)
 
         # TODO: this is useful for debugging, but remove at a later stage
         self.create_permanent_tunnel_to_controller(8080, 8080, prefix='marathon')
 
 
-    def _configure_nodes(self, nodes_info, node_tags_and_res, controller_ip):
+    def _configure_nodes(self, nodes_info, node_tags_and_res, controller_ip, logging_vars={}):
         nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
 
         nodes_inventory = tempfile.NamedTemporaryFile()
@@ -489,7 +521,7 @@ class AWSCluster(Cluster):
             self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag], node_tag, overwrite=False)
         nodes_inventory.flush()
         self._logger.info('Configuring nodes...')
-        self._run_on_controller('configure_nodes.yml', nodes_inventory.name)
+        self._run_on_controller('configure_nodes.yml', nodes_inventory.name, logging_vars)
         nodes_inventory.close()
         return
 
@@ -505,8 +537,6 @@ class AWSCluster(Cluster):
         cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
         with open(cluster_info_file,'w+') as f:
             f.write(yaml.dump(data, default_flow_style=False))
-
-
         return True
 
     def docker_build_image(self, full_path, image_name):
@@ -815,12 +845,12 @@ class AWSCluster(Cluster):
         """
         Creates an SSH tunnel to the logging system
         """
-        if not self._get_central_logging_ip():
+        if not self.get_central_logging_ip():
             message = 'No logging system has been set'
             return (True, message)
 
         central_logging_port = defaults.central_logging_port
-        self.make_tunnel_on_controller(central_logging_port, self._get_central_logging_ip(), central_logging_port)
+        self.make_tunnel_on_controller(central_logging_port, self.get_central_logging_ip(), 5601)
         success = self.create_permanent_tunnel_to_controller(central_logging_port, central_logging_port)
 
         if not success:
@@ -858,6 +888,10 @@ class AWSCluster(Cluster):
         instance_list = self._get_instances(self.cluster_name)
         num_instances = len(instance_list)
         instances = [ i.id for i in instance_list ]
+
+        if not instances:
+            self._logger.info('Nothing to terminate')
+            return True
 
         self._logger.info('Terminating {0} instances'.format(num_instances))
         conn.terminate_instances(instance_ids=instances)

@@ -3,12 +3,13 @@
   connection: local
   gather_facts: yes
 
-- name: wait for ssh to come up on controller
+- name: configure all nodes
   hosts: all
   user: root
   sudo: True
   gather_facts: False
   tasks:
+    # Wait for ssh before connecting
     - local_action:
         module: wait_for
         host: "{{ inventory_hostname }}"
@@ -37,3 +38,21 @@
 
     - name: start mesos-slave
       service: name=mesos-slave state=started
+
+    # Central logging
+    - lineinfile: dest=/etc/hosts line="{{ central_logging_ip }} central-logging"
+      when: central_logging_level > 1
+
+    - name: check if rsyslog is forwarding to logstash
+      shell: cat /etc/rsyslog.conf| grep 5514
+      register: result
+      ignore_errors: True
+      when: central_logging_level > 1
+
+    - name: Rsyslog to logstash
+      shell: echo '*.* @central-logging:5514' >> /etc/rsyslog.conf
+      when: central_logging_level > 1 and result.stdout.find('5514') == -1
+
+    - name: Restart rsyslog
+      shell: service rsyslog restart
+      when: central_logging_level > 1 and result.stdout.find('5514') == -1
