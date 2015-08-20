@@ -1,5 +1,5 @@
 # Clusterous
-Cluster compute tool for Docker based applications.
+Cluster compute tool for running Docker based applications on AWS.
 
 Written in Python. Requires Linux or OS X.
 
@@ -23,7 +23,7 @@ Clusterous needs to be configured before it can be used. Create the file `.clust
 
     vi ~/.clusterous.yml
 
-A template of the contents of file is as follows:
+A template of the contents of the file is as follows:
 ```yaml
 - AWS:
     access_key_id: xxx
@@ -36,7 +36,7 @@ A template of the contents of file is as follows:
     clusterous_s3_bucket: xxx
 ```
 
-Add appropriate values for all fields. For the `clusterous_s3_bucket`, give a unique name that you can share with others in your organisation. For example `myorg-experiments-clusterous-bucket`.
+Add appropriate values for all fields. The `clusterous_s3_bucket` field takes the name of an S3 bucket that Clusterous uses for storing some data (currently just built Docker images). Just specify a name, and Clusterous will create a new bucket by that name. However, make sure you use a unique name that you can share with others in your organisation. For example `myorg-experiments-clusterous-bucket`, where `myorg` is the name of your organisation.
 
 ## Starting a cluster
 To start a cluster, you need to provide Clusterous some information via a _profile file_. Create a file using a text editor. For example:
@@ -46,6 +46,8 @@ vi mycluster.yml
 
 ```
 
+And add:
+
 ```yaml
 - Default:
     cluster_name: mycluster
@@ -53,7 +55,7 @@ vi mycluster.yml
     instance_type: t2.micro
 ```
 
-Substitute anything appropriate for `mycluster`, ideally something unique to prevent conflicts with others on your AWS account. You can of course specify any number of instances or instance type.
+Replace `mycluster` with any appropriate name for your cluster, ideally something unique to prevent a conflict with other Clusterous users on your AWS account. You can of course specify any instance type or number of instances.
 
 To start a cluster, type:
 
@@ -77,7 +79,7 @@ As an example, Clusterous comes with an IPython Parallel environment. The `launc
 
     clusterous launch subprojects/environments/ipython-lite/ipython.yml
     
-You will get detailed output as Clusterous launched IPython Parallel. When you run it for the first time (to be technical, for the first time with your configured S3 bucket), it takes some time to launch as it builds an IPython parallel Docker image.
+You will get detailed output as Clusterous launched IPython Parallel. When you run it for the first time (to be technical, for the first time with your configured S3 bucket), it takes some time to launch as it builds an IPython Parallel Docker image. This built image is stored in the S3 bucket you specified in the configuration file.
 
 Once it has launched, Clusterous will output a URL to the IPython notebook on your cluster. Open this URL in your web browser to access the IPython notebook.
 
