@@ -49,21 +49,19 @@ vi mycluster.yml
 And add:
 
 ```yaml
-- Default:
-    cluster_name: mycluster
-    num_instances: 3
-    instance_type: t2.micro
+cluster_name: mycluster
+parameters:
+    master_instance_type: t2.micro
+    worker_instance_type: t2.micro
+    instance_count: 3
 ```
 
-Replace `mycluster` with any appropriate name for your cluster, ideally something unique to prevent a conflict with other Clusterous users on your AWS account. You can of course specify any instance type or number of instances.
+Replace `mycluster` with any appropriate name for your cluster, ideally something unique to prevent a conflict with other Clusterous users on your AWS account. You can of course specify any instance types or number of instances. Note that the number of instances includes the master (i.e. if you specify `instance_count` of 3, there will be 2 worker instances and 1 master instance).
 
 To start a cluster, type:
 
     clusterous start mycluster.yml
     
-You can optionally use the `--verbose` flag to get more detailed information as the cluster starts:
-
-    clusterous --verbose start mycluster.yml
 
 It will take several minutes to start the cluster. When the cluster has succesfully been started, you can run the `status` command to have a look:
 
@@ -73,6 +71,8 @@ You will see some information about the cluster name, the number of instances ru
 
 ## Launching an environment
 In Clusterous, an `environment` refers to a Docker based application, along with any associated configuration and data. To run your application on a Clusterous cluster, you create an `environment file` containing instructions to run the application.
+
+Detailed documentation for creating environment files is located under [docs/environment_file.md](https://github.com/sirca/bdkd_cluster/blob/master/docs/environment_file.md).
 
 ### IPython Parallel
 As an example, Clusterous comes with an IPython Parallel environment. The `launch` command is used to launch an environment on a running cluster. Once the cluster is launched, you can run IPython Parallel using the `ipython.yml` file located under `subprojects/environments/ipython-lite` in the Clusterous source. To launch, type the following (assuming you are in the bdkd_cluster root folder):
