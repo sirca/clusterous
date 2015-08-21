@@ -86,7 +86,7 @@ Once it has launched, Clusterous will output a URL to the IPython notebook on yo
 ## Terminating the cluster
 Once you are done, run the `terminate` subcommand to stop the cluster.
 
-    clusterous terminate testcluster
+    clusterous terminate
 
 
 ## Getting the Clusterous source
