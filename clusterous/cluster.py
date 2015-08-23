@@ -850,7 +850,7 @@ class AWSCluster(Cluster):
             return (True, message)
 
         central_logging_port = defaults.central_logging_port
-        self.make_tunnel_on_controller(central_logging_port, self.get_central_logging_ip(), 5601)
+        self.make_tunnel_on_controller(central_logging_port, self.get_central_logging_ip(), 8081)
         success = self.create_permanent_tunnel_to_controller(central_logging_port, central_logging_port)
 
         if not success:
