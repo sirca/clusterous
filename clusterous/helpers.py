@@ -39,7 +39,7 @@ class AnsibleHelper(object):
                 '--private-key', key_file,
                 '-c', 'ssh',
                 '--extra-vars', '@{0}'.format(vars_file), playbook_file]
-        # logger.debug(' '.join(args))
+        # print ' '.join(args)
         process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=run_env)
         output, error = process.communicate()
 

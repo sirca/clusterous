@@ -1,0 +1,58 @@
+- name: get info about local machine
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+
+- name: configure all nodes
+  hosts: all
+  user: root
+  sudo: True
+  gather_facts: False
+  tasks:
+    # Wait for ssh before connecting
+    - local_action:
+        module: wait_for
+        host: "{{ inventory_hostname }}"
+        port: 22
+        delay: 0
+        timeout: 300
+        state: started
+
+    - name: add entry to hosts file
+      lineinfile: dest=/etc/hosts line="{{ hostvars.localhost.ansible_default_ipv4.address }} controller registry"
+
+    - name: add mesos-dns to resolv.conf
+      lineinfile: >
+        dest=/etc/resolv.conf regexp='^nameserver'
+        line="nameserver {{ hostvars.localhost.ansible_default_ipv4.address }}" mode=0755
+
+    - name: set up NFS
+      lineinfile: dest=/etc/fstab regexp="^controller:/home/data" line="controller:/home/data  /home/data  ndf defaults  0 0" owner=root group=root mode=0644
+
+    - name: mount volume
+      file: path=/home/data state=directory mode=0755
+    - mount: name=/home/data src=controller:/home/data fstype=nfs state=mounted
+
+    - name: add node name to mesos attributes file
+      lineinfile: dest=/etc/mesos-slave/attributes line="name:{{ group_names[0] }}" create=yes
+
+    - name: start mesos-slave
+      service: name=mesos-slave state=started
+
+    # Central logging
+    - lineinfile: dest=/etc/hosts line="{{ central_logging_ip }} central-logging"
+      when: central_logging_level > 1
+
+    - name: check if rsyslog is forwarding to logstash
+      shell: cat /etc/rsyslog.conf| grep 5514
+      register: result
+      ignore_errors: True
+      when: central_logging_level > 1
+
+    - name: Rsyslog to logstash
+      shell: echo '*.* @central-logging:5514' >> /etc/rsyslog.conf
+      when: central_logging_level > 1 and result.stdout.find('5514') == -1
+
+    - name: Restart rsyslog
+      shell: service rsyslog restart
+      when: central_logging_level > 1 and result.stdout.find('5514') == -1

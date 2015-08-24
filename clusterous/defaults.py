@@ -16,12 +16,19 @@ CLUSTER_INFO_FILE = local_config_dir + '/' + 'cluster_info.yml'
 controller_ami_id = 'ami-2d6d2b17'
 node_ami_id = 'ami-47eaad7d'
 security_group_name_format = '{0}-sg'
-controller_name_format = '{0}_controller'
+controller_name_format = '{0}-controller'
 controller_instance_type = 't2.small'
-node_name_format = '{0}_node'
+node_name_format = '{0}-node-{1}'
+instance_tag_key = '@clusterous'
 registry_s3_path = '/docker-registry'
+central_logging_name_format = '{0}-central-logging'
+central_logging_instance_type = 't2.small'
+central_logging_ami_id = 'ami-45eaad7f'
+
+controller_root_volume_size = 20    # GB
 
 shared_volume_path = '/home/data/'
+shared_volume_size = 20     # GB
 
 remote_scripts_dir = 'ansible/remote'
 
@@ -37,6 +44,7 @@ node_tag_status_initialized = 'initialized'
 
 mesos_port = 5050
 marathon_port = 8080
+central_logging_port = 8081
 
 # How many seconds to wait for all Marathon applications to reach "started" state
 # Currently 30 minutes

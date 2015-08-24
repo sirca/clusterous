@@ -75,6 +75,7 @@ class Clusterous(object):
         except KeyError as e:
             raise ClusterousError('No "cluster_name" field in "{0}"'.format(profile_file))
 
+        validated['central_logging_level'] = contents.get('central_logging_level', 0)
         validated['parameters'] = contents.get('parameters', {})
 
         environment_file = None
@@ -124,9 +125,11 @@ class Clusterous(object):
 
         # Init Cluster object
         cl = self.make_cluster_object(cluster_name_required=False)
-        builder = clusterbuilder.ClusterBuilder(cl, profile['cluster_name'], cluster_spec)
+        builder = clusterbuilder.ClusterBuilder(cl, profile['cluster_name'], cluster_spec, profile['central_logging_level'])
         self._logger.info('Starting cluster')
-        builder.start_cluster()
+        started = builder.start_cluster()
+        if not started:
+            return False, ''
         self._logger.info('Cluster "{0}" started'.format(profile['cluster_name']))
 
         message = ''
@@ -240,6 +243,10 @@ class Clusterous(object):
             return (False, message)
 
         return cl.connect_to_container(component_name)
+
+    def central_logging(self):
+        cl = self.make_cluster_object()
+        return cl.central_logging()
 
     def cluster_status(self):
         cl = self.make_cluster_object()

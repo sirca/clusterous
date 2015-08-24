@@ -1,0 +1,53 @@
+- name: configure central logging
+  hosts: all
+  user: root
+  sudo: True
+  tasks:
+    # Wait for ssh before connection
+    - local_action:
+        module: wait_for
+        host: "{{ inventory_hostname }}"
+        port: 22
+        delay: 0
+        timeout: 300
+        state: started
+
+    # Hostnames
+    - name: add entry to hosts file
+      lineinfile: dest=/etc/hosts line="127.0.0.1 central-logging"
+
+    # Elasticsearch
+    - name: check if elasticsearch is running
+      shell: curl -I http://central-logging:9200/
+      register: result
+      ignore_errors: True
+    - name: elasticsearch start
+      shell: "nohup /usr/share/elasticsearch/bin/elasticsearch &"
+      when: result|failed
+
+    # Kibana
+    - name: check if kibana is running
+      shell: curl -I http://central-logging:5601/
+      register: result
+      ignore_errors: True
+    - name: kibana start
+      shell: service kibana start
+      when: result|failed
+
+    # nginx
+    - name: check if nginx is running
+      shell: curl -I http://central-logging:8081/
+      register: result
+      ignore_errors: True
+    - name: nginx start
+      service: name=nginx state=started enabled=yes
+      when: result|failed
+
+    # logstash
+    - name: check if logstash is running
+      shell: netstat -aln |grep 5514|grep LISTEN
+      register: result
+      ignore_errors: True
+    - name: logstash start
+      shell: "nohup /etc/init.d/logstash start&"
+      when: result.stdout.find('5514') == -1

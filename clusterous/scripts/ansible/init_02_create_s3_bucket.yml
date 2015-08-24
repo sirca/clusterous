@@ -1,9 +1,0 @@
----
-- hosts: localhost
-  connection: local
-  gather_facts: no
-  tasks:
-    - name: s3 bucket for private docker registry
-      s3: bucket={{ clusterous_s3_bucket }} mode=create aws_access_key="{{ AWS_KEY }}" aws_secret_key="{{ AWS_SECRET }}"
-      register: result
-      ignore_errors: True
