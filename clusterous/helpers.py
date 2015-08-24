@@ -36,7 +36,7 @@ class AnsibleHelper(object):
             run_env['ANSIBLE_HOST_KEY_CHECKING']='False'
 
         if 'LOCAL_ANSIBLE_PYTHON_INTERPRETER' not in run_env:
-            for python_version in ['python2', 'python']:
+            for python_version in ['python2', 'python2.7', 'python']:
                 process = subprocess.Popen(['which',python_version], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 output, error = process.communicate()
                 if output:
