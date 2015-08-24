@@ -11,6 +11,7 @@ import json
 import stat
 from datetime import datetime
 from dateutil import parser
+from collections import namedtuple
 
 
 from dateutil.relativedelta import relativedelta
@@ -329,6 +330,7 @@ class AWSCluster(Cluster):
         launched_ids = {}
         inst_list = []
         inst_to_tag = {}
+        LaunchInfo = namedtuple('LaunchInfo', 'public_ips private_ips')
         for (label, tag, insts) in tag_and_inst_list:
             inst_list.extend(insts)
             for i in insts:
@@ -347,8 +349,9 @@ class AWSCluster(Cluster):
                         t.update(clusterous_tag)
                         inst.add_tags(t)
                         if not label in launched:
-                            launched[label] = []
-                        launched[label].append(inst.ip_address)
+                            launched[label] = LaunchInfo([], [])
+                        launched[label].public_ips.append(inst.ip_address)
+                        launched[label].private_ips.append(inst.private_ip_address)
                         self._logger.debug('Running {0} {1} {2}'.format(inst.ip_address, tags, inst.id))
                 # There is no good reason for this to happen in practice
                 elif inst.state in ('terminated', 'stopped', 'stopping'):
@@ -458,9 +461,9 @@ class AWSCluster(Cluster):
         controller = self._wait_and_tag_instance_reservations(controller_tags_and_res)
 
         # Create cluster info file, so that user immediately has a working cluster set
-        self._set_cluster_info(cluster_name, controller.values()[0][0])
+        self._set_cluster_info(cluster_name, controller.values()[0].public_ips[0])
         controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
-        self._write_to_hosts_file(controller_inventory, [controller.values()[0][0]], 'controller', overwrite=True)
+        self._write_to_hosts_file(controller_inventory, [controller.values()[0].public_ips[0]], 'controller', overwrite=True)
 
         # Create and attach shared volume
         self._logger.info('Creating shared volume')
@@ -497,16 +500,16 @@ class AWSCluster(Cluster):
         if logging_tags_and_res:
             self._logger.info('Configuring central logging...')
             central_logging = self._wait_and_tag_instance_reservations(logging_tags_and_res)
-            logging_vars['central_logging_ip'] = central_logging.values()[0][0]
+            logging_vars['central_logging_ip'] = central_logging.values()[0].private_ips[0]     # private ip
             logging_inventory = tempfile.NamedTemporaryFile()
-            self._write_to_hosts_file(logging_inventory.name, [central_logging.values()[0][0]], 'central-logging', overwrite=True)
+            self._write_to_hosts_file(logging_inventory.name, [central_logging.values()[0].private_ips[0]], 'central-logging', overwrite=True)
             logging_inventory.flush()
             self._run_on_controller('configure_central_logging.yml', logging_inventory.name)
             logging_inventory.close()
 
         # Configure nodes
         if node_tags_and_res:
-            self._configure_nodes(nodes_info, node_tags_and_res, controller.values()[0][0], logging_vars)
+            self._configure_nodes(nodes_info, node_tags_and_res, controller.values()[0].public_ips[0], logging_vars)
 
         # TODO: this is useful for debugging, but remove at a later stage
         self.create_permanent_tunnel_to_controller(8080, 8080, prefix='marathon')
@@ -517,7 +520,7 @@ class AWSCluster(Cluster):
 
         nodes_inventory = tempfile.NamedTemporaryFile()
         for num_nodes, instance_type, node_tag in nodes_info:
-            self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag], node_tag, overwrite=False)
+            self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag].private_ips, node_tag, overwrite=False)
         nodes_inventory.flush()
         self._logger.info('Configuring nodes...')
         self._run_on_controller('configure_nodes.yml', nodes_inventory.name, logging_vars)
