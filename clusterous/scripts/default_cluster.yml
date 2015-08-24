@@ -1,0 +1,15 @@
+# DO NOT MODIFY
+# This is the in-built default provisioning definition. If an environment does not
+# have cluster provisioning, this provisioning is used. Likewise, if the user does
+# note specify any enviroment when launching the application, the default
+# provisioning is used
+
+name: default-cluster
+
+cluster:
+  master:         # give this node the Mesos attribute "master", by which the orchestration identifies it
+    type: $master_instance_type   # node_type is the instance type specified by user in profile
+    count: 1           # always only 1 node labelled "master"
+  worker:           # give all these nodes the Mesos attribute "node"
+    type: $worker_instance_type   # node_type is the instance type specified by user in profile
+    count: $instance_count - 1     # node_count as specified by user. Allows user to specify If "- [num]" after variable

@@ -43,7 +43,6 @@ To start a cluster, you need to provide Clusterous some information via a _profi
 
 ```
 vi mycluster.yml
-
 ```
 
 And add:
@@ -147,5 +146,3 @@ clusterous image-info bdkd:sample_v1
 clusterous destroy
 clusterous status
 ```
-
-
