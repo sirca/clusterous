@@ -25,7 +25,10 @@ central_logging_name_format = '{0}-central-logging'
 central_logging_instance_type = 't2.small'
 central_logging_ami_id = 'ami-45eaad7f'
 
+controller_root_volume_size = 20    # GB
+
 shared_volume_path = '/home/data/'
+shared_volume_size = 20     # GB
 
 remote_scripts_dir = 'ansible/remote'
 
@@ -41,7 +44,7 @@ node_tag_status_initialized = 'initialized'
 
 mesos_port = 5050
 marathon_port = 8080
-central_logging_port = 8999
+central_logging_port = 8081
 
 # How many seconds to wait for all Marathon applications to reach "started" state
 # Currently 30 minutes

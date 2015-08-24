@@ -1,7 +1,7 @@
 cluster_name: testcluster
 #environment_file: something.yml
+#central_logging_level: 1
 parameters:
     master_instance_type: t2.micro
     worker_instance_type: t2.micro
     instance_count: 3
-    central_logging_level: 0

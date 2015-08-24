@@ -423,7 +423,7 @@ class AWSCluster(Cluster):
         self._logger.info('Starting controller')
         block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
         root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True)
-        root_vol.size = 20
+        root_vol.size = defaults.controller_root_volume_size
 
         block_devices['/dev/sda1'] = root_vol
         controller_res = conn.run_instances(defaults.controller_ami_id, min_count=1,
@@ -462,10 +462,9 @@ class AWSCluster(Cluster):
         controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
         self._write_to_hosts_file(controller_inventory, [controller.values()[0][0]], 'controller', overwrite=True)
 
-
         # Create and attach shared volume
         self._logger.info('Creating shared volume')
-        shared_vol = conn.create_volume(20, zone=controller_res.instances[0].placement)
+        shared_vol = conn.create_volume(defaults.shared_volume_size, zone=controller_res.instances[0].placement)
         while shared_vol.status != 'available':
             time.sleep(2)
             shared_vol.update()
@@ -475,7 +474,7 @@ class AWSCluster(Cluster):
 
         attach = shared_vol.attach(controller_res.instances[0].id, '/dev/sdf')
         while shared_vol.attachment_state() != 'attached':
-            time.sleep(3)
+            time.sleep(2)
             shared_vol.update()
 
         # Variables needed by nodes for configuring central logging
@@ -496,9 +495,9 @@ class AWSCluster(Cluster):
 
         # Wait for logging instance to launch and configure
         if logging_tags_and_res:
+            self._logger.info('Configuring central logging...')
             central_logging = self._wait_and_tag_instance_reservations(logging_tags_and_res)
             logging_vars['central_logging_ip'] = central_logging.values()[0][0]
-            self._logger.info('Configuring central logging...')
             logging_inventory = tempfile.NamedTemporaryFile()
             self._write_to_hosts_file(logging_inventory.name, [central_logging.values()[0][0]], 'central-logging', overwrite=True)
             logging_inventory.flush()
@@ -850,7 +849,7 @@ class AWSCluster(Cluster):
             return (True, message)
 
         central_logging_port = defaults.central_logging_port
-        self.make_tunnel_on_controller(central_logging_port, self.get_central_logging_ip(), 5601)
+        self.make_tunnel_on_controller(central_logging_port, self.get_central_logging_ip(), central_logging_port)
         success = self.create_permanent_tunnel_to_controller(central_logging_port, central_logging_port)
 
         if not success:
@@ -858,7 +857,7 @@ class AWSCluster(Cluster):
             self._logger.debug(message)
             return (False, message)
 
-        message = 'To access the centralized logging system, use this URL http://localhost:{0}'.format(central_logging_port)
+        message = 'The logging system is available at this URL:\nhttp://localhost:{0}'.format(central_logging_port)
         return (True, message)
 
     def info_shared_volume(self):
@@ -881,6 +880,14 @@ class AWSCluster(Cluster):
                 info['free'] = volume_info[3]
         return info
 
+    def _delete_cluster_info(self):
+        os.remove(os.path.expanduser(defaults.CLUSTER_INFO_FILE))
+        os.remove(os.path.expanduser(defaults.current_controller_ip_file))
+        if os.path.exists(os.path.expanduser(defaults.local_session_data_dir)):
+            shutil.rmtree(os.path.expanduser(defaults.local_session_data_dir))
+
+        return True
+
     def terminate_cluster(self):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
@@ -890,7 +897,8 @@ class AWSCluster(Cluster):
         instances = [ i.id for i in instance_list ]
 
         if not instances:
-            self._logger.info('Nothing to terminate')
+            self._logger.info('Nothing to terminate. Cleaning up.')
+            self._delete_cluster_info()
             return True
 
         self._logger.info('Terminating {0} instances'.format(num_instances))
@@ -925,9 +933,6 @@ class AWSCluster(Cluster):
             self._logger.debug('Deleted security group')
 
         # Delete cluster info
-        os.remove(os.path.expanduser(defaults.CLUSTER_INFO_FILE))
-        os.remove(os.path.expanduser(defaults.current_controller_ip_file))
-        if os.path.exists(os.path.expanduser(defaults.local_session_data_dir)):
-            shutil.rmtree(os.path.expanduser(defaults.local_session_data_dir))
+        self._delete_cluster_info()
 
         return True
