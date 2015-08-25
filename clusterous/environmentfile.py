@@ -108,9 +108,9 @@ class EnvironmentFile(object):
                 new_env['components'][component] = validated_fields
 
             parsed['environment'] = new_env
-            parsed['environment']['image'] = data['environment']['image']
-            parsed['environment']['copy'] = data['environment']['copy']
-            parsed['environment']['expose_tunnel'] = data['environment']['expose_tunnel']
+            parsed['environment']['image'] = data.get('environment',{}).get('image',{})
+            parsed['environment']['copy'] = data.get('environment',{}).get('copy',{})
+            parsed['environment']['expose_tunnel'] = data.get('environment',{}).get('expose_tunnel',{})
 
         except ParseError as e:
             self._logger.error(e)
