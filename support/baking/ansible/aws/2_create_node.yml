@@ -26,10 +26,6 @@
         count_tag:
           Name: "{{ instance_name_node }}"
           group: node
-        volumes:
-          - device_name: /dev/sdb
-            volume_size: 20
-            delete_on_termination: true
       register: ec2
 
     - name: Wait for ssh to come up

@@ -25,8 +25,11 @@
 - name: format volume
   shell: mkfs -t ext4 /dev/xvdb
   when: result.stat.exists == True
-- file: path=/mnt/vol2 state=directory mode=0755
+  ignore_errors: True
+- file: path=/mnt/docker state=directory mode=0755
   when: result.stat.exists == True
-- name: mount volume /mnt/vol2
-  mount: name=/mnt/vol2 src=/dev/xvdb fstype=ext4 state=mounted
+  ignore_errors: True
+- name: mount volume /mnt/docker
+  mount: name=/mnt/docker src=/dev/xvdb fstype=ext4 state=mounted
   when: result.stat.exists == True
+  ignore_errors: True

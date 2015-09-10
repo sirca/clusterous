@@ -1,7 +1,7 @@
 # DOCKER
 ---
 - name: check if docker is present
-  stat: path=/mnt/vol2/docker
+  stat: path=/mnt/docker/docker
   register: result
   ignore_errors: True
 - name: install the required packages for docker
