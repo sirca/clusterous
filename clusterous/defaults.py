@@ -25,7 +25,7 @@ central_logging_name_format = '{0}-central-logging'
 central_logging_instance_type = 't2.small'
 central_logging_ami_id = 'ami-45eaad7f'
 
-controller_root_volume_size = 20    # GB
+controller_root_volume_size = 10    # GB
 
 shared_volume_path = '/home/data/'
 shared_volume_size = 20     # GB
