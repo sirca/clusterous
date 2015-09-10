@@ -5,7 +5,7 @@
   service: name=firewalld state=stopped enabled=no
 # NFS
 - name: nfs package
-  yum: name=nfs-utils state=present
+  yum: name=nfs-utils,e4fsprogs state=present
 - name: nfs enable
   service: name={{ item }} enabled=yes
   with_items:
@@ -18,3 +18,15 @@
     - nfs-server
     - nfs-lock
     - nfs-idmap
+- name: check if /dev/xvdb exists
+  stat: path=/dev/xvdb
+  register: result
+  ignore_errors: True
+- name: format volume
+  shell: mkfs -t ext4 /dev/xvdb
+  when: result.stat.exists == True
+- file: path=/mnt/vol2 state=directory mode=0755
+  when: result.stat.exists == True
+- name: mount volume /mnt/vol2
+  mount: name=/mnt/vol2 src=/dev/xvdb fstype=ext4 state=mounted
+  when: result.stat.exists == True
