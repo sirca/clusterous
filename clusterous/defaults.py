@@ -13,7 +13,7 @@ local_session_data_dir = local_config_dir + '/' + 'session'
 current_controller_ip_file = local_config_dir + '/' + 'current_controller'
 CLUSTER_INFO_FILE = local_config_dir + '/' + 'cluster_info.yml'
 
-controller_ami_id = 'ami-2d6d2b17'
+controller_ami_id = 'ami-fd4708c7'
 node_ami_id = 'ami-47eaad7d'
 security_group_name_format = '{0}-sg'
 controller_name_format = '{0}-controller'
@@ -25,7 +25,7 @@ central_logging_name_format = '{0}-central-logging'
 central_logging_instance_type = 't2.small'
 central_logging_ami_id = 'ami-45eaad7f'
 
-controller_root_volume_size = 20    # GB
+controller_root_volume_size = 10    # GB
 
 shared_volume_path = '/home/data/'
 shared_volume_size = 20     # GB
