@@ -1,20 +1,19 @@
 # DOCKER
 ---
 - name: check if docker is present
-  stat: path=/usr/bin/docker
+  stat: path=/mnt/docker/docker
   register: result
   ignore_errors: True
 - name: install the required packages for docker
-  #yum: name={{ item }} state=latest enablerepo=epel
   yum: name={{ item }} state=latest
   with_items: 
     - e4fsprogs
   when: result.stat.exists == false
-- name: install the docker packages
-  yum: pkg=docker state=present
-  when: result.stat.exists == false
 - name: docker config
   template: src=docker.j2 dest=/etc/sysconfig/docker mode=0755
+  when: result.stat.exists == false
+- name: install the docker packages
+  yum: pkg=docker state=present
   when: result.stat.exists == false
 - name: start docker
   service: name=docker state=started enabled=yes

@@ -473,11 +473,15 @@ class AWSCluster(Cluster):
 
         return spec
 
-    def init_cluster(self, cluster_name, cluster_spec, nodes_info=[], logging_level=0):
+
+    def init_cluster(self, cluster_name, cluster_spec, nodes_info=[], logging_level=0,
+                     shared_volume_size=None, controller_instance_type=None):
         """
         Initialise security group(s), cluster controller etc
         """
         self.cluster_name = cluster_name
+        self._shared_volume_size = defaults.shared_volume_size if shared_volume_size is None else shared_volume_size
+        self._controller_instance_type = defaults.controller_instance_type if controller_instance_type is None else controller_instance_type
 
         # Create dirs
         self._create_config_dirs()
@@ -527,7 +531,7 @@ class AWSCluster(Cluster):
 
         block_devices['/dev/sda1'] = root_vol
         controller_res = conn.run_instances(defaults.controller_ami_id, min_count=1,
-                                        key_name=c['key_pair'], instance_type=defaults.controller_instance_type,
+                                        key_name=c['key_pair'], instance_type=self._controller_instance_type,
                                         subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
 
         controller_tags = {'Name': defaults.controller_name_format.format(cluster_name)}
@@ -565,7 +569,7 @@ class AWSCluster(Cluster):
 
         # Create and attach shared volume
         self._logger.info('Creating shared volume')
-        shared_vol = conn.create_volume(defaults.shared_volume_size, zone=controller_res.instances[0].placement)
+        shared_vol = conn.create_volume(self._shared_volume_size, zone=controller_res.instances[0].placement)
         while shared_vol.status != 'available':
             time.sleep(2)
             shared_vol.update()

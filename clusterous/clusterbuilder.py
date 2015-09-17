@@ -8,13 +8,15 @@ class ClusterBuilder(object):
     Builds a cluster
     """
     def __init__(self, cluster):
+
         self._cluster = cluster
         self._started = False
 
         self._logger = logging.getLogger(__name__)
 
 
-    def start_cluster(self, cluster_name, cluster_spec, logging_system_level=0):
+    def start_cluster(self, cluster_name, cluster_spec, logging_system_level=0,
+                        shared_volume_size=None, controller_instance_type=None):
         if self._started:
             return False
 
@@ -24,7 +26,8 @@ class ClusterBuilder(object):
             nodes_info.append((params['count'], params['type'], name))
 
         try:
-            self._cluster.init_cluster(cluster_name, cluster_spec, nodes_info, logging_system_level)
+            self._cluster.init_cluster(cluster_name, cluster_spec, nodes_info, logging_system_level,
+                                        shared_volume_size, controller_instance_type)
             self._started = True
         except cluster.ClusterException as e:
             self._logger.error(e)
