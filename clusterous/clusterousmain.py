@@ -284,7 +284,12 @@ class Clusterous(object):
         Sets a working cluster
         """
         cl = self.make_cluster_object(cluster_name)
-        return cl.workon()
+        success = cl.workon()
+        if success:
+            message = 'Switched to {0}'.format(cluster_name)
+        else:
+            message = 'Could not switch to cluster {0}'.format(cluster_name)
+        return success, message
 
     def terminate_cluster(self):
         cl = self.make_cluster_object()

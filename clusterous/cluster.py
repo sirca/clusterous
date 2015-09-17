@@ -9,6 +9,7 @@ import glob
 import shutil
 import json
 import stat
+import errno
 from datetime import datetime
 from dateutil import parser
 from collections import namedtuple
@@ -425,7 +426,7 @@ class AWSCluster(Cluster):
                 os.makedirs(d)
         return
 
-    def copy_environment_to_controller(self):
+    def _copy_environment_to_controller(self):
         """
         Syncs locally cached environment file(s) to controller
         """
@@ -445,7 +446,7 @@ class AWSCluster(Cluster):
         sftp.close()
 
 
-    def copy_environment_from_controller(self):
+    def _copy_environment_from_controller(self):
         """
         Syncs environment file(s) on controller to local cache
         """
@@ -458,12 +459,13 @@ class AWSCluster(Cluster):
                 sftp.get(remote_path, local_path)
             except IOError as e:
                 # Only valid way to handle (valid) case where files don't exist on controller
-                pass
+                if e.errno != errno.ENOENT:     # No such file or directory error
+                    raise e
         sftp.close()
 
     def get_cluster_spec(self):
         # Sync from controller
-        self.copy_environment_from_controller()
+        self._copy_environment_from_controller()
         local_cluster_spec = os.path.expanduser(defaults.cached_cluster_file_path)
         node_types = []
         stream = open(local_cluster_spec, 'r')
@@ -591,7 +593,7 @@ class AWSCluster(Cluster):
 
         controller_vars_file.close()
 
-        self.copy_environment_to_controller()
+        self._copy_environment_to_controller()
 
 
         # Wait for logging instance to launch and configure
@@ -694,8 +696,8 @@ class AWSCluster(Cluster):
 
         actual_num_to_remove = len(ids_to_remove)
         if actual_num_to_remove == 0:
-            self.logger.info('No nodes to remove')
-            return -1
+            self._logger.info('No nodes to remove')
+            return 0
         elif actual_num_to_remove < num_nodes:
             self._logger.info('Actual number of nodes of type "{0}" is {1}'.format(node_name, actual_num_to_remove))
 
@@ -711,10 +713,18 @@ class AWSCluster(Cluster):
 
 
     def _delete_cluster_info(self):
-        os.remove(os.path.expanduser(defaults.cluster_info_file))
-        os.remove(os.path.expanduser(defaults.current_controller_ip_file))
-        if os.path.exists(os.path.expanduser(defaults.local_session_data_dir)):
-            shutil.rmtree(os.path.expanduser(defaults.local_session_data_dir))
+        files = [defaults.cluster_info_file, defaults.current_controller_ip_file,
+                 defaults.cached_cluster_file_path, defaults.cached_environment_file_path]
+        for f in files:
+            full = os.path.expanduser(f)
+            if os.path.isfile(full):
+                os.remove(full)
+
+        dirs = [defaults.local_session_data_dir, defaults.local_environment_dir]
+        for d in dirs:
+            full = os.path.expanduser(d)
+            if os.path.exists(full):
+                shutil.rmtree(full)
 
         return True
 
@@ -975,15 +985,18 @@ class AWSCluster(Cluster):
                 cluster_name = self.cluster_name
 
         if not controller_ip:
-            return (False, 'Cluster "{0}" does not exist'.format(self.cluster_name))
+            return False
 
-        self._set_cluster_info({'controller_ip': controller_ip, 'cluster_name': cluster_name})
-
+        self._create_config_dirs()
         # Write controller_ip
+        self._set_cluster_info({'controller_ip': controller_ip, 'cluster_name': cluster_name})
         ip_file = os.path.expanduser(defaults.current_controller_ip_file)
         self._write_to_hosts_file(ip_file, [controller_ip], 'controller', overwrite=True)
 
-        return (True, 'Ok')
+        # Sync from controller
+        self._copy_environment_from_controller()
+
+        return True
 
     def info_status(self):
         info = {'name': self._get_working_cluster_name(),
@@ -991,6 +1004,8 @@ class AWSCluster(Cluster):
                 'controller_ip': '',
                 }
         instances = self._get_instances(self.cluster_name)
+        if not instances:
+            return {}
         for instance in instances:
             if defaults.controller_name_format.format(self.cluster_name) in instance.tags['Name']:
                 info['controller_ip'] = str(instance.ip_address)
@@ -1001,6 +1016,8 @@ class AWSCluster(Cluster):
     def info_instances(self):
         info = {}
         instances = self._get_instances(self.cluster_name)
+        if not instances:
+            return {}
         for instance in instances:
             if instance.instance_type not in info:
                 info[instance.instance_type] = 0

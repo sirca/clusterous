@@ -144,7 +144,7 @@ class Environment(object):
         mesos_data = self._get_mesos_data(wait_time)
         cluster_info = self._process_mesos_data(mesos_data)
         if node_name not in cluster_info or 'num_nodes' not in cluster_info[node_name]:
-            return False ,'node_name not in cluster info'
+            return True ,'No nodes running, apps removed'
 
         total_nodes_count = cluster_info[node_name]['num_nodes']
         self._logger.debug('Number of nodes according to Mesos: {0}'.format(total_nodes_count))

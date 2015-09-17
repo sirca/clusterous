@@ -156,6 +156,7 @@ class CLIParser(object):
         app = self._init_clusterous_object(args)
         success, message = app.workon(cluster_name = args.cluster_name)
         print message
+
         return 0 if success else 1
 
     def _terminate_cluster(self, args):
