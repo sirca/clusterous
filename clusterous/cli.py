@@ -93,6 +93,17 @@ class CLIParser(object):
         rm = subparser.add_parser('rm', help='Delete a folder on the shared volume')
         rm.add_argument('remote_path', action='store', help='Path on the shared volume')
 
+        # add-nodes
+        add_nodes = subparser.add_parser('add-nodes', help='Add nodes to the running cluster')
+        add_nodes.add_argument('num_nodes', action='store', help='Number of nodes to add', type=int)
+        add_nodes.add_argument('node_name', action='store', help='Name of node type to add', default=None, nargs='?')
+
+        # rm-nodes
+        rm_nodes = subparser.add_parser('rm-nodes', help='Remove nodes from the running cluster')
+        rm_nodes.add_argument('num_nodes', action='store', help='Number of nodes to remove', type=int)
+        rm_nodes.add_argument('node_name', action='store', help='Name of node type to remove', default=None, nargs='?')
+
+
         # workon
         workon = subparser.add_parser('workon', help='Set the working cluster',
                                         description='Set the currently active cluster by name')
@@ -222,6 +233,25 @@ class CLIParser(object):
         print message
         return 0 if success else 1
 
+    def _scale_nodes(self, args, action):
+        if not action in ['add', 'rm']:
+            raise ValueError('action must be "add" or "rm"')
+
+        if args.num_nodes < 1:
+            print >> sys.stderr, 'num_nodes must be at least 1'
+            return False
+
+        app = self._init_clusterous_object(args)
+        success = False
+        if action in ('add', 'rm'):
+            success, message = app.scale_nodes(action, args.num_nodes, args.node_name)
+
+        if not success:
+            print >> sys.stderr, message
+
+        return success
+
+
     def _connect_to_container(self, args):
         app = self._init_clusterous_object(args)
         success, message = app.connect_to_container(component_name = args.component_name)
@@ -329,6 +359,10 @@ class CLIParser(object):
                 status = self._ls(args)
             elif args.subcmd == 'rm':
                 status = self._rm(args)
+            elif args.subcmd == 'add-nodes':
+                status = self._scale_nodes(args, action='add')
+            elif args.subcmd == 'rm-nodes':
+                status = self._scale_nodes(args, action='rm')
             elif args.subcmd == 'workon':
                 status = self._workon(args)
             elif args.subcmd == 'status':

@@ -71,7 +71,7 @@ class Cluster(object):
 
 
     def _get_cluster_info(self):
-        cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
+        cluster_info_file = os.path.expanduser(defaults.cluster_info_file)
         if not os.path.isfile(cluster_info_file):
             return None
 
@@ -86,18 +86,23 @@ class Cluster(object):
             return None
         return cluster_info.get('cluster_name')
 
+    def _get_logging_vars(self):
+        info = self._get_cluster_info()
+
+        logging_vars = {}
+        logging_vars['central_logging_level'] = info.get('central_logging_level', 0)
+        logging_vars['central_logging_ip'] = info.get('central_logging_ip', '')
+
+        return logging_vars
+
 
     def _get_controller_ip(self):
         if self._controller_ip:
             return self._controller_ip
 
         info = self._get_cluster_info()
-        if not 'controller' in info or not 'ip' in info['controller']:
-            return None
-        ip = info['controller']['ip']
-        self._controller_ip = ip
 
-        return ip
+        return info.get('controller_ip', None)
 
     def controller_tunnel(self, remote_port):
         """
@@ -183,6 +188,17 @@ class AWSCluster(Cluster):
         instance_list = conn.get_only_instances(filters=instance_filters)
         return instance_list
 
+    def _get_node_instances(self, conn, node_name):
+        """
+        Get only instances matching given node name (e.g. "worker")
+        """
+        name_tag = defaults.node_name_format.format(self.cluster_name, node_name)
+        instance_filters = { 'tag:Name': [name_tag],
+                        'instance-state-name': ['running', 'pending', 'stopping']
+                        }
+        instance_list = conn.get_only_instances(filters=instance_filters)
+        return instance_list
+
     def _ssh_to_controller(self):
         try:
             ssh = paramiko.SSHClient()
@@ -204,6 +220,14 @@ class AWSCluster(Cluster):
                 ip = str(instance.private_ip_address)
                 break
         return ip
+
+    def store_file_on_controller(self, remote_file_path, source_file):
+        ssh = self._ssh_to_controller()
+        sftp = ssh.open_sftp()
+        sftp.put(os.path.expanduser(self._config['key_file']), remote_key_path)
+        sftp.mkdir(os.path.dirname(remote_file_path))
+        sftp.put(source_file, remote_file_path, confirm=True)
+        sftp.close()
 
     def make_controller_tunnel(self, remote_port):
         """
@@ -325,6 +349,22 @@ class AWSCluster(Cluster):
         sg.authorize(ip_protocol=-1, src_group=sg)
         return sg.id
 
+    def _get_current_sg_id(self, conn):
+        """
+        Given a connection object, return the id of the security
+        group for current cluster. Returns None if zero or multiple matches
+        """
+        if not self.cluster_name:
+            return None
+        sg_name = defaults.security_group_name_format.format(self.cluster_name)
+        sg_list = conn.get_all_security_groups(filters={'tag:Name':sg_name})
+        if not sg_list or len(sg_list) != 1:
+            # Returns None if no match, or multiple matches
+            return None
+
+        return sg_list[0].id
+
+
     def _wait_and_tag_instance_reservations(self, tag_and_inst_list, sleep_interval=5):
         launched = {}
         launched_ids = {}
@@ -378,17 +418,72 @@ class AWSCluster(Cluster):
                 f.write('{0}\n'.format(ip.strip()))
         return True
 
-    def init_cluster(self, cluster_name, nodes_info=[], logging_level=0):
+    def _create_config_dirs(self):
+        for directory in [defaults.local_config_dir, defaults.local_session_data_dir, defaults.local_environment_dir]:
+            d = os.path.expanduser(directory)
+            if not os.path.exists(d):
+                os.makedirs(d)
+        return
+
+    def copy_environment_to_controller(self):
+        """
+        Syncs locally cached environment file(s) to controller
+        """
+        ssh = self._ssh_to_controller()
+        sftp = ssh.open_sftp()
+
+        for f in [defaults.cached_cluster_file_path, defaults.cached_environment_file_path]:
+            full_path = os.path.expanduser(f)
+            if os.path.exists(full_path):
+                try:
+                    sftp.mkdir(defaults.remote_environment_dir)
+                except IOError as e:
+                    pass
+                dest_path = defaults.remote_environment_dir + '/' + os.path.basename(full_path)
+                sftp.put(full_path, dest_path, confirm=True)
+
+        sftp.close()
+
+
+    def copy_environment_from_controller(self):
+        """
+        Syncs environment file(s) on controller to local cache
+        """
+        ssh = self._ssh_to_controller()
+        sftp = ssh.open_sftp()
+        for f in [defaults.cached_cluster_file_path, defaults.cached_environment_file_path]:
+            local_path = os.path.expanduser(f)
+            try:
+                remote_path = defaults.remote_environment_dir + '/' + os.path.basename(local_path)
+                sftp.get(remote_path, local_path)
+            except IOError as e:
+                # Only valid way to handle (valid) case where files don't exist on controller
+                pass
+        sftp.close()
+
+    def get_cluster_spec(self):
+        # Sync from controller
+        self.copy_environment_from_controller()
+        local_cluster_spec = os.path.expanduser(defaults.cached_cluster_file_path)
+        node_types = []
+        stream = open(local_cluster_spec, 'r')
+        spec = yaml.load(stream)
+
+        return spec
+
+    def init_cluster(self, cluster_name, cluster_spec, nodes_info=[], logging_level=0):
         """
         Initialise security group(s), cluster controller etc
         """
         self.cluster_name = cluster_name
 
         # Create dirs
-        for directory in [defaults.local_config_dir, defaults.local_session_data_dir]:
-            d = os.path.expanduser(directory)
-            if not os.path.exists(d):
-                os.makedirs(d)
+        self._create_config_dirs()
+
+        # Write cluster spec to local dir
+        cluster_spec_file_name = os.path.expanduser(defaults.cached_cluster_file_path)
+        with open(cluster_spec_file_name, 'w') as f:
+            f.write(yaml.dump(cluster_spec))
 
         c = self._config
 
@@ -461,7 +556,8 @@ class AWSCluster(Cluster):
         controller = self._wait_and_tag_instance_reservations(controller_tags_and_res)
 
         # Create cluster info file, so that user immediately has a working cluster set
-        self._set_cluster_info(cluster_name, controller.values()[0].public_ips[0])
+        self._set_cluster_info({'controller_ip': controller.values()[0].public_ips[0], 'cluster_name': cluster_name})
+
         controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
         self._write_to_hosts_file(controller_inventory, [controller.values()[0].public_ips[0]], 'controller', overwrite=True)
 
@@ -495,6 +591,8 @@ class AWSCluster(Cluster):
 
         controller_vars_file.close()
 
+        self.copy_environment_to_controller()
+
 
         # Wait for logging instance to launch and configure
         if logging_tags_and_res:
@@ -506,6 +604,9 @@ class AWSCluster(Cluster):
             logging_inventory.flush()
             self._run_on_controller('configure_central_logging.yml', logging_inventory.name)
             logging_inventory.close()
+        # Write logging vars to cluster info file
+        self._set_cluster_info(logging_vars)
+
 
         # Configure nodes
         if node_tags_and_res:
@@ -517,6 +618,8 @@ class AWSCluster(Cluster):
 
     def _configure_nodes(self, nodes_info, node_tags_and_res, controller_ip, logging_vars={}):
         nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
+        if not nodes:
+            return False
 
         nodes_inventory = tempfile.NamedTemporaryFile()
         for num_nodes, instance_type, node_tag in nodes_info:
@@ -525,21 +628,153 @@ class AWSCluster(Cluster):
         self._logger.info('Configuring nodes...')
         self._run_on_controller('configure_nodes.yml', nodes_inventory.name, logging_vars)
         nodes_inventory.close()
-        return
-
-    def _set_cluster_info(self, cluster_name, controller_ip):
-        """
-        Writes cluster information to cluster info file in YAML format
-        """
-        data = {}
-        data['controller'] = {'ip': controller_ip}
-        data['cluster_name'] = cluster_name
-
-        # Write cluster_info
-        cluster_info_file = os.path.expanduser(defaults.CLUSTER_INFO_FILE)
-        with open(cluster_info_file,'w+') as f:
-            f.write(yaml.dump(data, default_flow_style=False))
         return True
+
+    def _set_cluster_info(self, info):
+        """
+        Writes information to cluster info file. info is a flat dictionary.
+        Existing values are not removed; this method only add/updates values
+        Returns True if everything goes well
+        """
+        cluster_info_file = os.path.expanduser(defaults.cluster_info_file)
+
+
+        existing = {}
+        if os.path.exists(cluster_info_file):
+            stream = open(cluster_info_file, 'r')
+            existing = yaml.load(stream)
+
+        existing.update(info)
+
+        stream = open(cluster_info_file, 'w')
+        stream.write(yaml.dump(existing, default_flow_style=False))
+
+        return True
+
+
+    def add_nodes(self, num_nodes, instance_type, node_name):
+        success = False
+        self._logger.info('Launching {0} "{1}" nodes'.format(num_nodes, node_name))
+
+        c = self._config
+        nodes_info = [(num_nodes, instance_type, node_name)]
+        controller_ip = self._get_controller_ip()
+        logging_vars = self._get_logging_vars()
+
+        conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
+                                            aws_secret_access_key=c['secret_access_key'])
+
+        sg_id = self._get_current_sg_id(conn)
+        if not sg_id:
+            return False
+
+        res = conn.run_instances(defaults.node_ami_id, min_count=num_nodes, max_count=num_nodes,
+                                key_name=c['key_pair'], instance_type=instance_type,
+                                subnet_id=c['subnet_id'], security_group_ids=[sg_id])
+        node_tags = {'Name': defaults.node_name_format.format(self.cluster_name, node_name)}
+        node_tags_and_res = [(node_name, node_tags, res.instances)]
+
+        self._logger.info('Waiting for nodes to start...')
+        return self._configure_nodes(nodes_info, node_tags_and_res, controller_ip, logging_vars)
+
+    def rm_nodes(self, num_nodes, node_name):
+        c = self._config
+        conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
+                                            aws_secret_access_key=c['secret_access_key'])
+
+        instance_list = self._get_node_instances(conn, node_name)
+
+        ids_to_remove = []
+
+        for i in instance_list:
+            if len(ids_to_remove) < num_nodes:
+                ids_to_remove.append(i.id)
+            else:
+                break
+
+        actual_num_to_remove = len(ids_to_remove)
+        if actual_num_to_remove == 0:
+            self.logger.info('No nodes to remove')
+            return -1
+        elif actual_num_to_remove < num_nodes:
+            self._logger.info('Actual number of nodes of type "{0}" is {1}'.format(node_name, actual_num_to_remove))
+
+
+        self._logger.info('Removing {0} nodes of type "{1}"...'.format(actual_num_to_remove, node_name))
+
+        success = self._terminate_instances_and_wait(conn, ids_to_remove)
+
+        if success:
+            return actual_num_to_remove
+        else:
+            return -1
+
+
+    def _delete_cluster_info(self):
+        os.remove(os.path.expanduser(defaults.cluster_info_file))
+        os.remove(os.path.expanduser(defaults.current_controller_ip_file))
+        if os.path.exists(os.path.expanduser(defaults.local_session_data_dir)):
+            shutil.rmtree(os.path.expanduser(defaults.local_session_data_dir))
+
+        return True
+
+    def _terminate_instances_and_wait(self, conn, instance_ids):
+        num_instances = len(instance_ids)
+        conn.terminate_instances(instance_ids=instance_ids)
+        def instances_terminated():
+            term_filter = {'instance-state-name': 'terminated'}
+            num_terminated = len(conn.get_only_instances(instance_ids=instance_ids, filters=term_filter))
+            return num_terminated == num_instances
+
+        success = retry_till_true(instances_terminated, 2)
+        if not success:
+            self._logger.error('Timeout while trying to terminate instances in {0}'.format(self.cluster_name))
+            return False
+        else:
+            self._logger.debug('{0} instances terminated'.format(num_instances))
+
+        return True
+
+    def terminate_cluster(self):
+        conn = boto.ec2.connect_to_region(self._config['region'],
+                    aws_access_key_id=self._config['access_key_id'],
+                    aws_secret_access_key=self._config['secret_access_key'])
+        instance_list = self._get_instances(self.cluster_name)
+        num_instances = len(instance_list)
+        instances = [ i.id for i in instance_list ]
+
+        if not instances:
+            self._logger.info('Nothing to terminate. Cleaning up.')
+            self._delete_cluster_info()
+            return True
+
+        self._logger.info('Terminating {0} instances'.format(num_instances))
+
+        self._terminate_instances_and_wait(conn, instances)
+
+
+        # Delete EBS volume
+        volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
+        volumes_deleted = [ v.delete() for v in volumes ]
+        volume_ids_str = ','.join([ v.id for v in volumes])
+        if False in volumes_deleted:
+            self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, volume_ids_str))
+        else:
+            self._logger.debug('Deleted shared volume: {0}'.format(volume_ids_str))
+
+        # Delete security group
+        sg = conn.get_all_security_groups(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
+        sg_deleted = [ g.delete() for g in sg ]
+        if False in sg_deleted:
+            self._logger.error('Unable to delete security group for {0}'.format(self.cluster_name))
+        else:
+            self._logger.debug('Deleted security group')
+
+        # Delete cluster info
+        self._delete_cluster_info()
+
+        return True
+
 
     def docker_build_image(self, full_path, image_name):
         """
@@ -742,7 +977,7 @@ class AWSCluster(Cluster):
         if not controller_ip:
             return (False, 'Cluster "{0}" does not exist'.format(self.cluster_name))
 
-        self._set_cluster_info(cluster_name, controller_ip)
+        self._set_cluster_info({'controller_ip': controller_ip, 'cluster_name': cluster_name})
 
         # Write controller_ip
         ip_file = os.path.expanduser(defaults.current_controller_ip_file)
@@ -882,60 +1117,3 @@ class AWSCluster(Cluster):
                 info['used_pct'] = volume_info[4]
                 info['free'] = volume_info[3]
         return info
-
-    def _delete_cluster_info(self):
-        os.remove(os.path.expanduser(defaults.CLUSTER_INFO_FILE))
-        os.remove(os.path.expanduser(defaults.current_controller_ip_file))
-        if os.path.exists(os.path.expanduser(defaults.local_session_data_dir)):
-            shutil.rmtree(os.path.expanduser(defaults.local_session_data_dir))
-
-        return True
-
-    def terminate_cluster(self):
-        conn = boto.ec2.connect_to_region(self._config['region'],
-                    aws_access_key_id=self._config['access_key_id'],
-                    aws_secret_access_key=self._config['secret_access_key'])
-        instance_list = self._get_instances(self.cluster_name)
-        num_instances = len(instance_list)
-        instances = [ i.id for i in instance_list ]
-
-        if not instances:
-            self._logger.info('Nothing to terminate. Cleaning up.')
-            self._delete_cluster_info()
-            return True
-
-        self._logger.info('Terminating {0} instances'.format(num_instances))
-        conn.terminate_instances(instance_ids=instances)
-
-        def instances_terminated():
-            term_filter = {'instance-state-name': 'terminated'}
-            num_terminated = len(conn.get_only_instances(instance_ids=instances, filters=term_filter))
-            return num_terminated == num_instances
-
-        success = retry_till_true(instances_terminated, 2)
-        if not success:
-            self._logger.error('Timeout while trying to terminate instances in {0}'.format(self.cluster_name))
-        else:
-            self._logger.debug('{0} instances terminated'.format(num_instances))
-
-        # Delete EBS volume
-        volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
-        volumes_deleted = [ v.delete() for v in volumes ]
-        volume_ids_str = ','.join([ v.id for v in volumes])
-        if False in volumes_deleted:
-            self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, volume_ids_str))
-        else:
-            self._logger.debug('Deleted shared volume: {0}'.format(volume_ids_str))
-
-        # Delete security group
-        sg = conn.get_all_security_groups(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
-        sg_deleted = [ g.delete() for g in sg ]
-        if False in sg_deleted:
-            self._logger.error('Unable to delete security group for {0}'.format(self.cluster_name))
-        else:
-            self._logger.debug('Deleted security group')
-
-        # Delete cluster info
-        self._delete_cluster_info()
-
-        return True

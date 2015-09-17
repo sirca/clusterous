@@ -137,6 +137,55 @@ class Environment(object):
         self._logger.info('{0} running applications successfully destroyed'.format(component_count))
         return True
 
+    def scale_app(self, node_name, num_nodes_changed, wait_time=0):
+        if num_nodes_changed == 0:
+            return True, 'Nothing to change'
+
+        mesos_data = self._get_mesos_data(wait_time)
+        cluster_info = self._process_mesos_data(mesos_data)
+        if node_name not in cluster_info or 'num_nodes' not in cluster_info[node_name]:
+            return False ,'node_name not in cluster info'
+
+        total_nodes_count = cluster_info[node_name]['num_nodes']
+        self._logger.debug('Number of nodes according to Mesos: {0}'.format(total_nodes_count))
+        original_nodes_count = total_nodes_count - num_nodes_changed
+
+        # Get info about running apps from Marathon
+        marathon_tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
+        marathon_tunnel.connect()
+
+        node_info = self._get_running_components_by_node(tunnel=marathon_tunnel)
+
+        if not node_name in node_info:
+            return False, 'No app running on ' + node_name
+
+        running_instances = node_info[node_name]['instance_count']
+
+        instances_per_node = int(float(running_instances) / original_nodes_count)
+
+        # Actual number of instances to scale
+        num_instances_changed = instances_per_node * num_nodes_changed
+        self._logger.debug('Instances per node: {0}'.format(instances_per_node))
+
+        # Connect to Marathon to make change
+        marathon_url = 'http://localhost:{0}'.format(marathon_tunnel.local_port)
+        client = marathon.MarathonClient(servers=marathon_url, timeout=600)
+
+        # Tell Marathon to scale app
+        client.scale_app(node_info[node_name]['app_id'], delta=num_instances_changed)
+
+        # Log info
+        info_format = '{0} {1} running instances of component "{2}"'
+        app_name = node_info[node_name]['app_id'].strip('/')
+        if num_nodes_changed < 0:
+            action_str = 'Removed'
+        else:
+            action_str = 'Added'
+        self._logger.info(info_format.format(action_str, abs(num_instances_changed), app_name))
+
+        return True, 'Success'
+
+
     def _get_component_hostname(self, component_name, cluster_info, component_resources):
         """
         Given a component name (corresponding to a Marathon "app" name), and cluster and
@@ -189,7 +238,6 @@ class Environment(object):
             else:
                 # Increment node count
                 cluster_info[host['attributes']['name']]['num_nodes'] += 1
-
 
         return cluster_info
 
@@ -316,14 +364,39 @@ class Environment(object):
 
         return running_components
 
+    def _get_running_components_by_node(self, tunnel):
+        """
+        Queries Marathon and gets names of each running component by worker, and number
+        of instances of each
+        """
+        marathon_url = 'http://localhost:{0}'.format(tunnel.local_port)
+        client = marathon.MarathonClient(servers=marathon_url, timeout=600)
 
-    def get_running_component_info(self):
+        app_list = client.list_apps()
+        node_info = {}
+        for app in app_list:
+            if not app.constraints:
+                continue
+            con = app.constraints[0]
+            if con.field == 'name' and con.operator == 'CLUSTER':
+                if con.value not in node_info:
+                    node_info[con.value] = {'app_id': app.id,
+                                            'instance_count': app.instances
+                                            }
+
+        return node_info
+
+
+    def get_running_component_info(self, marathon_tunnel=None):
         """
         Queries Marathon and gets names of each running component and number of instances
         of each
         """
-        tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
-        tunnel.connect()
+        if not marathon_tunnel:
+            tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
+            tunnel.connect()
+        else:
+            tunnel = marathon_tunnel
 
         marathon_url = 'http://localhost:{0}'.format(tunnel.local_port)
         client = marathon.MarathonClient(servers=marathon_url, timeout=600)
