@@ -283,10 +283,15 @@ class AWSCluster(Cluster):
         local_vars_file.close()
         remote_vars_file.close()
 
-    def _get_instances(self, cluster_name):
-        conn = boto.ec2.connect_to_region(self._config['region'],
-                    aws_access_key_id=self._config['access_key_id'],
-                    aws_secret_access_key=self._config['secret_access_key'])
+    def _get_instances(self, cluster_name, connection=None):
+        if not connection:
+            conn = boto.ec2.connect_to_region(self._config['region'],
+                        aws_access_key_id=self._config['access_key_id'],
+                        aws_secret_access_key=self._config['secret_access_key'])
+            if not conn:
+                raise ClusterException('Cannot connect to AWS')
+        else:
+            conn = connection
 
         # Get instances
         instance_filters = { 'tag:{0}'.format(defaults.instance_tag_key):
@@ -600,8 +605,13 @@ class AWSCluster(Cluster):
 
         c = self._config
 
+        conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
+                                            aws_secret_access_key=c['secret_access_key'])
+        if not conn:
+            raise ClusterException('Cannot connect to AWS')
+
         # Check if cluster by this name is already running
-        if self._get_instances(cluster_name):
+        if self._get_instances(cluster_name, connection=conn):
             self._logger.error('A cluster by the name "{0}" is already running, cannot start'.format(cluster_name))
             raise ClusterException('Another cluster by the same name is running')
 
@@ -616,10 +626,6 @@ class AWSCluster(Cluster):
                 self._logger.error(e)
                 raise ClusterException('Unrecoverable error while trying to start cluster')
 
-
-
-        conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
-                                            aws_secret_access_key=c['secret_access_key'])
 
 
         # Create Security group
@@ -776,6 +782,9 @@ class AWSCluster(Cluster):
 
         conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
                                             aws_secret_access_key=c['secret_access_key'])
+        if not conn:
+            raise ClusterException('Cannot connect to AWS')
+
 
         sg_id = self._get_current_sg_id(conn)
         if not sg_id:
@@ -794,6 +803,9 @@ class AWSCluster(Cluster):
         c = self._config
         conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
                                             aws_secret_access_key=c['secret_access_key'])
+        if not conn:
+            raise ClusterException('Cannot connect to AWS')
+
 
         instance_list = self._get_node_instances(conn, node_name)
 
@@ -860,7 +872,11 @@ class AWSCluster(Cluster):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
                     aws_secret_access_key=self._config['secret_access_key'])
-        instance_list = self._get_instances(self.cluster_name)
+
+        if not conn:
+            raise ClusterException('Cannot connect to AWS')
+
+        instance_list = self._get_instances(self.cluster_name, connection=conn)
         num_instances = len(instance_list)
         instances = [ i.id for i in instance_list ]
 
