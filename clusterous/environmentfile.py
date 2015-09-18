@@ -140,8 +140,10 @@ class EnvironmentFile(object):
                 raise ParseError('Invalid values for machine "{0}"'.format(machine))
             new_cluster[machine] = {}
             for field_name, field_val in fields.iteritems():
-                val = self._process_field_value(field_val, params)
+                val, substituted = self._process_field_value(field_val, params)
                 new_cluster[machine][field_name] = val
+                if field_name == 'count' and substituted:
+                    new_cluster[machine]['scalable'] = True
 
         return new_cluster
 
@@ -150,9 +152,10 @@ class EnvironmentFile(object):
         Given a value, substitute any user-supplied '$' variables.
         E.g. "$num_nodes" gets converted to "3" if params has num_nodes=3
         Supports "-1" syntax
-        Returns numerical value for field
+        Returns value for field
         """
         tokens = []
+        substituted = True
         # If the field is a string value
         if isinstance(field, str):
             if '-' in field:
@@ -190,7 +193,8 @@ class EnvironmentFile(object):
         elif isinstance(field, int):
             # Field is a simple integer
             value = field
+            substituted = False
         else:
             raise ParseError('Unknown field value type: "{0}"'.format(field))
 
-        return value
+        return value, substituted
