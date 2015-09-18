@@ -9,6 +9,7 @@ import glob
 import shutil
 import json
 import stat
+import re
 import errno
 from datetime import datetime
 from dateutil import parser
@@ -41,6 +42,32 @@ def retry_till_true(func, sleep_interval, timeout_secs=300):
         time.sleep(sleep_interval)
 
     return success
+
+
+def read_config(config):
+    """
+    Reads in config (from config file), validates,
+    and returns appropriate Cluster subclass, error message (if any), and fields
+    """
+    valid = isinstance(config, list) and len(config) > 0 and isinstance(config[0], dict) and len(config[0]) > 0
+
+    if not valid:
+        return None, 'Invalid structure', None
+
+    # TODO: generalise when support for multiple cluster types is added
+    cluster_type = config[0].keys()[0]
+    if not isinstance(config[0][cluster_type], dict):
+        return None, 'Invalid structure, expected fields under cluster type', None
+
+    if cluster_type == 'AWS':
+        success, message = AWSCluster.validate_config(config[0]['AWS'])
+        if success:
+            return AWSCluster, message, config[0]['AWS']
+        else:
+            return None, message, None
+    else:
+        return None, 'Unknown cluster type "{0}"'.format(cluster_type), None
+
 
 class ClusterException(Exception):
     """
@@ -80,6 +107,9 @@ class Cluster(object):
         cluster_info = yaml.load(f)
         return cluster_info
 
+    @staticmethod
+    def validate_config(fields):
+        pass
 
     def _get_working_cluster_name(self):
         cluster_info = self._get_cluster_info()
@@ -122,6 +152,83 @@ class Cluster(object):
 
 
 class AWSCluster(Cluster):
+
+    @staticmethod
+    def _validate_s3_bucket_name(name):
+        """
+        Validates name of an S3 bucket, ensuring compliance with most of the
+        restrictions described by Amazon:
+        http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+        In addition, Clusterous doesn't allow dots in S3 bucket names to avoid
+        SSL issues.
+
+        Returns 2-tuple in the form (success, message)
+        """
+        s3_re = re.compile('^[a-z0-9][a-z0-9-]*$')
+
+        if '.' in name:
+            return False, 'Dots in bucket name not supported'
+
+        if not 3 <= len(name) <= 63:
+            return False, 'Must be between 3 and 63 characters long (inclusive)'
+
+        if not s3_re.search(name):
+            return False, 'Contains invalid characters'
+
+        return True, ''
+
+    @staticmethod
+    def validate_config(fields):
+        mandatory_fields = ['access_key_id', 'secret_access_key', 'key_pair', 'key_file',
+                            'vpc_id', 'clusterous_s3_bucket', 'subnet_id', 'region']
+
+        vpc_re = re.compile('^vpc-\w+$')
+        subnet_re = re.compile('^subnet-\w+$')
+
+        # Check for unrecognised fields
+        unrecog_fields = []
+        for f in fields.keys():
+            if not f in mandatory_fields:
+                unrecog_fields.append(f)
+
+        if unrecog_fields:
+            unrecog_str = ', '.join(unrecog_fields)
+            return False, 'The following fields are unrecognised: {0}'.format(unrecog_str)
+
+        # Check for missing mandatory fields
+        missing_fields = []
+        for f in mandatory_fields:
+            if not f in fields or not fields[f]:
+                missing_fields.append(f)
+
+        if missing_fields:
+            missing_str = ', '.join(missing_fields)
+            return False, 'The following field(s) must be supplied with valid values: {0}'.format(missing_str)
+
+
+        # Validate individual fields
+        key_file = os.path.expanduser(fields['key_file'])
+        if not os.path.isfile(key_file):
+            message = 'Cannot find key file "{0}"'.format(fields['key_file'])
+            return False, message
+
+        if oct(stat.S_IMODE(os.stat(key_file).st_mode)) != '0600':
+            message = 'Key file {0} must have permissions of 600 (not readable by others)'.format(fields['key_file'])
+            return False, message
+
+        s3_valid, s3_msg = AWSCluster._validate_s3_bucket_name(fields['clusterous_s3_bucket'])
+        if not s3_valid:
+            message = 'Error in S3 bucket name "{0}": {1}'.format(fields['clusterous_s3_bucket'], s3_msg)
+            return False, message
+
+        if not vpc_re.search(fields['vpc_id']):
+            return False, 'vpc_id "{0}" is not in valid format'.format(fields['vpc_id'])
+
+        if not subnet_re.search(fields['subnet_id']):
+            return False, 'subnet_id "{0}" is not in valid format'.format(fields['subnet_id'])
+
+        return True, ''
+
 
     def _controller_vars_dict(self):
         return {
@@ -176,10 +283,15 @@ class AWSCluster(Cluster):
         local_vars_file.close()
         remote_vars_file.close()
 
-    def _get_instances(self, cluster_name):
-        conn = boto.ec2.connect_to_region(self._config['region'],
-                    aws_access_key_id=self._config['access_key_id'],
-                    aws_secret_access_key=self._config['secret_access_key'])
+    def _get_instances(self, cluster_name, connection=None):
+        if not connection:
+            conn = boto.ec2.connect_to_region(self._config['region'],
+                        aws_access_key_id=self._config['access_key_id'],
+                        aws_secret_access_key=self._config['secret_access_key'])
+            if not conn:
+                raise ClusterException('Cannot connect to AWS')
+        else:
+            conn = connection
 
         # Get instances
         instance_filters = { 'tag:{0}'.format(defaults.instance_tag_key):
@@ -493,8 +605,13 @@ class AWSCluster(Cluster):
 
         c = self._config
 
+        conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
+                                            aws_secret_access_key=c['secret_access_key'])
+        if not conn:
+            raise ClusterException('Cannot connect to AWS')
+
         # Check if cluster by this name is already running
-        if self._get_instances(cluster_name):
+        if self._get_instances(cluster_name, connection=conn):
             self._logger.error('A cluster by the name "{0}" is already running, cannot start'.format(cluster_name))
             raise ClusterException('Another cluster by the same name is running')
 
@@ -509,10 +626,6 @@ class AWSCluster(Cluster):
                 self._logger.error(e)
                 raise ClusterException('Unrecoverable error while trying to start cluster')
 
-
-
-        conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
-                                            aws_secret_access_key=c['secret_access_key'])
 
 
         # Create Security group
@@ -669,6 +782,9 @@ class AWSCluster(Cluster):
 
         conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
                                             aws_secret_access_key=c['secret_access_key'])
+        if not conn:
+            raise ClusterException('Cannot connect to AWS')
+
 
         sg_id = self._get_current_sg_id(conn)
         if not sg_id:
@@ -687,6 +803,9 @@ class AWSCluster(Cluster):
         c = self._config
         conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
                                             aws_secret_access_key=c['secret_access_key'])
+        if not conn:
+            raise ClusterException('Cannot connect to AWS')
+
 
         instance_list = self._get_node_instances(conn, node_name)
 
@@ -753,7 +872,11 @@ class AWSCluster(Cluster):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
                     aws_secret_access_key=self._config['secret_access_key'])
-        instance_list = self._get_instances(self.cluster_name)
+
+        if not conn:
+            raise ClusterException('Cannot connect to AWS')
+
+        instance_list = self._get_instances(self.cluster_name, connection=conn)
         num_instances = len(instance_list)
         instances = [ i.id for i in instance_list ]
 

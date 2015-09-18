@@ -144,12 +144,18 @@ class CLIParser(object):
 
     def _init_clusterous_object(self, args):
         app = None
+
         if args.verbose:
             self._configure_logging('DEBUG')
         else:
             self._configure_logging('INFO')
 
-        app = clusterousmain.Clusterous()
+        try:
+            app = clusterousmain.Clusterous()
+        except clusterousmain.ConfigError as e:
+            print >> sys.stderr, 'Error in Clusterous configuration file', e.filename
+            print >> sys.stderr, e
+            sys.exit(-1)
         return app
 
     def _workon(self, args):

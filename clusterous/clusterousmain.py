@@ -16,6 +16,11 @@ from helpers import AnsibleHelper
 class ClusterousError(Exception):
     pass
 
+class ConfigError(Exception):
+    def __init__(self, message, filename):
+        super(ConfigError, self).__init__(message)
+        self.filename = filename
+
 class Clusterous(object):
     """
     Clusterous application
@@ -24,14 +29,11 @@ class Clusterous(object):
     def __init__(self, config_file=defaults.DEFAULT_CONFIG_FILE):
         self.clusters = []
         self._config = {}
+        self._cluster_class = None
 
         self._logger = logging.getLogger(__name__)
 
-        try:
-            self._read_config(config_file)
-        except Exception as e:
-            self._logger.error(e)
-            sys.exit(e)
+        self._read_config(config_file)
 
         conf_dir = os.path.expanduser(defaults.local_config_dir)
         if not os.path.exists(conf_dir):
@@ -41,18 +43,22 @@ class Clusterous(object):
         """
         Read and validate global configuration
         """
+        try:
+            stream = open(os.path.expanduser(config_file), 'r')
+            contents = yaml.load(stream)
+            stream.close()
+        except IOError as e:
+            raise ConfigError(str(e), config_file)
+        except yaml.YAMLError as e:
+            raise ConfigError('Invalid YAML format: ' + str(e), config_file)
 
-        stream = open(os.path.expanduser(config_file), 'r')
-        contents = yaml.load(stream)
-        stream.close()
+        cluster_class, message, fields = cluster.read_config(contents)
 
-        # Validate
-        if len(contents) < 1:
-            raise ClusterousError('Could not find configuration information in {0}'
-                             .format(defaults.DEFAULT_CONFIG_FILE))
+        if not cluster_class:
+            raise ConfigError(message, config_file)
 
-        # TODO: validate properly by sending to provisioner
-        self._config = contents[0]
+        self._config = fields
+        self._cluster_class = cluster_class
 
     def _read_profile(self, profile_file):
         """
@@ -96,14 +102,10 @@ class Clusterous(object):
         return validated
 
     def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
-        cl = None
-        if 'AWS' in self._config:
-            cl = cluster.AWSCluster(self._config['AWS'], cluster_name, cluster_name_required)
+        if not (self._cluster_class and self._config):
+            return None
         else:
-            self._logger.error('Unknown cloud type')
-            raise ClusterousError('Unknown cloud type')
-
-        return cl
+            return self._cluster_class(self._config, cluster_name, cluster_name_required)
 
     def start_cluster(self, profile_file, launch_env=True):
         """
@@ -129,9 +131,10 @@ class Clusterous(object):
         cl = self.make_cluster_object(cluster_name_required=False)
 
         builder = clusterbuilder.ClusterBuilder(cl)
-        self._logger.info('Starting cluster')
+        self._logger.info('Starting cluster...')
         started = builder.start_cluster(profile['cluster_name'], cluster_spec, profile['central_logging_level'],
                                         profile['shared_volume_size'], profile['controller_instance_type'])
+
         if not started:
             return False, ''
         self._logger.info('Cluster "{0}" started'.format(profile['cluster_name']))
