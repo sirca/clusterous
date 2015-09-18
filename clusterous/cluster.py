@@ -198,12 +198,12 @@ class AWSCluster(Cluster):
         # Check for missing mandatory fields
         missing_fields = []
         for f in mandatory_fields:
-            if not f in fields:
+            if not f in fields or not fields[f]:
                 missing_fields.append(f)
 
         if missing_fields:
             missing_str = ', '.join(missing_fields)
-            return False, 'The following field(s) must be supplied: {0}'.format(missing_str)
+            return False, 'The following field(s) must be supplied with valid values: {0}'.format(missing_str)
 
 
         # Validate individual fields
