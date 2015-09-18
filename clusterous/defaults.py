@@ -9,9 +9,17 @@ DEFAULT_CONFIG_FILE = '~/.clusterous.yml'
 
 local_config_dir = '~/.clusterous'
 local_session_data_dir = local_config_dir + '/' + 'session'
+local_environment_dir = local_config_dir + '/' + 'environment'
+cached_cluster_file = 'cluster_spec.yml'
+cached_environment_file = 'environment.yml'
+cached_cluster_file_path = local_environment_dir + '/' + cached_cluster_file
+cached_environment_file_path = local_environment_dir + '/' + cached_environment_file
+
+remote_environment_dir = '/root/environment'
+
 
 current_controller_ip_file = local_config_dir + '/' + 'current_controller'
-CLUSTER_INFO_FILE = local_config_dir + '/' + 'cluster_info.yml'
+cluster_info_file = local_config_dir + '/' + 'cluster_info.yml'
 
 controller_ami_id = 'ami-fd4708c7'
 node_ami_id = 'ami-47eaad7d'

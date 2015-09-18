@@ -129,10 +129,12 @@ class Clusterous(object):
 
         # Init Cluster object
         cl = self.make_cluster_object(cluster_name_required=False)
-        builder = clusterbuilder.ClusterBuilder(cl, profile['cluster_name'], cluster_spec, profile['central_logging_level'],
-                                                profile['shared_volume_size'],profile['controller_instance_type'])
+
+        builder = clusterbuilder.ClusterBuilder(cl)
         self._logger.info('Starting cluster...')
-        started = builder.start_cluster()
+        started = builder.start_cluster(profile['cluster_name'], cluster_spec, profile['central_logging_level'],
+                                        profile['shared_volume_size'], profile['controller_instance_type'])
+
         if not started:
             return False, ''
         self._logger.info('Cluster "{0}" started'.format(profile['cluster_name']))
@@ -180,6 +182,27 @@ class Clusterous(object):
 
         success &= cl.delete_all_permanent_tunnels()
         return success
+
+    def scale_nodes(self, action, num_nodes, node_name):
+        cl = self.make_cluster_object()
+        builder = clusterbuilder.ClusterBuilder(cl)
+        delta = num_nodes
+        actual_node_name = node_name
+        if action == 'add':
+            success, message, actual_node_name = builder.add_nodes(num_nodes, node_name)
+        elif action == 'rm':
+            success, message, actual_node_name = builder.rm_nodes(num_nodes, node_name)
+            delta = -num_nodes
+        else:
+            raise ValueError('action must be either "add" or "rm"')
+
+        env = environment.Environment(cl)
+        if success and env.get_running_component_info():
+            self._logger.info('Scaling running environment')
+            success, message = env.scale_app(actual_node_name, delta, wait_time=60)
+
+        return success, message
+
 
     def docker_build_image(self, args):
         """
@@ -268,7 +291,12 @@ class Clusterous(object):
         Sets a working cluster
         """
         cl = self.make_cluster_object(cluster_name)
-        return cl.workon()
+        success = cl.workon()
+        if success:
+            message = 'Switched to {0}'.format(cluster_name)
+        else:
+            message = 'Could not switch to cluster {0}'.format(cluster_name)
+        return success, message
 
     def terminate_cluster(self):
         cl = self.make_cluster_object()
