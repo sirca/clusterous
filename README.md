@@ -17,7 +17,7 @@ Substitute `clusterous-v0.3.0.zip` with the exact file name.
 
 ## Install from source (alternative)
 
-Alternatively, you may check out the Clusterous source and install from source.
+Alternatively, you may check out the Clusterous source and install from source. This method is recommended for advanced users, and is best done in a Python [virtualenv](https://virtualenv.pypa.io/en/latest/).
 
 
     git clone https://<username>@github.com/sirca/bdkd_cluster.git
@@ -83,6 +83,8 @@ It will take several minutes to start the cluster. When the cluster has succesfu
     clusterous status
     
 You will see some information about the cluster name, the number of instances running, etc.
+
+You may stop a running environment with the `destroy` command.
 
 # Launching an environment
 In Clusterous, an `environment` refers to a Docker based application, along with any associated configuration and data. To run your application on a Clusterous cluster, you create an `environment file` containing instructions to run the application.
@@ -191,20 +193,28 @@ When you (or your team) are running multiple clusters at once, you can switch be
 Note that Clusterous currently does not support launching more that one cluster from the same machine.
 
 
+## Connecting to a container
+When you have an environment running, you may connect to one of your containers' shell via the `connect` command. For example, if your environment has a 'master' component, you can use:
 
-### Build docker image
-```
-cd subprojects/environments/basic-python
-clusterous build-image image bdkd:sample_v1
-```
+    clusterous connect master
+    
+Note that you are currently limited to connecting to containers that have only 1 instance.
 
-### Get information about a Docker image
-```
-clusterous image-info bdkd:sample_v1
-```
 
-### Destroy environment
-```
-clusterous destroy
-clusterous status
-```
+## Building a Docker image on the cluster
+
+While you make typically build any custom Docker image as a step in your environment file, you may also build one using the `build-image` command:
+
+    
+    clusterous build-image image_dir bdkd:sample_v1
+
+The `image_dir` argument in the example is the directory containing a `Dockerfile`. The built container is stored in the private registry, and will be available to other clusters in your account.
+
+## Get information about a Docker image
+
+You may obtain information about a Docker image in your private registry:
+
+    clusterous image-info bdkd:sample_v1
+
+
+
