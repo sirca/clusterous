@@ -7,13 +7,13 @@
 * Central logging system
 * Add nodes to the cluster
 * Remove nodes from the cluster
+* Advanced cluster architectures, with multiple node groups
 
 ### Enhancements:
-* Launch environment after cluster started: Start your cluster and launch your environment with one command.
-* Custom instance type: Define your own instance types for your cluster
-* Custom size for shared volume: Define the size for your shared volume
-* Custom instance type for Controller: Bigger instance, faster building docker images
-* Faster cluster start up: Reduced from 12 minutes to around 6 minutes
+* Support for launching environment on cluster start up
+* Custom size for shared volume
+* Custom instance type for Controller
+* Faster cluster start up (from 12 to 6 minutes)
 
 ### Upgrade from v0.2 to v0.3:
 1.- Terminate running cluster
