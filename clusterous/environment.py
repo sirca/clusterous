@@ -172,7 +172,7 @@ class Environment(object):
         client = marathon.MarathonClient(servers=marathon_url, timeout=600)
 
         # Tell Marathon to scale app
-        client.scale_app(node_info[node_name]['app_id'], delta=num_instances_changed)
+        client.scale_app(node_info[node_name]['app_id'], delta=num_instances_changed, force=True)
 
         # Log info
         info_format = '{0} {1} running instances of component "{2}"'
