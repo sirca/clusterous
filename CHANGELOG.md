@@ -1,5 +1,68 @@
 # Clusterous
 
+## 0.3.0
+
+### New Features:
+* Connect (SSH) to a running docker container
+* Central logging system
+* Add nodes to the cluster
+* Remove nodes from the cluster
+* Advanced cluster architectures, with multiple node groups
+
+### Enhancements:
+* Support for launching environment on cluster start up
+* Custom size for shared volume
+* Custom instance type for Controller
+* Faster cluster start up (from 12 to 6 minutes)
+
+### Upgrade from v0.2 to v0.3:
+1.- Terminate running cluster
+
+```shell
+clusterous status
+clusterous terminate
+```
+
+2.- Uninstall v0.2
+
+```shell
+pip freeze |grep clusterous
+pip uninstall clusterous
+```
+
+3.- Install v0.3
+
+[README.md](https://github.com/sirca/bdkd_cluster/blob/master/README.md)
+
+4.- Update profile file
+
+Old profile:
+```yaml
+- IPython:
+    cluster_name: testcluster
+    num_instances: 4
+    instance_type: t2.micro
+```
+
+New profile:
+
+```yaml
+cluster_name: testcluster
+#central_logging_level: 2
+#environment_file: your-enviroment-file.yml
+#shared_volume_size: 40 #GB
+#controller_instance_type: c3.large
+parameters:
+    master_instance_type: t2.micro
+    worker_instance_type: t2.micro
+    instance_count: 2
+```
+
+5.- Create new cluster
+
+You are ready to start using new features and enhancements of this release.
+
+
 ## 0.2.0
 
 We are happy to announce the availability of Clusterous 0.2.0!
