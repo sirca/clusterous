@@ -10,7 +10,9 @@ setup(name='clusterous',
       package_data={'clusterous': [
                         'scripts/ansible/*.yml',
                         'scripts/ansible/hosts',
-                        'scripts/ansible/remote/*'
+                        'scripts/ansible/remote/*',
+                        'scripts/*.sh',
+                        'scripts/*.yml'
                     ]},
       install_requires=['pyyaml', 'pytest', 'mock', 'paramiko',
                         'boto', 'ansible', 'requests', 'marathon', 'sshtunnel',
