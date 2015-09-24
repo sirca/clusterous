@@ -1,5 +1,10 @@
 # Clusterous
 
+## 0.3.1
+
+### Bugfix:
+* Fixed installation issue when using pip
+
 ## 0.3.0
 
 ### New Features:
