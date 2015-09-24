@@ -1,5 +1,7 @@
-# Clusterous v0.3.1
+# Clusterous
 Run and manage a compute cluster on AWS using Docker.
+
+Latest release is v0.3.1.
 
 Written in Python. Requires Linux or OS X and Python 2.7.
 
