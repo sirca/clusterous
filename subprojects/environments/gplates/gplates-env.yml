@@ -1,7 +1,7 @@
 name: ipython_notebook_gplates
 environment:
   copy:
-    - "data/"
+    - "files/"
   image:
     - dockerfile: "docker/gplates/"
       image_name: "gplates-v1"
@@ -12,7 +12,7 @@ environment:
       machine: master
       cpu: auto
       image: registry:5000/bdkd:gplates_ipython_v2
-      cmd: "/home/data/data/launch_scripts/launch_ipython.sh"
+      cmd: "/home/data/files/config/launch_ipython.sh"
       ports: "31888:8888"
   expose_tunnel:
     service: 31888:notebook:31888

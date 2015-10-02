@@ -1,6 +1,6 @@
 cluster_name: gplatescluster
 #central_logging_level: 2
-#environment_file: something.yml
+environment_file: gplates-env.yml
 #shared_volume_size: 40
 controller_instance_type: c3.2xlarge
 parameters:
