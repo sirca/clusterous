@@ -75,6 +75,24 @@ class Clusterous(object):
             raise ClusterousError('Error processing YAML file {0}'.format(e))
 
         # Validate profile file
+        is_valid, message, validated = _validate_profile(contents)
+
+
+        return validated
+
+    def _validate_profile(self, profile):
+        """
+        Given a profile dictionary, validates contents.
+        Returns success, message (if any), and validated dictionary (if validation succesful)
+        """
+
+
+    def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
+        if not (self._cluster_class and self._config):
+            return None
+        else:
+            return self._cluster_class(self._config, cluster_name, cluster_name_required)
+
         validated = {}
         try:
             validated['cluster_name'] = contents['cluster_name']
@@ -99,13 +117,6 @@ class Clusterous(object):
             if key not in validated.keys():
                 raise ClusterousError('Unknown field "{0}" in profile file "{1}"'.format(key, profile_file))
 
-        return validated
-
-    def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
-        if not (self._cluster_class and self._config):
-            return None
-        else:
-            return self._cluster_class(self._config, cluster_name, cluster_name_required)
 
     def start_cluster(self, profile_file, launch_env=True):
         """
