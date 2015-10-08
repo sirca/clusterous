@@ -382,7 +382,7 @@ class CLIParser(object):
                 status = self._destroy(args)
         # TODO: this exception should not be caught here
         except NoWorkingClusterException as e:
-            pass
+            status = 1
 
         return status
 
