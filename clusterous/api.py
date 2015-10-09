@@ -63,6 +63,28 @@ def _init_clusterous_object():
 
     return status, app
 
+
+def _set_cluster_info(info):
+    """
+    Writes information to cluster info file. info is a flat dictionary.
+    Existing values are not removed; this method only add/updates values
+    Returns True if everything goes well
+    """
+    cluster_info_file = os.path.expanduser(defaults.cluster_info_file)
+
+
+    existing = {}
+    if os.path.exists(cluster_info_file):
+        stream = open(cluster_info_file, 'r')
+        existing = yaml.load(stream)
+
+    existing.update(info)
+
+    stream = open(cluster_info_file, 'w')
+    stream.write(yaml.dump(existing, default_flow_style=False))
+
+    return True
+
 def _get_cluster_info():
     cluster_info_file = os.path.expanduser(defaults.cluster_info_file)
     if not os.path.isfile(cluster_info_file):
@@ -74,32 +96,39 @@ def _get_cluster_info():
 
 def cluster_status():
     # Check if our start thread is already running
-    matching = [t for t in threading.enumerate() if t.getName() == 'cluster-creation']
-    if matching and matching[0].getName() == 'cluster-creation':
+    matching = _get_threads()
+    if matching:
+        i = _get_cluster_info()
         m = matching[0]
-        m.join(2)   # wait a bit in case it's nearly ready
+        d = {
+                'clusterName': i.get('starting_cluster_name', i.get('cluster_name', '')),
+                'controllerInstanceType': '',
+                'sharedVolumeSize': '',
+                'environmentType': 'ipython',
+                'instanceParameters': {
+                    'masterInstanceType': '',
+                    'workerInstanceType': '',
+                    'instanceCount': ''
+                },
+                'status': '',
+                'isActive': False,
+                'statusMessage': ''
+            }
         if m.isAlive():
-            return  {
-                        'clusterName': '',
-                        'controllerInstanceType': '',
-                        'sharedVolumeSize': '',
-                        'environmentType': 'ipython',
-                        'instanceParameters': {
-                            'masterInstanceType': '',
-                            'workerInstanceType': '',
-                            'instanceCount': ''
-                        },
-                        'status': 'starting',
-                        'isActive': False,
-                        'statusMessage': 'Starting cluster'
-                    }
+            if m.getName() == 'cluster-creation':
+                d['statusMessage'] = 'Starting cluster'
+                d['status'] = 'starting'
+            elif m.getName() == 'cluster-termination':
+                d['statusMessage'] = 'Terminating cluster'
+                d['status'] = 'terminating'
+
+            return d
 
 
     success, app = _init_clusterous_object()
 
     if not success:
         return None
-
 
     try:
         success, info = app.cluster_status()
@@ -119,12 +148,12 @@ def cluster_status():
 
 
     params = {
-                'masterInstanceType': info['instances']['master']['count'],
-                'workerInstanceType': info['instances']['worker']['count'],
-                'instanceCount': info['instances']['master']['count'] + info['instances']['worker']['count']
+                'masterInstanceType': info['instances'].get(['master'], {}).get('type', ''),
+                'workerInstanceType': info['instances'].get(['worker'], {}).get('type', ''),
+                'instanceCount': info['instances'].get(['master'], {}).get('count', 0) + info['instances'].get(['worker'], {}).get('count', 0)
     }
 
-    cluster_info = _get_cluster_info()
+    cluster_info = _get_cluster_info()['cluster_name']
     status_dict = {
                     'status': 'running',
                     'isActive': True,
@@ -178,6 +207,8 @@ def start_cluster(in_args):
     except KeyError as e:
         return False
 
+    _set_cluster_info({'starting_cluster_name': in_args['clusterName']})
+
     t = threading.Thread(target=run_start_cluster, args=(profile,), name='cluster-creation')
     t.daemon = True
     t.start()
@@ -188,7 +219,7 @@ def run_terminate_cluster():
     app.terminate_cluster()
 
 def terminate_cluster(cluster_name):
-    # Check if our thread is already running
+    # Check if any thread is already running
     matching = _get_threads()
     if matching:
         # Already running
@@ -224,7 +255,7 @@ def cluster():
 def cluster_id(id):
     if request.method == 'GET':
         status = cluster_status()
-        if id == status['clusterName']:
+        if status and id == status.get('clusterName', None):
             resp = flask.make_response(json.dumps(status))
             resp.mimetype = 'application/json'
             return resp
@@ -232,6 +263,7 @@ def cluster_id(id):
             flask.abort(404)
     elif request.method == 'DELETE':
         terminate_cluster(id)
+        return 'Ok'
 
 
 if __name__ == '__main__':
