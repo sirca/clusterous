@@ -148,12 +148,12 @@ def cluster_status():
 
 
     params = {
-                'masterInstanceType': info['instances'].get(['master'], {}).get('type', ''),
-                'workerInstanceType': info['instances'].get(['worker'], {}).get('type', ''),
-                'instanceCount': info['instances'].get(['master'], {}).get('count', 0) + info['instances'].get(['worker'], {}).get('count', 0)
+                'masterInstanceType': info['instances'].get('master', {}).get('type', ''),
+                'workerInstanceType': info['instances'].get('worker', {}).get('type', ''),
+                'instanceCount': info['instances'].get('master', {}).get('count', 0) + info['instances'].get('worker', {}).get('count', 0)
     }
 
-    cluster_info = _get_cluster_info()['cluster_name']
+    cluster_info = _get_cluster_info()
     status_dict = {
                     'status': 'running',
                     'isActive': True,
