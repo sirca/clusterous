@@ -1,5 +1,6 @@
 from flask import Flask, request
 from flask.ext.cors import CORS
+import yaml
 import flask
 import json
 import logging
@@ -63,7 +64,7 @@ def cluster_status():
     if matching and matching[0].getName() == 'cluster-creation':
         m = matching[0]
         m.join(2)   # wait a bit in case it's nearly ready
-        if m.isActive():
+        if m.isAlive():
             return  {
                         'status': 'starting',
                         'isActive': False,
@@ -115,9 +116,11 @@ def cluster_status():
     return status_dict
 
 def run_start_cluster(profile_dict):
-    vars_file = tempfile.NamedTemporaryFile()
-    app = _init_clusterous_object()
-    success, message = app.start_cluster(args.profile_file, args.launch)
+    profile_file = tempfile.NamedTemporaryFile()
+    with open(profile_file.name, 'w') as f:
+        f.write(yaml.dump(profile_dict))
+    status, app = _init_clusterous_object()
+    success, message = app.start_cluster(profile_file.name)
 
 def start_cluster(in_args):
     # Check if our thread is already running
@@ -131,21 +134,22 @@ def start_cluster(in_args):
         params = {
                 'master_instance_type': in_args['instanceParameters']['masterInstanceType'],
                 'worker_instance_type': in_args['instanceParameters']['workerInstanceType'],
-                'instanceCount': in_args['instanceParameters']['instanceCount']
+                'instance_count': in_args['instanceParameters']['instanceCount']
         }
         profile = {
                 "cluster_name": in_args['clusterName'],
                 'controller_instance_type': in_args.get('controllerInstanceType', 't2.small'),
                 'shared_volume_size': in_args.get('sharedVolumeSize', 20),
-                'environment_file': 'subprojects/environments/ipython-lite/ipython.yml',
-                'parameters': parameters
+                # 'environment_file': subprojects/environments/ipython-lite/ipython.yml',
+                'parameters': params
         }
     except KeyError as e:
         return False
 
-    t = threading.Thread(target=run_start_cluster, args=(profile), name='cluster-creation')
+    t = threading.Thread(target=run_start_cluster, args=(profile,), name='cluster-creation')
     t.daemon = True
     t.start()
+    t.join(1)
     return True
 
 
@@ -158,9 +162,7 @@ def hello_world():
 @flask_app.route('/cluster', methods=['POST', 'GET'])
 def cluster():
     if request.method == 'POST':
-        return str(request.get_json(force=True))
-        #d = request.json
-        print "IS D", d
+        d = request.get_json(force=True)
         success = start_cluster(d)
         if success:
             return 'Ok'
