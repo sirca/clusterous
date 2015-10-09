@@ -11,11 +11,13 @@ class DisplayCluster extends Component {
   static propTypes = {
     name: PropTypes.string.isRequired,
     title: PropTypes.string,
-    pollInterval: PropTypes.number
+    pollInterval: PropTypes.number,
+    source: PropTypes.string
   };
 
   static defaultProps = {
     pollInterval: 2000,
+    source: 'http://localhost:5005/cluster'
   };
 
   static contextTypes = {
@@ -60,49 +62,26 @@ class DisplayCluster extends Component {
   loadCluster() {
     this.setState({loading: true});
 
-    var clusterResult = {
-      "clusterName": "mycluster",
-      "controllerInstanceType": "t2.medium",
-      "sharedVolumeSize": 60,
-      "environmentType": "ipython",
-      "uptime": 2363463,
-      "controllerIP": "123.123.123.123",
-      "instanceParameters": {
-        "masterInstanceType": "t2.micro",
-        "workerInstanceType": "t2.micro",
-        "instanceCount": 2
-      },
-      "runningInstances": {
-        "t2.medium": 1,
-        "t2.micro": 2
-      },
-      "status": "running"
-    }
-    var check = this.state.check;
 
-    var promise = new Promise(function(resolve, reject) {
+    $.ajax({
+      url: this.props.source + '/' + this.props.name,
+      dataType: 'json',
+      crossDomain: true,
+      type: 'GET',
+      contentType: "application/json; charset=utf-8",
+      success: function(data) {
+        console.log('Success: ', data);
 
-      setTimeout(function() {
-        if(check) {
-          resolve(clusterResult);
-        }
-        else {
-          reject(clusterResult);
-        }
-      }, 2000);
+        this.setState({result: data, loading: false, instanceCount: data.instanceParameters.instanceCount, check:true});
 
+        clearInterval(this.interval);
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.log('Failed: ', status);
+        this.setState({result: {}, loading: false, instanceCount: 0, check:true});
+      }.bind(this)
     });
 
-    promise.then(function(res) {
-      this.setState({result: res, loading: false, instanceCount: res.instanceParameters.instanceCount, check:true});
-
-      clearInterval(this.interval);
-
-    }.bind(this), function(err) {
-      console.log('Finished Broke');
-      console.log(err); // Error: "It broke"
-      this.setState({result: {}, loading: false, instanceCount: 0, check:true});
-    }.bind(this));
   }
 
   componentDidMount() {
@@ -128,7 +107,35 @@ class DisplayCluster extends Component {
 
     if (this.state.typeOfSubmit === 'update') {
       console.log('Updating ...');
-      this.setState({updated: true})
+
+      var instanceCount = ReactDOM.findDOMNode(this.refs.instanceCount).value.trim();
+
+      var data = {
+        instanceCount: instanceCount,
+      }
+
+      if (!instanceCount) {
+        return;
+      }
+
+      $.ajax({
+        url: this.props.source,
+        dataType: 'json',
+        crossDomain: true,
+        type: 'PUT',
+        data: JSON.stringify(data),
+        contentType: "application/json; charset=utf-8",
+        success: function(data) {
+          console.log('Success: ', data);
+          this.setState({updated: true})
+        }.bind(this),
+        error: function(xhr, status, err) {
+          console.log('Failed: ', status);
+        }.bind(this)
+      });
+
+      ReactDOM.findDOMNode(this.refs.instanceCount).value = '';
+
     }
     else if (this.state.typeOfSubmit === 'delete') {
       console.log('Deleting..');

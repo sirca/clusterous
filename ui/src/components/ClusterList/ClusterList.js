@@ -18,7 +18,7 @@ class ClusterList extends Component {
   };
 
   static defaultProps = {
-    source: 'http://localhost:5000/cluster'
+    source: 'http://localhost:5005/cluster'
   };
 
 
@@ -125,6 +125,7 @@ class ClusterList extends Component {
                           <th>Cluster Name</th>
                           <th>Instances</th>
                           <th>Status</th>
+                          <th>Current?</th>
                           <th></th>
                         </tr>
                       </thead>
@@ -133,6 +134,7 @@ class ClusterList extends Component {
                           <td><a href={path} onClick={Link.handleClick}>{result.clusterName}</a></td>
                           <td>{result.instanceParameters.instanceCount}</td>
                           <td><span className="label label-success">{result.status}</span></td>
+                          <td><i className="fa fa-fw fa-check"></i></td>
                           <td>
                             <a href={path} onClick={Link.handleClick} className="btn btn-sm btn-default btn-flat pull-left">
                               <span className="fa fa-fw fa-gear" aria-hidden="true"></span> Manage

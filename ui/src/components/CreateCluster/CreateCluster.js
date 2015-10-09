@@ -33,8 +33,52 @@ class CreateCluster extends Component {
     e.preventDefault();
 
     if (this.state.typeOfSubmit === 'create') {
+
+      var clusterName = ReactDOM.findDOMNode(this.refs.clusterName).value.trim();
+      var instanceCount = ReactDOM.findDOMNode(this.refs.instanceCount).value.trim();
+      var controllerInstanceType = ReactDOM.findDOMNode(this.refs.controllerInstanceType).value.trim();
+      var masterInstanceType = ReactDOM.findDOMNode(this.refs.masterInstanceType).value.trim();
+      var workerInstanceType = ReactDOM.findDOMNode(this.refs.workerInstanceType).value.trim();
+      var environmentType = ReactDOM.findDOMNode(this.refs.environmentType).value.trim();
+      var sharedVolumeSize = ReactDOM.findDOMNode(this.refs.sharedVolumeSize).value.trim();
+
+      var data = {
+        "clusterName": clusterName,
+        "controllerInstanceType": controllerInstanceType,
+        "sharedVolumeSize": sharedVolumeSize,
+        "environmentType": environmentType,
+        "instanceParameters": {
+          "masterInstanceType": masterInstanceType,
+          "workerInstanceType": workerInstanceType,
+          "instanceCount": instanceCount
+          }
+      };
+
+      $.ajax({
+        url: this.props.source,
+        dataType: 'json',
+        crossDomain: true,
+        type: 'POST',
+        data: JSON.stringify(data),
+        contentType: "application/json; charset=utf-8",
+        success: function(data) {
+          console.log('Success: ', data);
+          this.setState({created: true})
+        }.bind(this),
+        error: function(xhr, status, err) {
+          console.log('Failed: ', status);
+        }.bind(this)
+      });
+
+      ReactDOM.findDOMNode(this.refs.clusterName).value = '';
+      ReactDOM.findDOMNode(this.refs.instanceCount).value = '';
+      ReactDOM.findDOMNode(this.refs.controllerInstanceType).value = '';
+      ReactDOM.findDOMNode(this.refs.masterInstanceType).value = '';
+      ReactDOM.findDOMNode(this.refs.workerInstanceType).value = '';
+      ReactDOM.findDOMNode(this.refs.environmentType).value = '';
+      ReactDOM.findDOMNode(this.refs.sharedVolumeSize).value = '';
+
       console.log('Created...');
-      this.setState({created: true})
     }
     else {
       console.log('Different Submit');
