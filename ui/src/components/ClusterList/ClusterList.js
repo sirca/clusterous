@@ -102,6 +102,28 @@ class ClusterList extends Component {
         </div>
       );
     }
+    else if (this.state.results.length == 0) {
+      return (
+        <div>
+          <div className="box box-primary">
+            <div className="box-header with-border">
+              <h3 className="box-title">Cluster List</h3>
+              <div className="box-tools pull-right">
+                <button className="btn btn-box-tool" data-widget="collapse"><i className="fa fa-minus"></i></button>
+                <button className="btn btn-box-tool" data-widget="remove"><i className="fa fa-times"></i></button>
+              </div>
+            </div>
+            <div className="no-cluster text-light-blue">No Cluster found.</div>
+            <div className="box-footer clearfix">
+              <a className="btn btn-sm btn-primary btn-flat pull-right" href="/create" onClick={Link.handleClick}>
+                <i className="fa fa-edit clusterous-icon-spacer"></i>
+                Create New Cluster
+              </a>
+            </div>
+          </div>
+        </div>
+      )
+    }
     else {
       return (
         <div>
@@ -124,6 +146,7 @@ class ClusterList extends Component {
                 }
 
                 let path = '/cluster/' + result.clusterName;
+                let status = result.status === 'starting' ? <td><span className="label label-warning">{result.status}</span></td> : <td><span className="label label-success">{result.status}</span></td>;
 
                 return (
                   <div className="box-body" key={result.clusterName}>
@@ -142,7 +165,7 @@ class ClusterList extends Component {
                           <tr>
                             <td><a href={path} onClick={Link.handleClick}>{result.clusterName}</a></td>
                             <td>{result.instanceParameters.instanceCount}</td>
-                            <td><span className="label label-success">{result.status}</span></td>
+                            {status}
                             <td><i className="fa fa-fw fa-check"></i></td>
                             <td>
                               <a href={path} onClick={Link.handleClick} className="btn btn-sm btn-default btn-flat pull-left">

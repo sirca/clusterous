@@ -232,6 +232,10 @@ class DisplayCluster extends Component {
                   <td>{clusterInfo.environmentType}</td>
                 </tr>
                 <tr>
+                  <th>Environment URL</th>
+                  <td>{clusterInfo.environmentUrl}</td>
+                </tr>
+                <tr>
                   <th>Shared Volume Size (GB)</th>
                   <td>{clusterInfo.sharedVolumeSize}</td>
                 </tr>

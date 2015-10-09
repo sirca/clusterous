@@ -1,0 +1,6 @@
+cluster_name: !!python/unicode 'mypythoncluster'
+controller_instance_type: !!python/unicode 't2.micro'
+environment_file: subprojects/environments/ipython-lite/ipython.yml
+parameters: {instance_count: 3, master_instance_type: !!python/unicode 't2.micro',
+  worker_instance_type: !!python/unicode 't2.micro'}
+shared_volume_size: 8
