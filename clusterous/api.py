@@ -1,12 +1,16 @@
 from flask import Flask, request
+from flask.ext.cors import CORS
 import flask
 import json
 import logging
+import tempfile
+import threading
 
 import clusterousmain
-# from helpers import NoWorkingClusterException
+from helpers import NoWorkingClusterException
 
 flask_app = Flask(__name__)
+CORS(flask_app)
 
 def _configure_logging(level='INFO'):
     logging_dict = {
@@ -54,6 +58,19 @@ def _init_clusterous_object():
     return status, app
 
 def cluster_status():
+    # Check if our start thread is already running
+    matching = [t for t in threading.enumerate() if t.getName() == 'cluster-creation']
+    if matching and matching[0].getName() == 'cluster-creation':
+        m = matching[0]
+        m.join(2)   # wait a bit in case it's nearly ready
+        if m.isActive():
+            return  {
+                        'status': 'starting',
+                        'isActive': False,
+                        'statusMessage': 'Starting cluster'
+                    }
+
+
     success, app = _init_clusterous_object()
 
     if not success:
@@ -84,8 +101,9 @@ def cluster_status():
     }
 
     status_dict = {
-                    "status": "running",
-                    "clusterName": info['cluster']['name'],
+                    'status': 'running',
+                    'isActive': True,
+                    'clusterName': info['cluster']['name'],
                     "controllerInstanceType": info['instances']['controller']['type'],
                     'sharedVolumeSize': info['volume']['total'][:-1],
                     'environmentType': 'ipython',
@@ -96,6 +114,41 @@ def cluster_status():
 
     return status_dict
 
+def run_start_cluster(profile_dict):
+    vars_file = tempfile.NamedTemporaryFile()
+    app = _init_clusterous_object()
+    success, message = app.start_cluster(args.profile_file, args.launch)
+
+def start_cluster(in_args):
+    # Check if our thread is already running
+    matching = [t for t in threading.enumerate() if t.getName() == 'cluster-creation']
+    if matching:
+        # Already running
+        return False
+
+
+    try:
+        params = {
+                'master_instance_type': in_args['instanceParameters']['masterInstanceType'],
+                'worker_instance_type': in_args['instanceParameters']['workerInstanceType'],
+                'instanceCount': in_args['instanceParameters']['instanceCount']
+        }
+        profile = {
+                "cluster_name": in_args['clusterName'],
+                'controller_instance_type': in_args.get('controllerInstanceType', 't2.small'),
+                'shared_volume_size': in_args.get('sharedVolumeSize', 20),
+                'environment_file': 'subprojects/environments/ipython-lite/ipython.yml',
+                'parameters': parameters
+        }
+    except KeyError as e:
+        return False
+
+    t = threading.Thread(target=run_start_cluster, args=(profile), name='cluster-creation')
+    t.daemon = True
+    t.start()
+    return True
+
+
 
 @flask_app.route('/')
 def hello_world():
@@ -105,7 +158,15 @@ def hello_world():
 @flask_app.route('/cluster', methods=['POST', 'GET'])
 def cluster():
     if request.method == 'POST':
-        return "data: " + str(request.get_json(force=True))
+        return str(request.get_json(force=True))
+        #d = request.json
+        print "IS D", d
+        success = start_cluster(d)
+        if success:
+            return 'Ok'
+        else:
+            print "couldn't start"
+            abort(400)
     elif request.method == 'GET':
         val = [cluster_status()]
         resp = flask.make_response(json.dumps(val))
@@ -126,4 +187,4 @@ def cluster_id(id):
 if __name__ == '__main__':
     _configure_logging()
     flask_app.debug = True
-    flask_app.run()
+    flask_app.run(port=5005)
