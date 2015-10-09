@@ -40,7 +40,6 @@ class Header extends Component {
                         <i className="ion ion-ios-people info"></i> Notification title
                       </a>
                     </li>
-                    ...
                   </ul>
                 </li>
                 <li className="footer"><a href="#">View all</a></li>
@@ -48,7 +47,7 @@ class Header extends Component {
             </li>
             <li className="dropdown user user-menu">
               <a href="#" className="dropdown-toggle" data-toggle="dropdown">
-                <img src="theme/img/user2-160x160.jpg" className="user-image" alt="User Image"/>
+
                 <span className="hidden-xs">Tim Berners-Lee</span>
               </a>
               <ul className="dropdown-menu">

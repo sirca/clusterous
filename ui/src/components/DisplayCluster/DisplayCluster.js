@@ -236,10 +236,6 @@ class DisplayCluster extends Component {
                   <th>Controller IP</th>
                   <td>{clusterInfo.controllerIP}</td>
                 </tr>
-                <tr>
-                  <th>Up time</th>
-                  <td>{clusterInfo.uptime}</td>
-                </tr>
                 </tbody>
               </table>
             </div>

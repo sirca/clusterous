@@ -10,11 +10,17 @@ class ClusterList extends Component {
 
   static propTypes = {
     title: PropTypes.string,
+    source: PropTypes.string
   };
 
   static contextTypes = {
     onSetTitle: PropTypes.func.isRequired,
   };
+
+  static defaultProps = {
+    source: 'http://localhost:5000/cluster'
+  };
+
 
   constructor(props) {
     super(props);
@@ -26,41 +32,57 @@ class ClusterList extends Component {
 
     this.setState({loading: true});
 
-    var results = [{
-      "clusterName": "mycluster",
-      "controllerInstanceType": "t2.medium",
-      "sharedVolumeSize": 60,
-      "environmentType": "ipython",
-      "uptime": 2363463,
-      "controllerIP": "123.123.123.123",
-      "instanceParameters": {
-        "masterInstanceType": "t2.micro",
-        "workerInstanceType": "t2.micro",
-        "instanceCount": 2
-      },
-      "runningInstances": {
-        "t2.medium": 1,
-        "t2.micro": 2
-      },
-      "status": "running"
-    }]
-
-    var promise = new Promise(function(resolve, reject) {
-      // do a thing, possibly async, then…
-
-      setTimeout(function() {
-        resolve(results);
-      }, 2000);
-
+    $.ajax({
+      url: this.props.source,
+      dataType: 'json',
+      crossDomain: true,
+      type: 'GET',
+      contentType: "application/json; charset=utf-8",
+      success: function(data) {
+        console.log('Success: ', data);
+        this.setState({results: data, loading: false});
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.log('Failed: ', status);
+        this.setState({results: [], loading: false});
+      }.bind(this)
     });
 
-    promise.then(function(result) {
-      this.setState({results: result, loading: false});
-      console.log('Finished');
-    }.bind(this), function(err) {
-      console.log(err); // Error: "It broke"
-      this.setState({results: [], loading: false});
-    }.bind(this));
+    // var results = [{
+    //   "clusterName": "mycluster",
+    //   "controllerInstanceType": "t2.medium",
+    //   "sharedVolumeSize": 60,
+    //   "environmentType": "ipython",
+    //   "uptime": 2363463,
+    //   "controllerIP": "123.123.123.123",
+    //   "instanceParameters": {
+    //     "masterInstanceType": "t2.micro",
+    //     "workerInstanceType": "t2.micro",
+    //     "instanceCount": 2
+    //   },
+    //   "runningInstances": {
+    //     "t2.medium": 1,
+    //     "t2.micro": 2
+    //   },
+    //   "status": "running"
+    // }]
+
+    // var promise = new Promise(function(resolve, reject) {
+    //   // do a thing, possibly async, then…
+
+    //   setTimeout(function() {
+    //     resolve(results);
+    //   }, 2000);
+
+    // });
+
+    // promise.then(function(result) {
+    //   this.setState({results: result, loading: false});
+    //   console.log('Finished');
+    // }.bind(this), function(err) {
+    //   console.log(err); // Error: "It broke"
+    //   this.setState({results: [], loading: false});
+    // }.bind(this));
   }
 
 

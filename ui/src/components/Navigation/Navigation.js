@@ -20,6 +20,7 @@ class Navigation extends Component {
     console.log('Path From Nav: ' + this.props.path);
     let dashboard = '';
     let create = '';
+    let current = '';
     let deploy = '';
 
     if(this.props.path === "/") {
@@ -34,6 +35,13 @@ class Navigation extends Component {
     }
     else {
       create = <li><a href="/create" onClick={Link.handleClick}><i className="fa fa-edit"></i><span>Create Cluster</span></a></li>
+    }
+
+    if(this.props.path === "/current") {
+      current = <li className="active"><a href="/current" onClick={Link.handleClick}><i className="fa fa-cloud"></i><span>Current Environment</span></a></li>
+    }
+    else {
+      current = <li><a href="/current" onClick={Link.handleClick}><i className="fa fa-cloud"></i><span>Current Environment</span></a></li>
     }
 
     if(this.props.path === "/deploy") {
@@ -60,6 +68,7 @@ class Navigation extends Component {
           <ul className="sidebar-menu">
             {dashboard}
             {create}
+            {current}
             {deploy}
           </ul>
 

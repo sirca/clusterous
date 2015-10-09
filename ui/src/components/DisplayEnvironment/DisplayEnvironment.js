@@ -12,17 +12,21 @@ class DisplayEnvironment extends Component {
   static propTypes = {
     name: PropTypes.string.isRequired,
     title: PropTypes.string,
+    source: PropTypes.string
   };
 
   static contextTypes = {
     onSetTitle: PropTypes.func.isRequired,
   };
 
+  static defaultProps = {
+    source: 'http://localhost:5000/environment'
+  };
+
   constructor(props) {
     super(props);
 
-    this.updateCluster = this.updateCluster.bind(this);
-    this.deleteCluster = this.deleteCluster.bind(this);
+    this.handleDelete = this.handleDelete.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
     this.handleOnChange = this.handleOnChange.bind(this);
 
@@ -93,20 +97,43 @@ class DisplayEnvironment extends Component {
     }.bind(this));
   }
 
-  updateCluster() {
-
-  }
-
-  deleteCluster() {
-
-  }
-
-  handleSubmit() {
-
-  }
 
   handleOnChange(event) {
     this.setState({instanceCount: event.target.value})
+  }
+
+  handleSubmit(e) {
+    e.preventDefault();
+
+    if (this.state.typeOfSubmit === 'delete') {
+      console.log('Deleting..');
+
+      $.ajax({
+        url: this.props.source,
+        dataType: 'json',
+        crossDomain: true,
+        type: 'DELETE',
+        contentType: "application/json; charset=utf-8",
+        success: function(data) {
+          console.log('Success: ', data);
+
+           this.setState({deleted: true});
+        }.bind(this),
+        error: function(xhr, status, err) {
+          console.log('Failed: ', status);
+        }.bind(this)
+      });
+
+    }
+    else {
+      console.log('OTHER..');
+    }
+
+    return;
+  }
+
+  handleDelete() {
+    this.setState({typeOfSubmit: 'delete'}, this.refs.form.submit);
   }
 
   render() {
@@ -127,11 +154,20 @@ class DisplayEnvironment extends Component {
     //     </div>
     //   </div>
 
+    if(this.state.deleted) {
+      return (
+        <div className="alert alert-success alert-dismissible">
+          <button type="button" className="close" data-dismiss="alert" aria-hidden="true">×</button>
+          <h4>  <i className="icon fa fa-check"></i> Removed!</h4>
+          Your environment has been removed
+        </div>
+      )
+    }
     if(this.state.loading) {
       return (
         <div className="box box-warning clusterous-overlay">
           <div className="box-header with-border">
-            <h3 className="box-title">Checking Cluster Status...</h3>
+            <h3 className="box-title">Checking Environment...</h3>
           </div>
           <div className="overlay">
             <i className="fa fa-refresh fa-spin"></i>
@@ -144,9 +180,9 @@ class DisplayEnvironment extends Component {
       return (
 
         <div className="box box-success">
-          <form onSubmit={this.handleSubmit}>
+          <form onSubmit={this.handleSubmit} ref="form">
             <div className="box-header with-border">
-              <h3 className="box-title">{clusterInfo.clusterName}</h3>
+              <h3 className="box-title">{clusterInfo.clusterName} Environment</h3>
               <span className="label label-success pull-right">{clusterInfo.status}</span>
             </div>
             <div className="box-body">
@@ -155,63 +191,24 @@ class DisplayEnvironment extends Component {
                 <tbody>
                 <tr>
                   <th>Name</th>
-                  <td>{clusterInfo.clusterName}</td>
-                </tr>
-                <tr>
-                  <th>Instance Count</th>
-                  <td>
-                    <input ref="instanceCount" type="text" className="form-control" id="instanceCount" placeholder="eg. 8" onChange={this.handleOnChange} value={count} />
-                  </td>
-                </tr>
-                <tr>
-                  <th>Controller Instance Type</th>
-                  <td>{clusterInfo.controllerInstanceType}</td>
-                </tr>
-                <tr>
-                  <th>Master Instance Type</th>
-                  <td>{clusterInfo.instanceParameters.masterInstanceType}</td>
-                </tr>
-                <tr>
-                  <th>Worker Instance Type</th>
-                  <td>{clusterInfo.instanceParameters.workerInstanceType}</td>
+                  <td>ipython</td>
                 </tr>
                 <tr>
                   <th>Environment Type</th>
                   <td>{clusterInfo.environmentType}</td>
                 </tr>
                 <tr>
-                  <th>Shared Volume Size (GB)</th>
-                  <td>{clusterInfo.sharedVolumeSize}</td>
-                </tr>
-                <tr>
-                  <th>Up time</th>
-                  <td>{clusterInfo.uptime}</td>
-                </tr>
-                <tr>
-                  <th>Controller IP</th>
-                  <td>{clusterInfo.controllerIP}</td>
-                </tr>
-                <tr>
-                  <th>Up time</th>
-                  <td>{clusterInfo.uptime}</td>
+                  <th>iPython URL</th>
+                  <td><a href="http://localhost:3456/ipython" target="_blank">http://localhost:3456/ipython</a></td>
                 </tr>
                 </tbody>
               </table>
             </div>
             <div className="box-footer clearfix">
-              <div className="pull-left">
-                <a className="btn btn-sm btn-primary btn-flat pull-left" href="/create" onClick={Link.handleClick}>
-                  <i className="fa fa-save clusterous-icon-spacer"></i>Update Cluster
-                </a>&nbsp;&nbsp;
-                <a className="btn btn-sm btn-default btn-flat" href="/create" onClick={Link.handleClick}>
-                  <i className="fa fa-globe clusterous-icon-spacer"></i>Display Environment Details
-                </a>
-              </div>
-
-              <a className="btn btn-sm btn-warning btn-flat pull-right" href="/create" onClick={Link.handleClick}>
+              <button type="submit" className="btn btn-sm btn-danger btn-flat pull-right" onClick={this.handleDelete}>
                 <i className="fa fa-remove clusterous-icon-spacer"></i>
-                Delete Cluster
-              </a>
+                Remove Environment
+              </button>
             </div>
           </form>
         </div>
