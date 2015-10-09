@@ -102,63 +102,74 @@ class ClusterList extends Component {
         </div>
       );
     }
-    return (
-      <div>
-        <div className="box box-primary">
-          <div className="box-header with-border">
-            <h3 className="box-title">Cluster List</h3>
-            <div className="box-tools pull-right">
-              <button className="btn btn-box-tool" data-widget="collapse"><i className="fa fa-minus"></i></button>
-              <button className="btn btn-box-tool" data-widget="remove"><i className="fa fa-times"></i></button>
+    else {
+      return (
+        <div>
+          <div className="box box-primary">
+            <div className="box-header with-border">
+              <h3 className="box-title">Cluster List</h3>
+              <div className="box-tools pull-right">
+                <button className="btn btn-box-tool" data-widget="collapse"><i className="fa fa-minus"></i></button>
+                <button className="btn btn-box-tool" data-widget="remove"><i className="fa fa-times"></i></button>
+              </div>
+            </div>
+            {
+              clusterList.map(function(result) {
+                console.log('Cluster Name: ' + result);
+
+                if(result == null) {
+                  return (
+                    <div className="no-cluster text-light-blue">No Cluster found.</div>
+                  )
+                }
+
+                let path = '/cluster/' + result.clusterName;
+
+                return (
+                  <div className="box-body" key={result.clusterName}>
+                    <div className="table-responsive">
+                      <table className="table no-margin">
+                        <thead>
+                          <tr>
+                            <th>Cluster Name</th>
+                            <th>Instances</th>
+                            <th>Status</th>
+                            <th>Current?</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td><a href={path} onClick={Link.handleClick}>{result.clusterName}</a></td>
+                            <td>{result.instanceParameters.instanceCount}</td>
+                            <td><span className="label label-success">{result.status}</span></td>
+                            <td><i className="fa fa-fw fa-check"></i></td>
+                            <td>
+                              <a href={path} onClick={Link.handleClick} className="btn btn-sm btn-default btn-flat pull-left">
+                                <span className="fa fa-fw fa-gear" aria-hidden="true"></span> Manage
+                              </a>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+
+              })
+            }
+
+            <div className="box-footer clearfix">
+              <a className="btn btn-sm btn-primary btn-flat pull-right" href="/create" onClick={Link.handleClick}>
+                <i className="fa fa-edit clusterous-icon-spacer"></i>
+                Create New Cluster
+              </a>
             </div>
           </div>
-          {
-            clusterList.map(function(result) {
-              let path = '/cluster/' + result.clusterName;
-
-              return (
-                <div className="box-body" key={result.clusterName}>
-                  <div className="table-responsive">
-                    <table className="table no-margin">
-                      <thead>
-                        <tr>
-                          <th>Cluster Name</th>
-                          <th>Instances</th>
-                          <th>Status</th>
-                          <th>Current?</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td><a href={path} onClick={Link.handleClick}>{result.clusterName}</a></td>
-                          <td>{result.instanceParameters.instanceCount}</td>
-                          <td><span className="label label-success">{result.status}</span></td>
-                          <td><i className="fa fa-fw fa-check"></i></td>
-                          <td>
-                            <a href={path} onClick={Link.handleClick} className="btn btn-sm btn-default btn-flat pull-left">
-                              <span className="fa fa-fw fa-gear" aria-hidden="true"></span> Manage
-                            </a>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-
-            })
-          }
-
-          <div className="box-footer clearfix">
-            <a className="btn btn-sm btn-primary btn-flat pull-right" href="/create" onClick={Link.handleClick}>
-              <i className="fa fa-edit clusterous-icon-spacer"></i>
-              Create New Cluster
-            </a>
-          </div>
         </div>
-      </div>
-    );
+      );
+    }
+
   }
 
 }

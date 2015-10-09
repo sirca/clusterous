@@ -1,6 +1,7 @@
 
 
 import React, { PropTypes, Component } from 'react';
+import ReactDOM from 'react-dom';
 import styles from './CreateCluster.css';
 import withStyles from '../../decorators/withStyles';
 import Link from '../Link';
@@ -10,10 +11,15 @@ class CreateCluster extends Component {
 
   static propTypes = {
     title: PropTypes.string,
+    source: PropTypes.string
   };
 
   static contextTypes = {
     onSetTitle: PropTypes.func.isRequired,
+  };
+
+  static defaultProps = {
+    source: 'http://localhost:5005/cluster'
   };
 
   constructor() {
@@ -34,6 +40,8 @@ class CreateCluster extends Component {
 
     if (this.state.typeOfSubmit === 'create') {
 
+      console.log('Creating..');
+
       var clusterName = ReactDOM.findDOMNode(this.refs.clusterName).value.trim();
       var instanceCount = ReactDOM.findDOMNode(this.refs.instanceCount).value.trim();
       var controllerInstanceType = ReactDOM.findDOMNode(this.refs.controllerInstanceType).value.trim();
@@ -45,12 +53,12 @@ class CreateCluster extends Component {
       var data = {
         "clusterName": clusterName,
         "controllerInstanceType": controllerInstanceType,
-        "sharedVolumeSize": sharedVolumeSize,
+        "sharedVolumeSize": Number(sharedVolumeSize),
         "environmentType": environmentType,
         "instanceParameters": {
           "masterInstanceType": masterInstanceType,
           "workerInstanceType": workerInstanceType,
-          "instanceCount": instanceCount
+          "instanceCount": Number(instanceCount)
           }
       };
 
@@ -128,10 +136,10 @@ class CreateCluster extends Component {
                 <label htmlFor="controllerInstanceType" className="col-sm-3 control-label">Controller Instance Type</label>
                 <div className="col-sm-3">
                   <select className="form-control" ref="controllerInstanceType">
-                    <option>t2.micro</option>
-                    <option>t2.small</option>
-                    <option>t2.medium</option>
-                    <option>t2.large</option>
+                    <option value="t2.micro">t2.micro</option>
+                    <option value="t2.small">t2.small</option>
+                    <option value="t2.medium">t2.medium</option>
+                    <option value="t2.large">t2.large</option>
                   </select>
                 </div>
               </div>
@@ -139,19 +147,19 @@ class CreateCluster extends Component {
                 <label htmlFor="masterInstanceType" className="col-sm-3 control-label">Master Instance Type</label>
                 <div className="col-sm-3">
                   <select className="form-control" ref="masterInstanceType">
-                    <option>t2.micro</option>
-                    <option>t2.small</option>
-                    <option>t2.medium</option>
-                    <option>t2.large</option>
+                    <option value="t2.micro">t2.micro</option>
+                    <option value="t2.small">t2.small</option>
+                    <option value="t2.medium">t2.medium</option>
+                    <option value="t2.large">t2.large</option>
                   </select>
                 </div>
                 <label htmlFor="workerInstanceType" className="col-sm-3 control-label">Worker Instance Type</label>
                 <div className="col-sm-3">
                   <select className="form-control" ref="workerInstanceType">
-                    <option>t2.micro</option>
-                    <option>t2.small</option>
-                    <option>t2.medium</option>
-                    <option>t2.large</option>
+                    <option value="t2.micro">t2.micro</option>
+                    <option value="t2.small">t2.small</option>
+                    <option value="t2.medium">t2.medium</option>
+                    <option value="t2.large">t2.large</option>
                   </select>
                 </div>
               </div>
@@ -159,8 +167,8 @@ class CreateCluster extends Component {
                 <label htmlFor="environmentType" className="col-sm-3 control-label">Environment Type</label>
                 <div className="col-sm-3">
                   <select className="form-control" ref="environmentType">
-                    <option>iPython</option>
-                    <option>Spark</option>
+                    <option value="ipython">iPython</option>
+                    <option value="spark">Spark</option>
                   </select>
                 </div>
               </div>
