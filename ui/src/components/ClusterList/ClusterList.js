@@ -145,8 +145,19 @@ class ClusterList extends Component {
                   )
                 }
 
+                let status = '';
+
+                if(result.status === 'starting') {
+                  status = <td><span className="label label-warning">{result.status}</span></td>;
+                }
+                else if(result.status === 'terminating') {
+                  status = <td><span className="label label-danger">{result.status}</span></td>;
+                }
+                else {
+                  status = <td><span className="label label-success">{result.status}</span></td>;
+                }
+
                 let path = '/cluster/' + result.clusterName;
-                let status = result.status === 'starting' ? <td><span className="label label-warning">{result.status}</span></td> : <td><span className="label label-success">{result.status}</span></td>;
 
                 return (
                   <div className="box-body" key={result.clusterName}>

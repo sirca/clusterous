@@ -104,11 +104,15 @@ class CreateCluster extends Component {
     this.context.onSetTitle(this.props.title);
 
     if(this.state.created) {
+
       return(
         <div className="alert alert-success alert-dismissible">
           <button type="button" className="close" data-dismiss="alert" aria-hidden="true">×</button>
           <h4>  <i className="icon fa fa-check"></i> Congratulations!</h4>
           Your cluster is being created
+          <a className="btn btn-sm btn-default btn-flat" href='/' onClick={Link.handleClick}>
+            OK
+          </a>
         </div>
       )
     }

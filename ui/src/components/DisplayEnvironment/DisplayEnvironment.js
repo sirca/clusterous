@@ -190,16 +190,12 @@ class DisplayEnvironment extends Component {
               <table className="table">
                 <tbody>
                 <tr>
-                  <th>Name</th>
-                  <td>ipython</td>
-                </tr>
-                <tr>
                   <th>Environment Type</th>
                   <td>{clusterInfo.environmentType}</td>
                 </tr>
                 <tr>
-                  <th>iPython URL</th>
-                  <td><a href="http://localhost:3456/ipython" target="_blank">http://localhost:3456/ipython</a></td>
+                  <th>Environment URL</th>
+                  <td><a href={clusterInfo.environmentUrl} target="_blank">{clusterInfo.environmentUrl}</a></td>
                 </tr>
                 </tbody>
               </table>

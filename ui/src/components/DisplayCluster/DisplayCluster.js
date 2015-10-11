@@ -1,6 +1,7 @@
 import React, { PropTypes, Component } from 'react';
 import styles from './DisplayCluster.css';
 import withStyles from '../../decorators/withStyles';
+import ReactDOM from 'react-dom';
 import Link from '../Link';
 import { Panel, ListGroup, ListGroupItem, Table, ButtonToolbar,
   Button, Input, DropdownButton, MenuItem } from 'react-bootstrap';
@@ -54,7 +55,9 @@ class DisplayCluster extends Component {
         },
         "status": ""
       },
-      loading: false
+      loading: false,
+      deleted: false,
+      updated: false
     }
 
   }
@@ -72,9 +75,13 @@ class DisplayCluster extends Component {
       success: function(data) {
         console.log('Success: ', data);
 
-        this.setState({result: data, loading: false, instanceCount: data.instanceParameters.instanceCount, check:true});
-
-        clearInterval(this.interval);
+        if(data && data.status === 'starting') {
+          this.setState({result: {}, loading: false, instanceCount: 0, check:true});
+        }
+        else {
+          this.setState({result: data, loading: false, instanceCount: data.instanceParameters.instanceCount, check:true});
+          clearInterval(this.interval);
+        }
       }.bind(this),
       error: function(xhr, status, err) {
         console.log('Failed: ', status);
@@ -127,10 +134,11 @@ class DisplayCluster extends Component {
         contentType: "application/json; charset=utf-8",
         success: function(data) {
           console.log('Success: ', data);
-          this.setState({updated: true})
+          this.setState({updated: true, loading: false})
         }.bind(this),
         error: function(xhr, status, err) {
           console.log('Failed: ', status);
+          this.setState({loading: false})
         }.bind(this)
       });
 
@@ -139,6 +147,24 @@ class DisplayCluster extends Component {
     }
     else if (this.state.typeOfSubmit === 'delete') {
       console.log('Deleting..');
+
+      this.setState({loading: true});
+
+      $.ajax({
+        url: this.props.source + '/' + this.props.name,
+        dataType: 'json',
+        crossDomain: true,
+        type: 'DELETE',
+        contentType: "application/json; charset=utf-8",
+        success: function(data) {
+          console.log('Success: ', data);
+          this.setState({deleted: true, loading: false})
+        }.bind(this),
+        error: function(xhr, status, err) {
+          console.log('Failed: ', status);
+          this.setState({loading: false})
+        }.bind(this)
+      });
     }
     else {
       console.log('OTHER..');
@@ -167,7 +193,18 @@ class DisplayCluster extends Component {
     let checked = this.state.check;
     let displayEnvironmentPath = '/environment/' + clusterInfo.clusterName;
 
-    if(this.state.loading && !checked) {
+    if(this.state.deleted) {
+      return (
+        <div className="alert alert-success alert-dismissible">
+          <button type="button" className="close" data-dismiss="alert" aria-hidden="true">×</button>
+          <h4>  <i className="icon fa fa-check"></i> Cluster Deleted.</h4>
+          <a className="btn btn-sm btn-default btn-flat" href='/' onClick={Link.handleClick}>
+            OK
+          </a>
+        </div>
+      );
+    }
+    else if(this.state.loading && !checked) {
       return (
         <div className="box box-warning clusterous-overlay">
           <div className="box-header with-border">
@@ -183,7 +220,7 @@ class DisplayCluster extends Component {
       return (
         <div className="box box-warning clusterous-overlay">
           <div className="box-header with-border">
-            <h3 className="box-title">Cluster not up yet... ill keep checking mate - I GOT THIS!</h3>
+            <h3 className="box-title">Cluster not up yet... please make a coffee and come back soon</h3>
           </div>
           <div className="overlay">
             <i className="fa fa-refresh fa-spin"></i>
@@ -233,7 +270,7 @@ class DisplayCluster extends Component {
                 </tr>
                 <tr>
                   <th>Environment URL</th>
-                  <td>{clusterInfo.environmentUrl}</td>
+                  <td><a href={clusterInfo.environmentUrl} target="_blank">{clusterInfo.environmentUrl}</a></td>
                 </tr>
                 <tr>
                   <th>Shared Volume Size (GB)</th>
