@@ -4,6 +4,7 @@ import sys
 import os
 import yaml
 import logging
+import collections
 
 from sshtunnel import SSHTunnelForwarder
 from defaults import get_script
@@ -50,6 +51,45 @@ class AnsibleHelper(object):
             raise AnsibleHelper.AnsibleError(playbook_file, process.returncode, output, error)
 
         return process.returncode
+
+
+SchemaEntry = collections.namedtuple('SchemaEntry', ['mandatory', 'default', 'type', 'schema'])
+
+def validate(d, schema, strict=True):
+    """
+    Runs validation on d, according to schema, returns a validated dict.
+    schema is a dictionary mapping field name (key) to a SchemaEntry.
+    If strict is True, all keys in d must be described in schema. If not,
+    d may contain keys not required by schema.
+    """
+
+    copy = d
+
+    # First verify schema
+    for key, rules in schema.iteritems():
+        if key not in copy:
+            if rules.mandatory:
+                return False, 'Missing mandatory field "{0}"'.format(key), {}
+            elif not rules.mandatory:
+                copy[key] = rules.default
+        elif key in copy:
+            if not rules.type == type(copy[key]):
+                return False, 'For field "{0}", expected type "{1}", got "{2}"'.format(key, rules.type.__name__, type(copy[key]).__name__), {}
+            if rules.type == dict and rules.schema:
+                # Recursively validate this nested dictionary
+                success, message, validated = validate(copy[key], rules.schema, strict)
+                if not success:
+                    return False, 'In {0}: {1}'.format(key, message), {}
+                else:
+                    copy[key] = validated
+
+
+    if strict:
+        for key, val in d.iteritems():
+            if key not in schema:
+                return False, 'Unexpected field "{0}"'.format(key), {}
+
+    return True, '', copy
 
 
 class NoWorkingClusterException(Exception):

@@ -592,8 +592,8 @@ class AWSCluster(Cluster):
         Initialise security group(s), cluster controller etc
         """
         self.cluster_name = cluster_name
-        self._shared_volume_size = defaults.shared_volume_size if shared_volume_size is None else shared_volume_size
-        self._controller_instance_type = defaults.controller_instance_type if controller_instance_type is None else controller_instance_type
+        self._shared_volume_size = defaults.shared_volume_size if not shared_volume_size else shared_volume_size
+        self._controller_instance_type = defaults.controller_instance_type if not controller_instance_type else controller_instance_type
 
         # Create dirs
         self._create_config_dirs()

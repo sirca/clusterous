@@ -47,9 +47,6 @@ remote_host_key_file = 'key.pem'
 remote_host_vars_file = 'vars.yml'
 container_id_script_file = 'container_id.sh'
 
-node_tag_status_uninitialized = 'uninitialized'
-node_tag_status_initialized = 'initialized'
-
 mesos_port = 5050
 marathon_port = 8080
 central_logging_port = 8081

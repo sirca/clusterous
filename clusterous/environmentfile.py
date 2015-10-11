@@ -2,6 +2,9 @@ import logging
 import yaml
 import os.path
 
+import helpers
+from helpers import SchemaEntry
+
 class ParseError(Exception):
     def __init__(self, msg, parents=[]):
         self.msg = msg
@@ -22,6 +25,8 @@ class UnknownValue(Exception):
     pass
 
 class DictValidator(object):
+    # TODO: helpers.validate could potentiall replace this, if it supports
+    # arbitrary fields (like under the components section)
     """
     Simple class for validating a dictionary.
     Takes a trivial schema that states which keys
@@ -57,9 +62,16 @@ class EnvironmentFile(object):
     Reads and parses an environment file
     """
 
-    def __init__(self, env_file, params={}):
+    def __init__(self, env_file, params={}, profile_file_path=None):
         self._logger = logging.getLogger(__name__)
-        self._env_filename = env_file
+
+        # Obtain actual path of environment file (which may be relative to profile_file_path)
+        if profile_file_path:
+            profile_base = os.path.dirname(os.path.abspath(os.path.expanduser(profile_file_path)))
+            self._env_filename = os.path.join(profile_base, env_file)
+        else:
+            self._env_filename = env_file
+
         yaml_data = self._read_yaml(self._env_filename)
 
         # Get base path
@@ -88,28 +100,38 @@ class EnvironmentFile(object):
 
     def _parse_environment_file(self, data, params):
         parsed = {}
-        try:
-            if not 'name' in data:
-                raise ParseError('Expected "name" section')
-            parsed['name'] = data['name']
+        tunnel_schema = {
+                    'service': SchemaEntry(True, '', str, None),
+                    'message': SchemaEntry(True, '', str, None)
+        }
+        env_schema = {
+                    'copy': SchemaEntry(False, [], list, None),
+                    'image': SchemaEntry(False, [], list, None),
+                    'components': SchemaEntry(True, {}, dict, None),
+                    'expose_tunnel': SchemaEntry(False, {}, dict, tunnel_schema)
+        }
+        top_schema = {
+                    'name': SchemaEntry(True, '', str, None),
+                    'environment': SchemaEntry(False, {}, dict, env_schema),
+                    'cluster': SchemaEntry(False, {}, dict, None)
+        }
 
-            parsed['environment'] = {}
-            parsed['cluster'] = {}
-            if 'environment' in data:
-                parsed['environment'] = self._parse_environment_section(data['environment'])
+        is_valid, message, validated = helpers.validate(data, top_schema)
 
-            if 'cluster' in data:
-                parsed['cluster'] = self._parse_cluster_section(data['cluster'], params)
+        if not is_valid:
+            raise ParseError(message)
 
-        except ParseError as e:
-            self._logger.error(e)
-        except UnknownValue as e:
-            self._logger.error('Expected value "{0}" not present'.format(e))
+        if 'components' in validated.get('environment', {}):
+            validated['environment']['components'] = self._parse_components_section(validated['environment']['components'])
 
-        return parsed
+        if 'cluster' in validated:
+            validated['cluster'] = self._parse_cluster_section(validated['cluster'], params)
 
-    def _parse_environment_section(self, env):
-        # Validate environment section
+        print validated
+        return validated
+
+    def _parse_components_section(self, comps):
+        # Validate environment section using DictValidator
         component_schema = {
                             'machine': (True,),
                             'cpu': (True,),
@@ -121,16 +143,12 @@ class EnvironmentFile(object):
                             'depends': (False, '')
                             }
         validator = DictValidator(component_schema)
-        new_env = {}
-        new_env['components'] = {}
-        for component, fields in env['components'].iteritems():
+        new_comps = {}
+        for component, fields in comps.iteritems():
             validated_fields = validator.validate(fields)
-            new_env['components'][component] = validated_fields
+            new_comps[component] = validated_fields
 
-        new_env['image'] = env.get('image',{})
-        new_env['copy'] = env.get('copy',{})
-        new_env['expose_tunnel'] = env.get('expose_tunnel',{})
-        return new_env
+        return new_comps
 
     def _parse_cluster_section(self, cluster, params):
         new_cluster = {}

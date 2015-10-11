@@ -10,7 +10,8 @@ import cluster
 import clusterbuilder
 from environmentfile import EnvironmentFile
 import environment
-from helpers import AnsibleHelper
+import helpers
+from helpers import SchemaEntry
 
 
 class ClusterousError(Exception):
@@ -20,6 +21,15 @@ class ConfigError(Exception):
     def __init__(self, message, filename):
         super(ConfigError, self).__init__(message)
         self.filename = filename
+
+class ConfigError(Exception):
+    def __init__(self, message, filename):
+        super(ConfigError, self).__init__(message)
+        self.filename = filename
+
+class ProfileError(Exception):
+    pass
+
 
 class Clusterous(object):
     """
@@ -74,18 +84,23 @@ class Clusterous(object):
         except yaml.YAMLError as e:
             raise ClusterousError('Error processing YAML file {0}'.format(e))
 
-        # Validate profile file
-        is_valid, message, validated = _validate_profile(contents)
+        main_schema = {
+            'cluster_name': SchemaEntry(True, None, str, None),
+            'controller_instance_type': SchemaEntry(False, '', str, None),
+            'shared_volume_size': SchemaEntry(False, 0, int, None),
+            'central_logging_level': SchemaEntry(False, 0, int, None),
+            'environment_file': SchemaEntry(False, '', str, None),
+            'parameters': SchemaEntry(True, {}, dict, None)
+        }
 
+
+        # Validate profile file
+        is_valid, message, validated = helpers.validate(contents, main_schema)
+
+        if not is_valid:
+            raise ProfileError(message)
 
         return validated
-
-    def _validate_profile(self, profile):
-        """
-        Given a profile dictionary, validates contents.
-        Returns success, message (if any), and validated dictionary (if validation succesful)
-        """
-
 
     def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
         if not (self._cluster_class and self._config):
@@ -93,29 +108,7 @@ class Clusterous(object):
         else:
             return self._cluster_class(self._config, cluster_name, cluster_name_required)
 
-        validated = {}
-        try:
-            validated['cluster_name'] = contents['cluster_name']
-        except KeyError as e:
-            raise ClusterousError('No "cluster_name" field in "{0}"'.format(profile_file))
 
-        validated['central_logging_level'] = contents.get('central_logging_level', 0)
-        validated['shared_volume_size'] = contents.get('shared_volume_size', defaults.shared_volume_size)
-        validated['controller_instance_type'] = contents.get('controller_instance_type', defaults.controller_instance_type)
-        validated['parameters'] = contents.get('parameters', {})
-
-        environment_file = None
-        if 'environment_file' in contents:
-            # Get absolute path of environment file
-            # The given file path is assumed to be relative to the location of the profile file
-            base_path = os.path.dirname(full_path)
-            environment_file = os.path.join(base_path, contents['environment_file'])
-
-        validated['environment_file'] = environment_file
-
-        for key in contents.keys():
-            if key not in validated.keys():
-                raise ClusterousError('Unknown field "{0}" in profile file "{1}"'.format(key, profile_file))
 
 
     def start_cluster(self, profile_file, launch_env=True):
@@ -126,7 +119,7 @@ class Clusterous(object):
         env_file = None
         cluster_spec = None
         if profile['environment_file']:
-            env_file = EnvironmentFile(profile['environment_file'], profile['parameters'])
+            env_file = EnvironmentFile(profile['environment_file'], profile['parameters'], profile_file)
 
         # If necessary, obtain cluster spec
         if not env_file or (not env_file.spec['cluster']):
