@@ -108,7 +108,7 @@ def cluster_status():
                 'instanceParameters': {
                     'masterInstanceType': '',
                     'workerInstanceType': '',
-                    'instanceCount': ''
+                    'instanceCount': 0
                 },
                 'status': '',
                 'isActive': False,
@@ -230,6 +230,27 @@ def terminate_cluster(cluster_name):
     t.start()
     return True
 
+def run_scale_cluster(delta):
+    status, app = _init_clusterous_object()
+    if delta > 0:
+        success, message = app.scale_nodes('add', delta, None)
+
+def scale_cluster(d):
+    s = cluster_status()
+    if not s['isActive']:
+        return False
+    currentInstances = s.get('instanceParameters', {}).get('instanceCount', 0)
+    if currentInstances < 1:
+        return False    # cannot scale anymore
+
+    scaleDelta = d['instanceCount'] - currentInstances
+    if scaleDelta == 0:
+        return True
+
+
+
+
+
 @flask_app.route('/')
 def hello_world():
     return "hello world!"
@@ -251,7 +272,7 @@ def cluster():
         return resp
 
 
-@flask_app.route('/cluster/<id>', methods=['GET', 'DELETE'])
+@flask_app.route('/cluster/<id>', methods=['GET', 'DELETE', 'PUT'])
 def cluster_id(id):
     if request.method == 'GET':
         status = cluster_status()
@@ -264,6 +285,13 @@ def cluster_id(id):
     elif request.method == 'DELETE':
         terminate_cluster(id)
         return 'Ok'
+    elif request.method == 'PUT':
+        d = request.get_json(force=True)
+        success = scale_cluster(d)
+        if success:
+            return 'Ok'
+        else:
+            abort(400)
 
 
 if __name__ == '__main__':
