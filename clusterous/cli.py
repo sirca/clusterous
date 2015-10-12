@@ -191,12 +191,21 @@ class CLIParser(object):
         except clusterousmain.ProfileError as e:
             print >> sys.stderr, 'Error in profile file {0}:'.format(args.profile_file)
             print >> sys.stderr, e.message
+        except clusterousmain.EnvironmentFileError as e:
+            print >> sys.stderr, 'Error in environment file {0}'.format(e.filename)
+            print >> sys.stderr, e.message
 
         return 0 if success else 1
 
     def _launch_environment(self, args):
         app = self._init_clusterous_object(args)
-        success, message = app.launch_environment(args.environment_file)
+        success = False
+
+        try:
+            success, message = app.launch_environment(args.environment_file)
+        except clusterousmain.EnvironmentFileError as e:
+            print >> sys.stderr, 'Error in environment file {0}'.format(e.filename)
+            print >> sys.stderr, e.message
 
         if success and message:
             print '\nMessage for user:'

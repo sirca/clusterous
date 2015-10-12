@@ -3,33 +3,34 @@ import os
 import sys
 import logging
 import logging.config
+import re
+
 import boto
 
 import defaults
 import cluster
 import clusterbuilder
 from environmentfile import EnvironmentFile
+import environmentfile
+
 import environment
 import helpers
 from helpers import SchemaEntry
 
 
-class ClusterousError(Exception):
+class FileError(Exception):
+    def __init__(self, message, filename=''):
+        super(FileError, self).__init__(message)
+        self.filename = filename
+
+class ConfigError(FileError):
     pass
 
-class ConfigError(Exception):
-    def __init__(self, message, filename):
-        super(ConfigError, self).__init__(message)
-        self.filename = filename
-
-class ConfigError(Exception):
-    def __init__(self, message, filename):
-        super(ConfigError, self).__init__(message)
-        self.filename = filename
+class EnvironmentFileError(FileError):
+    pass
 
 class ProfileError(Exception):
     pass
-
 
 class Clusterous(object):
     """
@@ -77,12 +78,12 @@ class Clusterous(object):
         """
         full_path = os.path.abspath(os.path.expanduser(profile_file))
         if not os.path.isfile(full_path):
-            raise ClusterousError('Cannot open file "{0}"'.format(profile_file))
+            raise ProfileError('Cannot open file "{0}"'.format(profile_file))
         stream = open(full_path, 'r')
         try:
             contents = yaml.load(stream)
         except yaml.YAMLError as e:
-            raise ClusterousError('Error processing YAML file {0}'.format(e))
+            raise ProfileError('Invalid YAML format {0}'.format(e))
 
         main_schema = {
             'cluster_name': SchemaEntry(True, None, str, None),
@@ -100,6 +101,17 @@ class Clusterous(object):
         if not is_valid:
             raise ProfileError(message)
 
+        if not defaults.taggable_name_re.match(validated['cluster_name']):
+            raise ProfileError('Unsupported characters in cluster_name "{0}"'.format(validated['cluster_name']))
+        if len(validated['cluster_name']) > defaults.taggable_name_max_length:
+            raise ProfileError('"cluster_name" cannot be more than {0} characters'.format(defaults.taggable_name_max_length))
+
+        if not 0 <= validated['central_logging_level'] <= 2:
+            raise ProfileError('"central_logging_level" must be either 0, 1 or 2')
+
+        if validated['shared_volume_size'] < 0:
+            raise ProfileError('"shared_volume_size" cannot be negative')
+
         return validated
 
     def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
@@ -109,8 +121,6 @@ class Clusterous(object):
             return self._cluster_class(self._config, cluster_name, cluster_name_required)
 
 
-
-
     def start_cluster(self, profile_file, launch_env=True):
         """
         Create a new cluster from profile file
@@ -118,16 +128,26 @@ class Clusterous(object):
         profile = self._read_profile(profile_file)
         env_file = None
         cluster_spec = None
-        if profile['environment_file']:
-            env_file = EnvironmentFile(profile['environment_file'], profile['parameters'], profile_file)
 
-        # If necessary, obtain cluster spec
-        if not env_file or (not env_file.spec['cluster']):
-            default_file_path = defaults.get_script(defaults.default_cluster_def_filename)
-            cluster_env_file = EnvironmentFile(default_file_path, profile['parameters'])
-            cluster_spec = cluster_env_file.spec['cluster']
-        else:
-            cluster_spec = env_file.spec['cluster']
+        try:
+            if profile['environment_file']:
+                env_file = EnvironmentFile(profile['environment_file'], profile['parameters'], profile_file)
+
+            # If necessary, obtain cluster spec
+            if not env_file or (not env_file.spec['cluster']):
+                default_file_path = defaults.get_script(defaults.default_cluster_def_filename)
+                cluster_env_file = EnvironmentFile(default_file_path, profile['parameters'])
+                cluster_spec = cluster_env_file.spec['cluster']
+            else:
+                cluster_spec = env_file.spec['cluster']
+
+        except environmentfile.UnknownValue as e:
+            # If unknown value found, probably an error in the profile (i.e. user params)
+            raise ProfileError(str(e))
+        except environmentfile.EnvironmentSpecError as e:
+            # Otherwise it's a problem in the environment file itself
+            raise EnvironmentFileError(str(e), filename=profile['environment_file'])
+
 
         self._logger.debug('Actual cluster spec: {0}'.format(cluster_spec))
 
@@ -166,6 +186,8 @@ class Clusterous(object):
             env_file = EnvironmentFile(environment_file)
             env = environment.Environment(cl)
             success, message = env.launch_from_spec(env_file)
+        except environmentfile.EnvironmentSpecError as e:
+            raise EnvironmentFileError(e, filename=environment_file)
         except environment.Environment.LaunchError as e:
             self._logger.error(e)
             self._logger.error('Failed to launch environment')

@@ -73,6 +73,8 @@ def validate(d, schema, strict=True):
             elif not rules.mandatory:
                 copy[key] = rules.default
         elif key in copy:
+            if type(copy[key]) == type(None):
+                return False, 'A valid value must be provided for field "{0}"'.format(key), {}
             if not rules.type == type(copy[key]):
                 return False, 'For field "{0}", expected type "{1}", got "{2}"'.format(key, rules.type.__name__, type(copy[key]).__name__), {}
             if rules.type == dict and rules.schema:

@@ -4,25 +4,21 @@ import os.path
 
 import helpers
 from helpers import SchemaEntry
+import defaults
 
-class ParseError(Exception):
-    def __init__(self, msg, parents=[]):
-        self.msg = msg
-        self.parents = parents
+class EnvironmentSpecError(Exception):
+    pass
 
-    def __str__(self):
-        p = ''
-        if self.parents:
-            p = 'In {0}'.format(' > '.join(self.parents))
+class ParseError(EnvironmentSpecError):
+    pass
 
-        return '{0}: {1}'.format(p, self.msg)
-
-class UnknownValue(Exception):
+class UnknownValue(EnvironmentSpecError):
     """
     For use when unknown "$" value found in environment file.
     Usually means user hasn't supplied the value in the profile file.
     """
-    pass
+    def __str__(self):
+        return 'The following parameter was expected but not supplied: "{0}"'.format(self.message)
 
 class DictValidator(object):
     # TODO: helpers.validate could potentiall replace this, if it supports
@@ -92,10 +88,17 @@ class EnvironmentFile(object):
         Loads environment file into yaml dictionary
         """
 
+        if not os.path.isfile(environment_file):
+            raise EnvironmentSpecError('Cannot open file')
+
         stream = open(environment_file, 'r')
-        contents = yaml.load(stream)
+
+        try:
+            contents = yaml.load(stream)
+        except yaml.YAMLError as e:
+            raise EnvironmentSpecError('Invalid YAML format: ' + str(e))
+
         stream.close()
-        #TODO handle error
         return contents
 
     def _parse_environment_file(self, data, params):
@@ -121,13 +124,15 @@ class EnvironmentFile(object):
         if not is_valid:
             raise ParseError(message)
 
+        if not defaults.taggable_name_re.match(validated['name']):
+            raise ParseError('Invalid characters in name')
+
         if 'components' in validated.get('environment', {}):
             validated['environment']['components'] = self._parse_components_section(validated['environment']['components'])
 
         if 'cluster' in validated:
             validated['cluster'] = self._parse_cluster_section(validated['cluster'], params)
 
-        print validated
         return validated
 
     def _parse_components_section(self, comps):
@@ -146,6 +151,14 @@ class EnvironmentFile(object):
         new_comps = {}
         for component, fields in comps.iteritems():
             validated_fields = validator.validate(fields)
+            if (validated_fields['cpu'] != 'auto' and
+                    not type(validated_fields['cpu']) in (int, float)):
+                raise ParseError('In "{0}", invalid value for "cpu": {1}'.format(component, type(validated_fields['cpu'])))
+            if (isinstance(validated_fields['cpu'], (int, float)) and
+                not validated_fields['cpu'] > 0):
+                raise ParseError('In "{0}", "cpu" must be positive'.format(component))
+            if validated_fields['attach_volume'] not in ('yes', 'no'):
+                raise ParseError('In "{0}", "attach_volume" must be either yes or no'.format(component))
             new_comps[component] = validated_fields
 
         return new_comps
@@ -191,6 +204,8 @@ class EnvironmentFile(object):
                 var_val = params[var]
                 if not isinstance(var_val, int):
                     raise ParseError('Expected integer value for "{0}"'.format(var))
+                if var_val <= 0:
+                    raise ParseError('Expected positive value for "{0}"'.format(var))
 
                 # Ensure right hand argument is also an int
                 right = tokens[1].strip()

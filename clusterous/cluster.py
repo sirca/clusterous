@@ -164,7 +164,7 @@ class AWSCluster(Cluster):
 
         Returns 2-tuple in the form (success, message)
         """
-        s3_re = re.compile('^[a-z0-9][a-z0-9-]*$')
+        s3_re = re.compile('^[a-z0-9][a-z0-9-]+$')
 
         if '.' in name:
             return False, 'Dots in bucket name not supported'
