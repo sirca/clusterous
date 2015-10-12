@@ -1,0 +1,6 @@
+{
+  "name": "CreateCluster",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./CreateCluster.js"
+}

@@ -597,6 +597,7 @@ class Environment(object):
         message = ''
         if 'message' in tunnel_info:
             url = 'http://localhost:{0}'.format(local_port)
+            self._cluster._set_cluster_info({'environment_url': url, 'environment_name': 'ipython'})
             message = '{0}{1}'.format(tunnel_info['message'], url)
 
         return message

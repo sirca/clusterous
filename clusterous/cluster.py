@@ -1145,10 +1145,21 @@ class AWSCluster(Cluster):
         instances = self._get_instances(self.cluster_name)
         if not instances:
             return {}
+        name = self._get_working_cluster_name()
         for instance in instances:
-            if instance.instance_type not in info:
-                info[instance.instance_type] = 0
-            info[instance.instance_type] += 1
+            node_prefix = '{0}-node-'.format(name)
+            controller_name = '{0}-controller'.format(name)
+            if instance.tags['Name'].startswith(node_prefix):
+                instance_name = instance.tags['Name'][len(node_prefix):]
+            elif instance.tags['Name'] == controller_name:
+                instance_name = 'controller'
+            else:
+                print instance.tags['Name']
+
+            if instance_name and instance_name not in info:
+                info[instance_name] = {'type': instance.instance_type, 'count': 0}
+
+            info[instance_name]['count'] += 1
         return info
 
     def connect_to_container(self, component_name):
