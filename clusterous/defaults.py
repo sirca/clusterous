@@ -1,5 +1,5 @@
 import os
-import yaml
+import re
 
 """
 Module for storing default and static values
@@ -17,12 +17,13 @@ cached_environment_file_path = local_environment_dir + '/' + cached_environment_
 
 remote_environment_dir = '/root/environment'
 
-
 current_controller_ip_file = local_config_dir + '/' + 'current_controller'
 cluster_info_file = local_config_dir + '/' + 'cluster_info.yml'
 
-controller_ami_id = 'ami-fd4708c7'
-node_ami_id = 'ami-47eaad7d'
+
+taggable_name_re = re.compile('^[\w-]+$')       # For user supplied strings such as cluster name
+taggable_name_max_length = 64       # Arbitrary but ample, keeping in mind AWS keys can be max 127 chars
+
 security_group_name_format = '{0}-sg'
 controller_name_format = '{0}-controller'
 controller_instance_type = 't2.small'
@@ -32,6 +33,8 @@ registry_s3_path = '/docker-registry'
 central_logging_name_format = '{0}-central-logging'
 central_logging_instance_type = 't2.small'
 central_logging_ami_id = 'ami-45eaad7f'
+controller_ami_id = 'ami-fd4708c7'
+node_ami_id = 'ami-47eaad7d'
 
 controller_root_volume_size = 10    # GB
 
@@ -46,9 +49,6 @@ remote_host_scripts_dir = 'clusterous'
 remote_host_key_file = 'key.pem'
 remote_host_vars_file = 'vars.yml'
 container_id_script_file = 'container_id.sh'
-
-node_tag_status_uninitialized = 'uninitialized'
-node_tag_status_initialized = 'initialized'
 
 mesos_port = 5050
 marathon_port = 8080
