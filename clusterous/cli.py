@@ -156,6 +156,9 @@ class CLIParser(object):
         central_logging = subparser.add_parser('logging', help='Creates an SSH tunnel to the logging system',
                                                 description='Creates an SSH tunnel to the centralized logging system and presents the URL to access it')
 
+        # ls-volume
+        ls_shared_volumes = subparser.add_parser('ls-shared-volumes', help='List available shared volumes left on cluster termination')
+
     def _init_clusterous_object(self, args):
         app = None
 
@@ -379,6 +382,15 @@ class CLIParser(object):
 
         return 0 if result else 1
 
+    def _ls_shared_volumes(self, args):
+        app = self._init_clusterous_object(args)
+        success, info = app.ls_shared_volumes()
+        output_fmt = '{0:<13} {1:<21} {2:<10} {3}\n'.format('ID', 'Created', 'Size (GB)', 'Cluster name')
+        for i in info:
+            output_fmt += '{0:<13} {1:<21} {2:<10} {3}\n'.format(i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name'))
+        print output_fmt
+        return 0 if success else 1
+
     def main(self, argv=None):
         parser = argparse.ArgumentParser(__prog_name__, description='Tool to create and manage compute clusters')
 
@@ -423,6 +435,9 @@ class CLIParser(object):
                 status = self._central_logging(args)
             elif args.subcmd == 'destroy':
                 status = self._destroy(args)
+            elif args.subcmd == 'ls-shared-volumes':
+                status = self._ls_shared_volumes(args)
+
         # TODO: this exception should not be caught here
         except NoWorkingClusterException as e:
             pass

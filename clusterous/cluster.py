@@ -1314,3 +1314,36 @@ class AWSCluster(Cluster):
 
         message = 'The logging system is available at this URL:\nhttp://localhost:{0}'.format(central_logging_port)
         return (True, message)
+
+    def info_shared_volume(self):
+        info = {'total': '',
+                'used': '',
+                'used_pct': '',
+                'free': ''}
+        with paramiko.SSHClient() as ssh:
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(hostname = self._get_controller_ip(),
+                        username = 'root',
+                        key_filename = os.path.expanduser(self._config['key_file']))
+            cmd = 'df -h |grep {0}'.format(defaults.shared_volume_path[:-1])
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            volume_info = ' '.join(stdout.read().split()).split()
+            if volume_info:
+                info['total'] = volume_info[1]
+                info['used'] =  volume_info[2]
+                info['used_pct'] = volume_info[4]
+                info['free'] = volume_info[3]
+        return info
+
+    def ls_shared_volumes(self):
+        from datetime import datetime
+        conn = boto.ec2.connect_to_region(self._config['region'],
+                    aws_access_key_id=self._config['access_key_id'],
+                    aws_secret_access_key=self._config['secret_access_key'])
+        volumes = conn.get_all_volumes(filters={'tag-key':defaults.instance_tag_key})
+        shared_volumes = []
+        for v in volumes:
+            if v.status == 'available':
+                shared_volumes.append({'id': v.id, 'created_ts': parser.parse(v.create_time).strftime("%Y-%m-%d %H:%M:%S"), 
+                                       'size':v.size, 'cluster_name':v.tags.get(defaults.instance_tag_key,'')})
+        return shared_volumes
