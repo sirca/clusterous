@@ -281,7 +281,9 @@ class Clusterous(object):
         env = environment.Environment(cl)
         info = cl.get_cluster_info()
         component_info =  env.get_running_components_by_node()
-        for node in info['nodes']:
+
+        # Fill in information about running components
+        for node in info.get('nodes', {}):
             components = []
             for c in component_info.get(node, []):
                 component = {}
@@ -291,8 +293,8 @@ class Clusterous(object):
             info['nodes'][node]['components'] = components
 
 
+        # Add information about shared volume usage
         info['shared_volume'] = cl.get_shared_volume_usage_info()
-
 
         return True, info
 

@@ -291,7 +291,6 @@ class CLIParser(object):
             return 1
 
         # Format cluster info
-        # print self.boldify(info['cluster_name']), 'status'
         central_logging_frag = '' if not info['central_logging'] else ' and central logging'
         instance_plural = '' if info['instance_count'] == 1 else 's'
         print '{0} has {1} instance{2} running, including controller{3}'.format(
@@ -299,17 +298,18 @@ class CLIParser(object):
                                             info['instance_count'],
                                             instance_plural,
                                             central_logging_frag)
-        print
+        # print
         print 'Controller IP:\t{0}'.format(info['controller']['ip'])
 
+        # Calculate uptime
         rd = relativedelta.relativedelta(seconds=info['controller']['uptime'])
         uptime_str = ''
         if rd.days: uptime_str += '{0} days '.format(rd.days)
-        if uptime_str or rd.hours: uptime_str += '{0} hours '.format(rd.hours)  # print 0 hours if preceeded by "days"
+        if uptime_str or rd.hours: uptime_str += '{0} hours '.format(rd.hours)  # 0 hours is valid if preceeded by "days"
         if rd.minutes: uptime_str += '{0} minutes'.format(rd.minutes)
         print 'Uptime:\t\t{0}'.format(uptime_str)
 
-        print ''
+        # Prepare node information table
         nodes_headers = map(self.boldify, ['Node Name', 'Instance Type', 'Count', 'Running Components'])
         nodes_table = []
 
@@ -331,14 +331,17 @@ class CLIParser(object):
             line = [node_name, node_info['type'], node_info['count'], components_str]
             nodes_table.append(line)
 
-
+        # Print table
+        print
         print tabulate.tabulate(nodes_table, headers=nodes_headers, tablefmt='plain')
 
+        # Print shared volume info
         if info['shared_volume']:
             print '\n', self.boldify('Shared Volume')
             vinfo = info['shared_volume']
             print '{0} ({1}) used of {2}'.format(vinfo['used'], vinfo['used_percent'], vinfo['total'])
             print '{0} available'.format(vinfo['free'])
+
         return 0
 
     def _destroy(self, args):
