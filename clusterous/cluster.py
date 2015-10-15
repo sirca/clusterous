@@ -12,11 +12,9 @@ import stat
 import re
 import errno
 from datetime import datetime
-from dateutil import parser
 from collections import namedtuple
 
-
-from dateutil.relativedelta import relativedelta
+import dateutil.parser
 import boto.ec2
 import boto.s3.connection
 import paramiko
@@ -647,7 +645,8 @@ class AWSCluster(Cluster):
                                         key_name=c['key_pair'], instance_type=self._controller_instance_type,
                                         subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
 
-        controller_tags = {'Name': defaults.controller_name_format.format(cluster_name)}
+        controller_tags = {'Name': defaults.controller_name_format.format(cluster_name),
+                            defaults.instance_node_type_tag_key: defaults.controller_name_tag_value}
         controller_tags_and_res = [('controller', controller_tags, controller_res.instances)]
 
         # Loop through node groups and launch all
@@ -657,7 +656,8 @@ class AWSCluster(Cluster):
             res = conn.run_instances(defaults.node_ami_id, min_count=num_nodes, max_count=num_nodes,
                                 key_name=c['key_pair'], instance_type=instance_type,
                                 subnet_id=c['subnet_id'], security_group_ids=[sg_id])
-            node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag)}
+            node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag),
+                        defaults.instance_node_type_tag_key: node_tag}
             node_tags_and_res.append((node_tag, node_tags, res.instances))
 
         # Launch logging instance if necessary
@@ -667,7 +667,8 @@ class AWSCluster(Cluster):
             logging_res = conn.run_instances(defaults.central_logging_ami_id, min_count=1,
                                             key_name=c['key_pair'], instance_type=defaults.central_logging_instance_type,
                                             subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
-            logging_tags = {'Name': defaults.central_logging_name_format.format(cluster_name)}
+            logging_tags = {'Name': defaults.central_logging_name_format.format(cluster_name),
+                            defaults.instance_node_type_tag_key: defaults.central_logging_name_tag_value}
             logging_tags_and_res = [('central-logging', logging_tags, logging_res.instances)]
 
 
@@ -773,7 +774,7 @@ class AWSCluster(Cluster):
 
     def add_nodes(self, num_nodes, instance_type, node_name):
         success = False
-        self._logger.info('Launching {0} "{1}" nodes'.format(num_nodes, node_name))
+        self._logger.info('Creating {0} "{1}" nodes'.format(num_nodes, node_name))
 
         c = self._config
         nodes_info = [(num_nodes, instance_type, node_name)]
@@ -793,7 +794,8 @@ class AWSCluster(Cluster):
         res = conn.run_instances(defaults.node_ami_id, min_count=num_nodes, max_count=num_nodes,
                                 key_name=c['key_pair'], instance_type=instance_type,
                                 subnet_id=c['subnet_id'], security_group_ids=[sg_id])
-        node_tags = {'Name': defaults.node_name_format.format(self.cluster_name, node_name)}
+        node_tags = {'Name': defaults.node_name_format.format(self.cluster_name, node_name),
+                    defaults.instance_node_type_tag_key: node_name}
         node_tags_and_res = [(node_name, node_tags, res.instances)]
 
         self._logger.info('Waiting for nodes to start...')
@@ -1125,31 +1127,77 @@ class AWSCluster(Cluster):
 
         return True
 
-    def info_status(self):
-        info = {'name': self._get_working_cluster_name(),
-                'up_time': '',
-                'controller_ip': '',
-                }
+
+    def get_cluster_info(self):
+        """
+        Gets information about instances running in current cluster,
+        returns dictionary
+        """
+        nodes_info = {}
+        controller_info = {}
+        central_logging_info = {}
         instances = self._get_instances(self.cluster_name)
-        if not instances:
-            return {}
+
         for instance in instances:
-            if defaults.controller_name_format.format(self.cluster_name) in instance.tags['Name']:
-                info['controller_ip'] = str(instance.ip_address)
-                launch_time = parser.parse(instance.launch_time)
-                info['up_time'] = relativedelta(datetime.now(launch_time.tzinfo), launch_time)
+            node_name = instance.tags[defaults.instance_node_type_tag_key]
+            if node_name == defaults.controller_name_tag_value:
+                # Controller instance
+                if controller_info:     # Shouldn't happen
+                    self._logger.warning('There appears to be more than one controller running')
+
+                launch_time = dateutil.parser.parse(instance.launch_time)
+                uptime = (datetime.now(launch_time.tzinfo) - launch_time).total_seconds()
+                controller_info = {
+                                    'ip': str(instance.ip_address),
+                                    'type': instance.instance_type,
+                                    'uptime': int(uptime)
+                }
+            elif node_name == defaults.central_logging_name_tag_value:
+                if central_logging_info:     # Shouldn't happen
+                    self._logger.warning('There appears to be more than one central logging instance running')
+
+                central_logging_info = {
+                                    'type': instance.instance_type
+                }
+            else:
+                if node_name not in nodes_info:
+                    nodes_info[node_name] = {
+                                        'type': instance.instance_type,
+                                        'count': 1
+                    }
+                else:
+                    nodes_info[node_name]['count'] += 1
+
+        info = {
+                'cluster_name': self.cluster_name,
+                'instance_count': len(instances),
+                'nodes': nodes_info,
+                'controller': controller_info,
+                'central_logging': central_logging_info
+        }
+
         return info
 
-    def info_instances(self):
+    def get_shared_volume_usage_info(self):
+        """
+        Gets information about the free space on the shared volume,
+        returns dictionary
+        """
         info = {}
-        instances = self._get_instances(self.cluster_name)
-        if not instances:
-            return {}
-        for instance in instances:
-            if instance.instance_type not in info:
-                info[instance.instance_type] = 0
-            info[instance.instance_type] += 1
+        ssh = self._ssh_to_controller()
+
+        cmd = 'df -h | grep {0}'.format(defaults.shared_volume_path[:-1])
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+
+        volume_info = ' '.join(stdout.read().split()).split()
+        if volume_info:
+            info =  { 'total': volume_info[1],
+                      'used': volume_info[2],
+                      'used_percent': volume_info[4],
+                      'free': volume_info[3]
+                    }
         return info
+
 
     def connect_to_container(self, component_name):
         '''
@@ -1222,7 +1270,7 @@ class AWSCluster(Cluster):
 
         return (True, 'Ok')
 
-    def central_logging(self):
+    def connect_to_central_logging(self):
         """
         Creates an SSH tunnel to the logging system
         """
@@ -1241,23 +1289,3 @@ class AWSCluster(Cluster):
 
         message = 'The logging system is available at this URL:\nhttp://localhost:{0}'.format(central_logging_port)
         return (True, message)
-
-    def info_shared_volume(self):
-        info = {'total': '',
-                'used': '',
-                'used_pct': '',
-                'free': ''}
-        with paramiko.SSHClient() as ssh:
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostname = self._get_controller_ip(),
-                        username = 'root',
-                        key_filename = os.path.expanduser(self._config['key_file']))
-            cmd = 'df -h |grep {0}'.format(defaults.shared_volume_path[:-1])
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            volume_info = ' '.join(stdout.read().split()).split()
-            if volume_info:
-                info['total'] = volume_info[1]
-                info['used'] =  volume_info[2]
-                info['used_pct'] = volume_info[4]
-                info['free'] = volume_info[3]
-        return info

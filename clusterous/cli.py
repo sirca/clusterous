@@ -5,6 +5,9 @@ import argparse
 import logging
 import textwrap
 
+import tabulate
+from dateutil import relativedelta
+
 import clusterousmain
 from clusterous import __version__, __prog_name__
 from helpers import NoWorkingClusterException
@@ -48,6 +51,13 @@ class CLIParser(object):
         libs = ['boto', 'paramiko', 'requests', 'marathon']
         for l in libs:
             logging.getLogger(l).setLevel(logging.WARNING)
+
+    @staticmethod
+    def boldify(s):
+        """
+        Adds shell formatting characters to s to make it bold when printed
+        """
+        return '\033[1m' + str(s) + '\033[0m'
 
 
     def _create_args(self, parser):
@@ -280,47 +290,55 @@ class CLIParser(object):
             print info
             return 1
 
-        # Formating
-        up_time=info.get('cluster',{}).get('up_time')
-        up_time_str = ''
-        if up_time.years > 0: up_time_str += ' {0} years'.format(up_time.years)
-        if up_time.months > 0: up_time_str += ' {0} months'.format(up_time.months)
-        if up_time.days > 0: up_time_str += ' {0} days'.format(up_time.days)
-        if up_time.hours > 0: up_time_str += ' {0} hours'.format(up_time.hours)
-        if up_time.minutes > 0: up_time_str += ' {0} minutes'.format(up_time.minutes)
-        if len(info.get('applications')) == 0:
-            apps_str = '[No applications running]'
-        else:
-            apps_str = '\n'.join(['{0}: {1}'.format(k, str(v)) for k,v in info.get('applications').iteritems()])
+        # Format cluster info
+        # print self.boldify(info['cluster_name']), 'status'
+        central_logging_frag = '' if not info['central_logging'] else ' and central logging'
+        instance_plural = '' if info['instance_count'] == 1 else 's'
+        print '{0} has {1} instance{2} running, including controller{3}'.format(
+                                            self.boldify(info['cluster_name']),
+                                            info['instance_count'],
+                                            instance_plural,
+                                            central_logging_frag)
+        print
+        print 'Controller IP:\t{0}'.format(info['controller']['ip'])
 
-        output_fmt = textwrap.dedent("""\
-                        CLUSTER:
-                        Name: {cluster_name}
-                        Uptime: {up_time}
-                        Controller IP: {controller_ip}
+        rd = relativedelta.relativedelta(seconds=info['controller']['uptime'])
+        uptime_str = ''
+        if rd.days: uptime_str += '{0} days '.format(rd.days)
+        if uptime_str or rd.hours: uptime_str += '{0} hours '.format(rd.hours)  # print 0 hours if preceeded by "days"
+        if rd.minutes: uptime_str += '{0} minutes'.format(rd.minutes)
+        print 'Uptime:\t\t{0}'.format(uptime_str)
 
-                        INSTANCES:
-                        {instances}
+        print ''
+        nodes_headers = map(self.boldify, ['Node Name', 'Instance Type', 'Count', 'Running Components'])
+        nodes_table = []
 
-                        APPLICATION COMPONENTS:
-                        {applications}
+        # Add controller and logging instances to table
+        nodes_table.append(['[controller]', info['controller']['type'], 1, '--'])
 
-                        SHARED VOLUME:
-                        Total: {volume_total}
-                        Used: {volume_used} ({volume_used_pct})
-                        Free: {volume_free}\
-                        """)
-        output = output_fmt.format(cluster_name=info.get('cluster',{}).get('name'),
-                       up_time=up_time_str,
-                       controller_ip=info.get('cluster',{}).get('controller_ip'),
-                       volume_total=info.get('volume',{}).get('total'),
-                       volume_used=info.get('volume',{}).get('used'),
-                       volume_used_pct=info.get('volume',{}).get('used_pct'),
-                       volume_free=info.get('volume',{}).get('free'),
-                       instances='\n'.join(['{0}: {1}'.format(k, str(v)) for k,v in info.get('instances').iteritems()]),
-                       applications=apps_str,
-                       )
-        print output
+        if info['central_logging']:
+            nodes_table.append(['[logging]', info['central_logging']['type'], 1, '--'])
+
+        # Add regular nodes
+        for node_name, node_info in info['nodes'].iteritems():
+            components_str = '[None]'
+            components = []
+            for c in node_info['components']:
+                components.append(c['name'])
+            if components:
+                components_str = ', '.join(components)
+
+            line = [node_name, node_info['type'], node_info['count'], components_str]
+            nodes_table.append(line)
+
+
+        print tabulate.tabulate(nodes_table, headers=nodes_headers, tablefmt='plain')
+
+        if info['shared_volume']:
+            print '\n', self.boldify('Shared Volume')
+            vinfo = info['shared_volume']
+            print '{0} ({1}) used of {2}'.format(vinfo['used'], vinfo['used_percent'], vinfo['total'])
+            print '{0} available'.format(vinfo['free'])
         return 0
 
     def _destroy(self, args):
