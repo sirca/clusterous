@@ -386,7 +386,8 @@ class CLIParser(object):
         app = self._init_clusterous_object(args)
         success, info = app.ls_shared_volumes()
         output_fmt = '{0:<13} {1:<21} {2:<10} {3}\n'
-        output = output_fmt.format('ID', 'Created', 'Size (GB)', 'Cluster name')
+        output = 'Shared volumes that were left on cluster termination:\n'
+        output += output_fmt.format('ID', 'Created', 'Size (GB)', 'Cluster name')
         for i in info:
             output += output_fmt.format(i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name'))
         print output
