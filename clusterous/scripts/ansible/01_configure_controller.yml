@@ -17,6 +17,7 @@
   sudo: True
   vars:
     central_logging_level: '{{ central_logging_level }}'
+    byo_volume: '{{ byo_volume }}'
   tasks:
     - name: add entry to hosts file
       lineinfile: dest=/etc/hosts line="127.0.0.1 controller registry"
@@ -41,6 +42,7 @@
     # Mount volume
     - name: format ebs
       shell: mkfs -t ext4 /dev/xvdf
+      when: byo_volume == 0
     - file: path=/home/data state=directory mode=0755
     - name: mount volume /home/data
       mount: name=/home/data src=/dev/xvdf fstype=ext4 state=mounted

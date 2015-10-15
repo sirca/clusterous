@@ -124,6 +124,10 @@ class CLIParser(object):
                                             description='Terminate the working cluster, destroying all resources')
         terminate.add_argument('--confirm', dest='no_prompt', action='store_true',
             default=False, help='Immediately terminate cluster without prompting for confirmation')
+        terminate.add_argument('--leave-shared-volume', dest='leave_shared_volume', action='store_true',
+            default=False, help='Do not delete the shared volume')
+        terminate.add_argument('--force-delete-shared-volume', dest='force_delete_shared_volume', action='store_true',
+            default=False, help='Force to delete shared volume')
 
         # Status
         cluster_status = subparser.add_parser('status', help='Status of the cluster',
@@ -176,6 +180,10 @@ class CLIParser(object):
         return 0 if success else 1
 
     def _terminate_cluster(self, args):
+        if args.leave_shared_volume and args.force_delete_shared_volume:
+            print 'Error: Use --leave-shared-volume or --force-delete-shared-volume but not both at the same time'
+            return 1
+            
         app = self._init_clusterous_object(args)
         cl = app.make_cluster_object()
         if not args.no_prompt:
@@ -186,7 +194,7 @@ class CLIParser(object):
                 return 1
 
         app = self._init_clusterous_object(args)
-        app.terminate_cluster()
+        app.terminate_cluster(args.leave_shared_volume, args.force_delete_shared_volume)
         return 0
 
     def _start_cluster(self, args):

@@ -91,6 +91,7 @@ class Clusterous(object):
             'shared_volume_size': SchemaEntry(False, 0, int, None),
             'central_logging_level': SchemaEntry(False, 0, int, None),
             'environment_file': SchemaEntry(False, '', str, None),
+            'shared_volume_id': SchemaEntry(False, '', str, None),
             'parameters': SchemaEntry(True, {}, dict, None)
         }
 
@@ -157,7 +158,7 @@ class Clusterous(object):
         builder = clusterbuilder.ClusterBuilder(cl)
         self._logger.info('Starting cluster...')
         started = builder.start_cluster(profile['cluster_name'], cluster_spec, profile['central_logging_level'],
-                                        profile['shared_volume_size'], profile['controller_instance_type'])
+                                        profile['shared_volume_size'], profile['controller_instance_type'], profile['shared_volume_id'])
 
         if not started:
             return False, ''
@@ -336,7 +337,7 @@ class Clusterous(object):
             message = 'Could not switch to cluster {0}'.format(cluster_name)
         return success, message
 
-    def terminate_cluster(self):
+    def terminate_cluster(self, leave_shared_volume, force_delete_shared_volume):
         cl = self.make_cluster_object()
         self._logger.info('Terminating cluster {0}'.format(cl.cluster_name))
-        cl.terminate_cluster()
+        cl.terminate_cluster(leave_shared_volume, force_delete_shared_volume)
