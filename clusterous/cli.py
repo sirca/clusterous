@@ -385,10 +385,11 @@ class CLIParser(object):
     def _ls_shared_volumes(self, args):
         app = self._init_clusterous_object(args)
         success, info = app.ls_shared_volumes()
-        output_fmt = '{0:<13} {1:<21} {2:<10} {3}\n'.format('ID', 'Created', 'Size (GB)', 'Cluster name')
+        output_fmt = '{0:<13} {1:<21} {2:<10} {3}\n'
+        output = output_fmt.format('ID', 'Created', 'Size (GB)', 'Cluster name')
         for i in info:
-            output_fmt += '{0:<13} {1:<21} {2:<10} {3}\n'.format(i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name'))
-        print output_fmt
+            output += output_fmt.format(i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name'))
+        print output
         return 0 if success else 1
 
     def main(self, argv=None):
