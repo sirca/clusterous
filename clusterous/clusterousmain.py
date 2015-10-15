@@ -300,17 +300,29 @@ class Clusterous(object):
 
     def central_logging(self):
         cl = self.make_cluster_object()
-        return cl.central_logging()
+        return cl.connect_to_central_logging()
 
     def cluster_status(self):
         cl = self.make_cluster_object()
         env = environment.Environment(cl)
-        all_info = {'cluster': cl.info_status(),
-                    'instances': cl.info_instances(),
-                    'applications': env.get_running_component_info(),
-                    'volume': cl.info_shared_volume()
-                    }
-        return (True, all_info)
+        info = cl.get_cluster_info()
+        component_info =  env.get_running_components_by_node()
+
+        # Fill in information about running components
+        for node in info.get('nodes', {}):
+            components = []
+            for c in component_info.get(node, []):
+                component = {}
+                component['name'] = c.get('app_id', '').strip('/')
+                component['count'] = c.get('instance_count', 0)
+                components.append(component)
+            info['nodes'][node]['components'] = components
+
+
+        # Add information about shared volume usage
+        info['shared_volume'] = cl.get_shared_volume_usage_info()
+
+        return True, info
 
     def workon(self, cluster_name):
         """
