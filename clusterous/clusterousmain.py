@@ -342,9 +342,16 @@ class Clusterous(object):
         self._logger.info('Terminating cluster {0}'.format(cl.cluster_name))
         cl.terminate_cluster(leave_shared_volume, force_delete_shared_volume)
 
-    def ls_shared_volumes(self):
+    def ls_volumes(self):
         """
         List available shared volumes left on cluster termination
         """
-        cl = self.make_cluster_object()
-        return (True, cl.ls_shared_volumes())
+        cl = self.make_cluster_object(cluster_name_required=False)
+        return (True, cl.ls_volumes())
+
+    def rm_volume(self, volume_id):
+        """
+        Deletes a shared volume left on cluster termination
+        """
+        cl = self.make_cluster_object(cluster_name_required=False)
+        return cl.rm_volume(volume_id)

@@ -1335,8 +1335,7 @@ class AWSCluster(Cluster):
                 info['free'] = volume_info[3]
         return info
 
-    def ls_shared_volumes(self):
-        from datetime import datetime
+    def ls_volumes(self):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
                     aws_secret_access_key=self._config['secret_access_key'])
@@ -1347,3 +1346,29 @@ class AWSCluster(Cluster):
                 shared_volumes.append({'id': v.id, 'created_ts': parser.parse(v.create_time).strftime("%Y-%m-%d %H:%M:%S"), 
                                        'size':v.size, 'cluster_name':v.tags.get(defaults.instance_tag_key,'')})
         return shared_volumes
+
+    def rm_volume(self, volume_id):
+        """
+        Deletes a shared volume left on cluster termination
+        """
+        success = False
+        message = ''
+        conn = boto.ec2.connect_to_region(self._config['region'],
+                    aws_access_key_id=self._config['access_key_id'],
+                    aws_secret_access_key=self._config['secret_access_key'])
+        try:
+            volume_obj = conn.get_all_volumes([volume_id])[0]
+            if volume_obj.status == 'available':
+                if defaults.instance_tag_key in volume_obj.tags:
+                    if conn.delete_volume(volume_id):
+                        success = True
+                        message = 'Volume "{0}" has been deleted'.format(volume_id)
+                    else:
+                        message = 'Unable to delete volume "{0}"'.format(volume_id)
+                else:
+                    message = 'Volume "{0}" was not created by Clusterous'.format(volume_id)
+            else:
+                message = 'Volume "{0}" is not available'.format(volume_id)
+        except boto.exception.EC2ResponseError as e:
+            message = 'Volume "{0}" does not exists'.format(volume_id)
+        return (success, message)

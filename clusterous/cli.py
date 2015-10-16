@@ -157,7 +157,11 @@ class CLIParser(object):
                                                 description='Creates an SSH tunnel to the centralized logging system and presents the URL to access it')
 
         # ls-volume
-        ls_shared_volumes = subparser.add_parser('ls-shared-volumes', help='List available shared volumes left on cluster termination')
+        ls_volumes = subparser.add_parser('ls-volumes', help='List available shared volumes')
+
+        # rm-shared-volumes
+        workon = subparser.add_parser('rm-volume', help='Deletes a shared volume left on cluster termination')
+        workon.add_argument('volume_id', action='store', help='Volume ID')
 
     def _init_clusterous_object(self, args):
         app = None
@@ -382,15 +386,26 @@ class CLIParser(object):
 
         return 0 if result else 1
 
-    def _ls_shared_volumes(self, args):
+    def _ls_volumes(self, args):
         app = self._init_clusterous_object(args)
-        success, info = app.ls_shared_volumes()
+        success, info = app.ls_volumes()
         output_fmt = '{0:<13} {1:<21} {2:<10} {3}\n'
         output = 'Shared volumes that were left on cluster termination:\n'
         output += output_fmt.format('ID', 'Created', 'Size (GB)', 'Cluster name')
         for i in info:
             output += output_fmt.format(i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name'))
         print output
+        return 0 if success else 1
+
+    def _rm_volume(self, args):
+        cont = raw_input('This will delete shared volume "{0}". Continue (y/n)? '.format(args.volume_id))
+        if cont.lower() != 'y' and cont.lower() != 'yes':
+            print 'Doing nothing'
+            return 1
+
+        app = self._init_clusterous_object(args)
+        success, message = app.rm_volume(args.volume_id)
+        print message
         return 0 if success else 1
 
     def main(self, argv=None):
@@ -437,8 +452,10 @@ class CLIParser(object):
                 status = self._central_logging(args)
             elif args.subcmd == 'destroy':
                 status = self._destroy(args)
-            elif args.subcmd == 'ls-shared-volumes':
-                status = self._ls_shared_volumes(args)
+            elif args.subcmd == 'ls-volumes':
+                status = self._ls_volumes(args)
+            elif args.subcmd == 'rm-volume':
+                status = self._rm_volume(args)
 
         # TODO: this exception should not be caught here
         except NoWorkingClusterException as e:
