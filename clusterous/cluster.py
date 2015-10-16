@@ -1315,26 +1315,6 @@ class AWSCluster(Cluster):
         message = 'The logging system is available at this URL:\nhttp://localhost:{0}'.format(central_logging_port)
         return (True, message)
 
-    def info_shared_volume(self):
-        info = {'total': '',
-                'used': '',
-                'used_pct': '',
-                'free': ''}
-        with paramiko.SSHClient() as ssh:
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostname = self._get_controller_ip(),
-                        username = 'root',
-                        key_filename = os.path.expanduser(self._config['key_file']))
-            cmd = 'df -h |grep {0}'.format(defaults.shared_volume_path[:-1])
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            volume_info = ' '.join(stdout.read().split()).split()
-            if volume_info:
-                info['total'] = volume_info[1]
-                info['used'] =  volume_info[2]
-                info['used_pct'] = volume_info[4]
-                info['free'] = volume_info[3]
-        return info
-
     def ls_volumes(self):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],

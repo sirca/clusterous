@@ -156,10 +156,10 @@ class CLIParser(object):
         central_logging = subparser.add_parser('logging', help='Creates an SSH tunnel to the logging system',
                                                 description='Creates an SSH tunnel to the centralized logging system and presents the URL to access it')
 
-        # ls-volume
+        # ls-volumes
         ls_volumes = subparser.add_parser('ls-volumes', help='List available shared volumes')
 
-        # rm-shared-volumes
+        # rm-shared
         workon = subparser.add_parser('rm-volume', help='Deletes a shared volume left on cluster termination')
         workon.add_argument('volume_id', action='store', help='Volume ID')
 
