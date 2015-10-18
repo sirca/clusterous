@@ -1323,7 +1323,7 @@ class AWSCluster(Cluster):
         shared_volumes = []
         for v in volumes:
             if v.status == 'available':
-                shared_volumes.append({'id': v.id, 'created_ts': parser.parse(v.create_time).strftime("%Y-%m-%d %H:%M:%S"), 
+                shared_volumes.append({'id': v.id, 'created_ts': dateutil.parser.parse(v.create_time).strftime("%Y-%m-%d %H:%M:%S"), 
                                        'size':v.size, 'cluster_name':v.tags.get(defaults.instance_tag_key,'')})
         return shared_volumes
 

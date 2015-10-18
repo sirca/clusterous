@@ -127,7 +127,7 @@ class CLIParser(object):
         terminate.add_argument('--leave-shared-volume', dest='leave_shared_volume', action='store_true',
             default=False, help='Do not delete the shared volume')
         terminate.add_argument('--force-delete-shared-volume', dest='force_delete_shared_volume', action='store_true',
-            default=False, help='Force to delete shared volume')
+            default=False, help='Force deletion of shared volume')
 
         # Status
         cluster_status = subparser.add_parser('status', help='Status of the cluster',
@@ -157,10 +157,12 @@ class CLIParser(object):
                                                 description='Creates an SSH tunnel to the centralized logging system and presents the URL to access it')
 
         # ls-volumes
-        ls_volumes = subparser.add_parser('ls-volumes', help='List available shared volumes')
+        ls_volumes = subparser.add_parser('ls-volumes', help='List unattached shared volumes',
+                                          description='List unattached shared volumes left on cluster termination')
 
         # rm-shared
-        workon = subparser.add_parser('rm-volume', help='Deletes a shared volume left on cluster termination')
+        workon = subparser.add_parser('rm-volume', help='Delete unattached shared volume',
+                                          description='Deletes unattached shared volume left on cluster termination')
         workon.add_argument('volume_id', action='store', help='Volume ID')
 
     def _init_clusterous_object(self, args):
@@ -389,14 +391,15 @@ class CLIParser(object):
     def _ls_volumes(self, args):
         app = self._init_clusterous_object(args)
         success, info = app.ls_volumes()
-        output_fmt = '{0:<13} {1:<21} {2:<10} {3}\n'
-        output = 'Shared volumes that were left on cluster termination:\n'
-        output += output_fmt.format('ID', 'Created', 'Size (GB)', 'Cluster name')
-        for i in info:
-            output += output_fmt.format(i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name'))
-        print output
-        return 0 if success else 1
 
+        # Prepare node information table
+        headers = map(self.boldify, ['ID', 'Created', 'Size (GB)', 'Cluster name'])
+        table = []
+        for i in info:
+            table.append([i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name')])
+        print tabulate.tabulate(table, headers=headers, tablefmt='plain')
+        return 0 if success else 1
+        
     def _rm_volume(self, args):
         cont = raw_input('This will delete shared volume "{0}". Continue (y/n)? '.format(args.volume_id))
         if cont.lower() != 'y' and cont.lower() != 'yes':
