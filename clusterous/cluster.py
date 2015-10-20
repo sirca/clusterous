@@ -14,7 +14,7 @@ import errno
 from datetime import datetime
 from collections import namedtuple
 
-import dateutil.parser
+from dateutil import parser, tz
 import boto.ec2
 import boto.s3.connection
 import paramiko
@@ -629,7 +629,7 @@ class AWSCluster(Cluster):
                 if conn.get_all_volumes([shared_volume_id])[0].status != 'available':
                     raise ClusterException('Volume "{0}" is not available'.format(shared_volume_id))
             except boto.exception.EC2ResponseError as e:
-                raise ClusterException('Volume "{0}" does not exists'.format(shared_volume_id))
+                raise ClusterException('Volume "{0}" does not exist'.format(shared_volume_id))
     
         # Create Security group
         self._logger.info('Creating security group')
@@ -689,7 +689,7 @@ class AWSCluster(Cluster):
         # Shared volume
         if shared_volume_id:
             # Attach shared volume
-            self._logger.debug('Attaching volume {0}'.format(shared_volume_id))
+            self._logger.info('Attaching EBS volume "{0}"'.format(shared_volume_id))
             conn.attach_volume(shared_volume_id, controller_res.instances[0].id, "/dev/sdf")
             while conn.get_all_volumes([shared_volume_id])[0].status != 'in-use':
                 time.sleep(2)
@@ -909,23 +909,26 @@ class AWSCluster(Cluster):
         self._terminate_instances_and_wait(conn, instances)
 
         # Shared volume
-        attached_volumes = conn.get_all_volumes(filters={'tag:Attached':self.cluster_name})
-        created_volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
-        if leave_shared_volume:
-            self._logger.info('Leaving shared volume')
-            volumes_dettached = [ v.remove_tags({'Attached': self.cluster_name}) for v in attached_volumes ]
+        volumes = conn.get_all_volumes(filters={'tag:Attached':self.cluster_name})
+        byo_volume = True if volumes else False
+        if byo_volume:
+            shared_volume = volumes[0]
+            shared_volume.remove_tags({'Attached': self.cluster_name})
         else:
-            if force_delete_shared_volume:
-                volumes_to_delete = set(attached_volumes + created_volumes)
+            volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
+            shared_volume = volumes[0]
+        
+        if leave_shared_volume:
+            self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
+        else:
+            if force_delete_shared_volume or not byo_volume:
+                if shared_volume.delete():
+                    self._logger.info('Shared volume "{0}" has been deleted'.format(shared_volume.id))
+                else:
+                    self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, shared_volume.id))
             else:
-                volumes_to_delete = [ v for v in created_volumes if v not in attached_volumes]
-            volumes_deleted = [ v.delete() for v in volumes_to_delete ]
-            volume_ids_str = ','.join([ v.id for v in volumes_to_delete])
-            if False in volumes_deleted:
-                self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, volume_ids_str))
-            else:
-                self._logger.debug('Deleted shared volume: {0}'.format(volume_ids_str))
-
+                self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
+            
         # Delete security group
         sg = conn.get_all_security_groups(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
         sg_deleted = [ g.delete() for g in sg ]
@@ -1170,7 +1173,7 @@ class AWSCluster(Cluster):
                 if controller_info:     # Shouldn't happen
                     self._logger.warning('There appears to be more than one controller running')
 
-                launch_time = dateutil.parser.parse(instance.launch_time)
+                launch_time = parser.parse(instance.launch_time)
                 uptime = (datetime.now(launch_time.tzinfo) - launch_time).total_seconds()
                 controller_info = {
                                     'ip': str(instance.ip_address),
@@ -1323,7 +1326,8 @@ class AWSCluster(Cluster):
         shared_volumes = []
         for v in volumes:
             if v.status == 'available':
-                shared_volumes.append({'id': v.id, 'created_ts': dateutil.parser.parse(v.create_time).strftime("%Y-%m-%d %H:%M:%S"), 
+                utc = datetime.strptime(v.create_time, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=tz.tzutc())
+                shared_volumes.append({'id': v.id, 'created_ts': utc.astimezone(tz.tzlocal()).strftime("%Y-%m-%d %H:%M:%S"), 
                                        'size':v.size, 'cluster_name':v.tags.get(defaults.instance_tag_key,'')})
         return shared_volumes
 
@@ -1348,7 +1352,7 @@ class AWSCluster(Cluster):
                 else:
                     message = 'Volume "{0}" was not created by Clusterous'.format(volume_id)
             else:
-                message = 'Volume "{0}" is not available'.format(volume_id)
+                message = 'Volume "{0}" cannot be deleted because it is currently in use'.format(volume_id)
         except boto.exception.EC2ResponseError as e:
-            message = 'Volume "{0}" does not exists'.format(volume_id)
+            message = 'Volume "{0}" does not exist'.format(volume_id)
         return (success, message)

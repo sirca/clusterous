@@ -393,7 +393,7 @@ class CLIParser(object):
         success, info = app.ls_volumes()
 
         # Prepare node information table
-        headers = map(self.boldify, ['ID', 'Created', 'Size (GB)', 'Cluster name'])
+        headers = map(self.boldify, ['ID', 'Created', 'Size (GB)', 'Last attached to'])
         table = []
         for i in info:
             table.append([i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name')])
