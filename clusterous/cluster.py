@@ -16,6 +16,7 @@ from collections import namedtuple
 
 from dateutil import parser, tz
 import boto.ec2
+import boto.vpc
 import boto.s3.connection
 import paramiko
 
@@ -624,10 +625,19 @@ class AWSCluster(Cluster):
                 self._logger.error(e)
                 raise ClusterException('Unrecoverable error while trying to start cluster')
 
+        # Shared volume
         if shared_volume_id:
             try:
-                if conn.get_all_volumes([shared_volume_id])[0].status != 'available':
+                shared_volume = conn.get_all_volumes([shared_volume_id])[0]
+                if shared_volume.status != 'available':
                     raise ClusterException('Volume "{0}" is not available'.format(shared_volume_id))
+                vpc_conn = boto.vpc.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],aws_secret_access_key=c['secret_access_key'])
+                subnet = vpc_conn.get_all_subnets([c['subnet_id']])[0]
+                if subnet.availability_zone != shared_volume.zone:
+                    raise ClusterException('Conflict on availability zone. Sub-net "{0}" in "{1}" and Volume "{2}" in "{3}"'.format(c['subnet_id'],
+                                                                                                                            subnet.availability_zone,
+                                                                                                                            shared_volume_id,
+                                                                                                                            shared_volume.zone))
             except boto.exception.EC2ResponseError as e:
                 raise ClusterException('Volume "{0}" does not exist'.format(shared_volume_id))
     
