@@ -14,8 +14,9 @@ import errno
 from datetime import datetime
 from collections import namedtuple
 
-import dateutil.parser
+from dateutil import parser, tz
 import boto.ec2
+import boto.vpc
 import boto.s3.connection
 import paramiko
 
@@ -585,7 +586,7 @@ class AWSCluster(Cluster):
 
 
     def init_cluster(self, cluster_name, cluster_spec, nodes_info=[], logging_level=0,
-                     shared_volume_size=None, controller_instance_type=None):
+                     shared_volume_size=None, controller_instance_type=None, shared_volume_id=None):
         """
         Initialise security group(s), cluster controller etc
         """
@@ -624,8 +625,22 @@ class AWSCluster(Cluster):
                 self._logger.error(e)
                 raise ClusterException('Unrecoverable error while trying to start cluster')
 
-
-
+        # Shared volume
+        if shared_volume_id:
+            try:
+                shared_volume = conn.get_all_volumes([shared_volume_id])[0]
+                if shared_volume.status != 'available':
+                    raise ClusterException('Volume "{0}" is not available'.format(shared_volume_id))
+                vpc_conn = boto.vpc.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],aws_secret_access_key=c['secret_access_key'])
+                subnet = vpc_conn.get_all_subnets([c['subnet_id']])[0]
+                if subnet.availability_zone != shared_volume.zone:
+                    raise ClusterException('Conflict on availability zone. Sub-net "{0}" in "{1}" and Volume "{2}" in "{3}"'.format(c['subnet_id'],
+                                                                                                                            subnet.availability_zone,
+                                                                                                                            shared_volume_id,
+                                                                                                                            shared_volume.zone))
+            except boto.exception.EC2ResponseError as e:
+                raise ClusterException('Volume "{0}" does not exist'.format(shared_volume_id))
+    
         # Create Security group
         self._logger.info('Creating security group')
         sg_id = self._create_security_group(cluster_name, conn)
@@ -681,27 +696,39 @@ class AWSCluster(Cluster):
         controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
         self._write_to_hosts_file(controller_inventory, [controller.values()[0].public_ips[0]], 'controller', overwrite=True)
 
-        # Create and attach shared volume
-        self._logger.info('Creating shared volume')
-        shared_vol = conn.create_volume(self._shared_volume_size, zone=controller_res.instances[0].placement)
-        while shared_vol.status != 'available':
-            time.sleep(2)
-            shared_vol.update()
-        self._logger.debug('Shared volume {0} created'.format(shared_vol.id))
-        conn.create_tags([shared_vol.id], {'Name': defaults.controller_name_format.format(cluster_name),
-                                           defaults.instance_tag_key: cluster_name})
+        # Shared volume
+        if shared_volume_id:
+            # Attach shared volume
+            self._logger.info('Attaching EBS volume "{0}"'.format(shared_volume_id))
+            conn.attach_volume(shared_volume_id, controller_res.instances[0].id, "/dev/sdf")
+            while conn.get_all_volumes([shared_volume_id])[0].status != 'in-use':
+                time.sleep(2)
+            conn.create_tags([shared_volume_id], {'Attached': cluster_name})
+        else:
+            # Create and attach shared volume
+            self._logger.info('Creating shared volume')
+            shared_vol = conn.create_volume(self._shared_volume_size, zone=controller_res.instances[0].placement)
+            while shared_vol.status != 'available':
+                time.sleep(2)
+                shared_vol.update()
+            self._logger.debug('Shared volume {0} created'.format(shared_vol.id))
+            conn.create_tags([shared_vol.id], {'Name': defaults.controller_name_format.format(cluster_name),
+                                               defaults.instance_tag_key: cluster_name})
+    
+            attach = shared_vol.attach(controller_res.instances[0].id, '/dev/sdf')
+            while shared_vol.attachment_state() != 'attached':
+                time.sleep(2)
+                shared_vol.update()
 
-        attach = shared_vol.attach(controller_res.instances[0].id, '/dev/sdf')
-        while shared_vol.attachment_state() != 'attached':
-            time.sleep(2)
-            shared_vol.update()
-
-        # Variables needed by nodes for configuring central logging
-        logging_vars = {'central_logging_level': logging_level, 'central_logging_ip': ''}
+        # Extra variables used by ansible scripts
+        extra_vars = {'central_logging_level': logging_level, 
+                      'central_logging_ip': '',
+                      'byo_volume': 1 if shared_volume_id else 0
+                      }
 
         # Configure controller
         controller_vars_dict = self._controller_vars_dict()
-        controller_vars_dict.update(logging_vars)
+        controller_vars_dict.update(extra_vars)
         controller_vars_file = self._make_vars_file(controller_vars_dict)
 
         self._logger.info('Configuring controller instance...')
@@ -718,25 +745,25 @@ class AWSCluster(Cluster):
         if logging_tags_and_res:
             self._logger.info('Configuring central logging...')
             central_logging = self._wait_and_tag_instance_reservations(logging_tags_and_res)
-            logging_vars['central_logging_ip'] = central_logging.values()[0].private_ips[0]     # private ip
+            extra_vars['central_logging_ip'] = central_logging.values()[0].private_ips[0]     # private ip
             logging_inventory = tempfile.NamedTemporaryFile()
             self._write_to_hosts_file(logging_inventory.name, [central_logging.values()[0].private_ips[0]], 'central-logging', overwrite=True)
             logging_inventory.flush()
             self._run_on_controller('configure_central_logging.yml', logging_inventory.name)
             logging_inventory.close()
         # Write logging vars to cluster info file
-        self._set_cluster_info(logging_vars)
+        self._set_cluster_info(extra_vars)
 
 
         # Configure nodes
         if node_tags_and_res:
-            self._configure_nodes(nodes_info, node_tags_and_res, controller.values()[0].public_ips[0], logging_vars)
+            self._configure_nodes(nodes_info, node_tags_and_res, controller.values()[0].public_ips[0], extra_vars)
 
         # TODO: this is useful for debugging, but remove at a later stage
         self.create_permanent_tunnel_to_controller(8080, 8080, prefix='marathon')
 
 
-    def _configure_nodes(self, nodes_info, node_tags_and_res, controller_ip, logging_vars={}):
+    def _configure_nodes(self, nodes_info, node_tags_and_res, controller_ip, extra_vars={}):
         nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
         if not nodes:
             return False
@@ -746,7 +773,7 @@ class AWSCluster(Cluster):
             self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag].private_ips, node_tag, overwrite=False)
         nodes_inventory.flush()
         self._logger.info('Configuring nodes...')
-        self._run_on_controller('configure_nodes.yml', nodes_inventory.name, logging_vars)
+        self._run_on_controller('configure_nodes.yml', nodes_inventory.name, extra_vars)
         nodes_inventory.close()
         return True
 
@@ -870,7 +897,7 @@ class AWSCluster(Cluster):
 
         return True
 
-    def terminate_cluster(self):
+    def terminate_cluster(self, leave_shared_volume, force_delete_shared_volume):
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
                     aws_secret_access_key=self._config['secret_access_key'])
@@ -891,16 +918,27 @@ class AWSCluster(Cluster):
 
         self._terminate_instances_and_wait(conn, instances)
 
-
-        # Delete EBS volume
-        volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
-        volumes_deleted = [ v.delete() for v in volumes ]
-        volume_ids_str = ','.join([ v.id for v in volumes])
-        if False in volumes_deleted:
-            self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, volume_ids_str))
+        # Shared volume
+        volumes = conn.get_all_volumes(filters={'tag:Attached':self.cluster_name})
+        byo_volume = True if volumes else False
+        if byo_volume:
+            shared_volume = volumes[0]
+            shared_volume.remove_tags({'Attached': self.cluster_name})
         else:
-            self._logger.debug('Deleted shared volume: {0}'.format(volume_ids_str))
-
+            volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
+            shared_volume = volumes[0]
+        
+        if leave_shared_volume:
+            self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
+        else:
+            if force_delete_shared_volume or not byo_volume:
+                if shared_volume.delete():
+                    self._logger.info('Shared volume "{0}" has been deleted'.format(shared_volume.id))
+                else:
+                    self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, shared_volume.id))
+            else:
+                self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
+            
         # Delete security group
         sg = conn.get_all_security_groups(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
         sg_deleted = [ g.delete() for g in sg ]
@@ -1145,7 +1183,7 @@ class AWSCluster(Cluster):
                 if controller_info:     # Shouldn't happen
                     self._logger.warning('There appears to be more than one controller running')
 
-                launch_time = dateutil.parser.parse(instance.launch_time)
+                launch_time = parser.parse(instance.launch_time)
                 uptime = (datetime.now(launch_time.tzinfo) - launch_time).total_seconds()
                 controller_info = {
                                     'ip': str(instance.ip_address),
@@ -1289,3 +1327,42 @@ class AWSCluster(Cluster):
 
         message = 'The logging system is available at this URL:\nhttp://localhost:{0}'.format(central_logging_port)
         return (True, message)
+
+    def ls_volumes(self):
+        conn = boto.ec2.connect_to_region(self._config['region'],
+                    aws_access_key_id=self._config['access_key_id'],
+                    aws_secret_access_key=self._config['secret_access_key'])
+        volumes = conn.get_all_volumes(filters={'tag-key':defaults.instance_tag_key})
+        shared_volumes = []
+        for v in volumes:
+            if v.status == 'available':
+                utc = datetime.strptime(v.create_time, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=tz.tzutc())
+                shared_volumes.append({'id': v.id, 'created_ts': utc.astimezone(tz.tzlocal()).strftime("%Y-%m-%d %H:%M:%S"), 
+                                       'size':v.size, 'cluster_name':v.tags.get(defaults.instance_tag_key,'')})
+        return shared_volumes
+
+    def rm_volume(self, volume_id):
+        """
+        Deletes a shared volume left on cluster termination
+        """
+        success = False
+        message = ''
+        conn = boto.ec2.connect_to_region(self._config['region'],
+                    aws_access_key_id=self._config['access_key_id'],
+                    aws_secret_access_key=self._config['secret_access_key'])
+        try:
+            volume_obj = conn.get_all_volumes([volume_id])[0]
+            if volume_obj.status == 'available':
+                if defaults.instance_tag_key in volume_obj.tags:
+                    if conn.delete_volume(volume_id):
+                        success = True
+                        message = 'Volume "{0}" has been deleted'.format(volume_id)
+                    else:
+                        message = 'Unable to delete volume "{0}"'.format(volume_id)
+                else:
+                    message = 'Volume "{0}" was not created by Clusterous'.format(volume_id)
+            else:
+                message = 'Volume "{0}" cannot be deleted because it is currently in use'.format(volume_id)
+        except boto.exception.EC2ResponseError as e:
+            message = 'Volume "{0}" does not exist'.format(volume_id)
+        return (success, message)

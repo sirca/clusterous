@@ -124,6 +124,10 @@ class CLIParser(object):
                                             description='Terminate the working cluster, destroying all resources')
         terminate.add_argument('--confirm', dest='no_prompt', action='store_true',
             default=False, help='Immediately terminate cluster without prompting for confirmation')
+        terminate.add_argument('--leave-shared-volume', dest='leave_shared_volume', action='store_true',
+            default=False, help='Do not delete the shared volume')
+        terminate.add_argument('--force-delete-shared-volume', dest='force_delete_shared_volume', action='store_true',
+            default=False, help='Force deletion of shared volume')
 
         # Status
         cluster_status = subparser.add_parser('status', help='Status of the cluster',
@@ -152,6 +156,15 @@ class CLIParser(object):
         central_logging = subparser.add_parser('logging', help='Creates an SSH tunnel to the logging system',
                                                 description='Creates an SSH tunnel to the centralized logging system and presents the URL to access it')
 
+        # ls-volumes
+        ls_volumes = subparser.add_parser('ls-volumes', help='List unattached shared volumes',
+                                          description='List unattached shared volumes left on cluster termination')
+
+        # rm-shared
+        workon = subparser.add_parser('rm-volume', help='Delete unattached shared volume',
+                                          description='Deletes unattached shared volume left on cluster termination')
+        workon.add_argument('volume_id', action='store', help='Volume ID')
+
     def _init_clusterous_object(self, args):
         app = None
 
@@ -176,6 +189,10 @@ class CLIParser(object):
         return 0 if success else 1
 
     def _terminate_cluster(self, args):
+        if args.leave_shared_volume and args.force_delete_shared_volume:
+            print 'Error: Use --leave-shared-volume or --force-delete-shared-volume but not both at the same time'
+            return 1
+            
         app = self._init_clusterous_object(args)
         cl = app.make_cluster_object()
         if not args.no_prompt:
@@ -186,7 +203,7 @@ class CLIParser(object):
                 return 1
 
         app = self._init_clusterous_object(args)
-        app.terminate_cluster()
+        app.terminate_cluster(args.leave_shared_volume, args.force_delete_shared_volume)
         return 0
 
     def _start_cluster(self, args):
@@ -371,6 +388,29 @@ class CLIParser(object):
 
         return 0 if result else 1
 
+    def _ls_volumes(self, args):
+        app = self._init_clusterous_object(args)
+        success, info = app.ls_volumes()
+
+        # Prepare node information table
+        headers = map(self.boldify, ['ID', 'Created', 'Size (GB)', 'Last attached to'])
+        table = []
+        for i in info:
+            table.append([i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name')])
+        print tabulate.tabulate(table, headers=headers, tablefmt='plain')
+        return 0 if success else 1
+        
+    def _rm_volume(self, args):
+        cont = raw_input('This will delete shared volume "{0}". Continue (y/n)? '.format(args.volume_id))
+        if cont.lower() != 'y' and cont.lower() != 'yes':
+            print 'Doing nothing'
+            return 1
+
+        app = self._init_clusterous_object(args)
+        success, message = app.rm_volume(args.volume_id)
+        print message
+        return 0 if success else 1
+
     def main(self, argv=None):
         parser = argparse.ArgumentParser(__prog_name__, description='Tool to create and manage compute clusters')
 
@@ -415,6 +455,11 @@ class CLIParser(object):
                 status = self._central_logging(args)
             elif args.subcmd == 'destroy':
                 status = self._destroy(args)
+            elif args.subcmd == 'ls-volumes':
+                status = self._ls_volumes(args)
+            elif args.subcmd == 'rm-volume':
+                status = self._rm_volume(args)
+
         # TODO: this exception should not be caught here
         except NoWorkingClusterException as e:
             pass
