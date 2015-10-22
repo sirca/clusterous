@@ -113,7 +113,7 @@ The optional `--verbose` switch can be used to show more information about what 
 
 The first time you run this example, Clusterous may have to build the Docker image, which may take a few minutes. Additionally, there will be a few minute's wait when deploying the applications while the nodes download the newly built Docker image from the cluster's repository. Note that on subsequent runs on the same cluster, this delay doesn't happen as the nodes will be able to use a cached copy of the image.
 
-Clusterous will first copy the specified directories to the shared storage, build the image(s) if necessary, before going on to launch the containers. Since the environment file has an `expose_tunnel` section, the following will be output on the terminal when the environment has finishe launching:
+Clusterous will first copy the specified directories to the shared storage, build the image(s) if necessary, before going on to run the containers. Since the environment file has an `expose_tunnel` section, the following will be output on the terminal when the environment has finished launching:
 
 ```
 Message for user:
