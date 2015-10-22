@@ -158,6 +158,7 @@ class EnvironmentFile(object):
                 not validated_fields['cpu'] > 0):
                 raise ParseError('In "{0}", "cpu" must be positive'.format(component))
             if validated_fields['attach_volume'] not in ('yes', 'no'):
+                print ">{0}<".format(validated_fields['attach_volume'])
                 raise ParseError('In "{0}", "attach_volume" must be either yes or no'.format(component))
             new_comps[component] = validated_fields
 

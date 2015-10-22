@@ -122,7 +122,7 @@ class Clusterous(object):
             return self._cluster_class(self._config, cluster_name, cluster_name_required)
 
 
-    def start_cluster(self, profile_file, launch_env=True):
+    def create_cluster(self, profile_file, launch_env=True):
         """
         Create a new cluster from profile file
         """
@@ -156,31 +156,31 @@ class Clusterous(object):
         cl = self.make_cluster_object(cluster_name_required=False)
 
         builder = clusterbuilder.ClusterBuilder(cl)
-        self._logger.info('Starting cluster...')
-        started = builder.start_cluster(profile['cluster_name'], cluster_spec, profile['central_logging_level'],
+        self._logger.info('Creating cluster...')
+        created = builder.create_cluster(profile['cluster_name'], cluster_spec, profile['central_logging_level'],
                                         profile['shared_volume_size'], profile['controller_instance_type'], profile['shared_volume_id'])
 
-        if not started:
+        if not created:
             return False, ''
-        self._logger.info('Cluster "{0}" started'.format(profile['cluster_name']))
+        self._logger.info('Cluster "{0}" created'.format(profile['cluster_name']))
 
         message = ''
-        # Launch environment if environment file is available
+        # Run environment if environment file is available
         if env_file:
-            self._logger.info('Launching environment')
+            self._logger.info('Running environment...')
             try:
                 env = environment.Environment(cl)
-                # Launch environment (but wait 10 seconds for Mesos to init)
+                # Run environment (but wait 10 seconds for Mesos to init)
                 success, message = env.launch_from_spec(env_file, 10)
-                self._logger.info('Environment launched')
+                self._logger.info('Environment is running')
             except environment.Environment.LaunchError as e:
                 self._logger.error(e)
-                self._logger.error('Failed to launch environment')
+                self._logger.error('Failed to run environment')
                 return False, message
 
         return True, message
 
-    def launch_environment(self, environment_file):
+    def run_environment(self, environment_file):
         cl = self.make_cluster_object()
 
         try:
@@ -191,17 +191,17 @@ class Clusterous(object):
             raise EnvironmentFileError(e, filename=environment_file)
         except environment.Environment.LaunchError as e:
             self._logger.error(e)
-            self._logger.error('Failed to launch environment')
+            self._logger.error('Failed to run environment')
             return False, ''
 
         return success, message
 
-    def destroy_environment(self, tunnel_only=False):
+    def quit_environment(self, tunnel_only=False):
         cl = self.make_cluster_object()
 
         success = True
         if not tunnel_only:
-            # Destroy running apps
+            # Quit running apps
             env = environment.Environment(cl)
             success &= env.destroy()
         else:
@@ -337,21 +337,21 @@ class Clusterous(object):
             message = 'Could not switch to cluster {0}'.format(cluster_name)
         return success, message
 
-    def terminate_cluster(self, leave_shared_volume, force_delete_shared_volume):
+    def destroy_cluster(self, leave_shared_volume, force_delete_shared_volume):
         cl = self.make_cluster_object()
-        self._logger.info('Terminating cluster {0}'.format(cl.cluster_name))
+        self._logger.info('Destroying cluster {0}'.format(cl.cluster_name))
         cl.terminate_cluster(leave_shared_volume, force_delete_shared_volume)
 
     def ls_volumes(self):
         """
-        List available shared volumes left on cluster termination
+        List available shared volumes left behind from destroyed cluster
         """
         cl = self.make_cluster_object(cluster_name_required=False)
         return (True, cl.ls_volumes())
 
     def rm_volume(self, volume_id):
         """
-        Deletes a shared volume left on cluster termination
+        Deletes a shared volume left behind from destroyed cluster
         """
         cl = self.make_cluster_object(cluster_name_required=False)
         return cl.rm_volume(volume_id)
