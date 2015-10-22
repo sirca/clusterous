@@ -15,7 +15,7 @@ class ClusterBuilder(object):
         self._logger = logging.getLogger(__name__)
 
 
-    def start_cluster(self, cluster_name, cluster_spec, logging_system_level=0,
+    def create_cluster(self, cluster_name, cluster_spec, logging_system_level=0,
                         shared_volume_size=None, controller_instance_type=None, shared_volume_id=None):
         if self._started:
             return False

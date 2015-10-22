@@ -56,8 +56,8 @@ Ensure that the key file is not readable by other users, or Clusterous will be u
 
 Add appropriate values for all fields. The `clusterous_s3_bucket` field takes the name of an S3 bucket that Clusterous uses for storing some data (currently just built Docker images). Just specify a name, and Clusterous will create a new bucket by that name. However, make sure you use a unique name that you can share with others in your organisation. For example `myorg-experiments-clusterous-bucket`, where `myorg` is the name of your organisation.
 
-# Starting a cluster
-To start a cluster, you need to provide Clusterous some information via a _profile file_. Create a file using a text editor. For example:
+# Creating a cluster
+To create a cluster, you need to provide Clusterous some information via a _profile file_. Create a file using a text editor. For example:
 
 ```
 vi mycluster.yml
@@ -75,37 +75,44 @@ parameters:
 
 Replace `mycluster` with any appropriate name for your cluster, ideally something unique to prevent a conflict with other Clusterous users on your AWS account. You can of course specify any instance types or number of instances. Note that the number of instances includes the master (i.e. if you specify `instance_count` of 3, there will be 2 worker instances and 1 master instance).
 
-To start a cluster, type:
+To create a cluster, type:
 
-    clusterous start mycluster.yml
+    clusterous create mycluster.yml
     
 
-It will take several minutes to start the cluster. When the cluster has succesfully been started, you can run the `status` command to have a look:
+It will take several minutes to create the cluster. When the cluster has succesfully been created, you can run the `status` command to have a look:
 
     clusterous status
     
 You will see some information about the cluster name, the number of instances running, etc.
 
-You may stop a running environment with the `destroy` command.
+You may terminate a cluster by using the `destroy` command (see below).
 
-# Launching an environment
+# Running an environment
 In Clusterous, an `environment` refers to a Docker based application, along with any associated configuration and data. To run your application on a Clusterous cluster, you create an `environment file` containing instructions to run the application.
 
 Detailed documentation for creating environment files is located under [docs/environment_file.md](https://github.com/sirca/bdkd_cluster/blob/master/docs/environment_file.md).
 
 ## IPython Parallel
-As an example, the Clusterous source includes an IPython Parallel environment. The `launch` command is used to launch an environment on a running cluster. Once the cluster is launched, you can run IPython Parallel using the `ipython.yml` file located under `subprojects/environments/ipython-lite` in the Clusterous source. To launch, type the following (assuming you are in the bdkd_cluster root folder):
+As an example, the Clusterous source includes an IPython Parallel environment. The `run` command is used to launch an environment on a running cluster. Once the cluster is created, you can run IPython Parallel using the `ipython.yml` file located under `subprojects/environments/ipython-lite` in the Clusterous source. To launch, type the following (assuming you are in the bdkd_cluster root folder):
 
-    clusterous launch subprojects/environments/ipython-lite/ipython.yml
+    clusterous run subprojects/environments/ipython-lite/ipython.yml
     
-You will get detailed output as Clusterous launched IPython Parallel. When you run it for the first time (to be technical, for the first time with your configured S3 bucket), it takes some time to launch as it builds an IPython Parallel Docker image. This built image is stored in the S3 bucket you specified in the configuration file.
+You will get detailed output as Clusterous starts up IPython Parallel. When you launch it for the first time (to be technical, for the first time with your configured S3 bucket), it takes some time to run as it builds an IPython Parallel Docker image. This built image is stored in the S3 bucket you specified in the configuration file.
 
-Once it has launched, Clusterous will output a URL to the IPython notebook on your cluster. Open this URL in your web browser to access the IPython notebook.
+Once it has run, Clusterous will output a URL to the IPython notebook on your cluster. Open this URL in your web browser to access the IPython notebook.
 
-# Terminating the cluster
-Once you are done, run the `terminate` subcommand to stop the cluster.
+## Quiting the environment
+If you want to run another environment on the cluster, or relaunch the current environment, you first need to stop the currently running one. Simply use:
 
-    clusterous terminate
+    clusterous quit
+    
+And you will be prompted to confirm before clusterous stops the running containers. This command will not touch any of the data in the shared volume.
+
+# Destroy the cluster
+Once you are done, run the `destroy` subcommand to stop the cluster. This will remove all AWS resources that Clusterous created (with the exception of the Clusterous S3 bucket).
+
+    clusterous destroy
     
 # Adding and removing nodes
 You can scale the number of nodes on a cluster using the `add-nodes` and `rm-nodes` commands. Any running application will also be scaled according the parameters specified in the application's environment file.
@@ -124,7 +131,7 @@ Take care when removing nodes from a cluster with a running application.
 
 # Advanced options
 
-The profile file used to start a cluster has some advanced options. The following example enables some extra (optional) features:
+The profile file used to create a cluster has some advanced options. The following example enables some extra (optional) features:
 
 ```yaml
 cluster_name: mycluster
@@ -138,7 +145,7 @@ parameters:
     instance_count: 3
 ```
 
-The `environment_file` field allows you to launch your environment on cluster start up. Simply specify a relative (or absolute) path to the YAML environment file, and Clusterous will automatically run the environment after the cluster starts up. This avoids the need for running the `launch` command separately.
+The `environment_file` field allows you to run your environment on cluster creation. Simply specify a relative (or absolute) path to the YAML environment file, and Clusterous will automatically run the environment after the cluster starts up. This avoids the need for running the `run` command separately.
 
 The `central_logging_level` field enables the logging system, useful for debugging problems. The logging system consists of a special dedicated virtual machine in your cluster that collects log messages from the cluster and makes them accessing via a web GUI. The number refers to the logging level; `1` means that only application logs are collected (i.e. if your application logs via syslog), `2` additionally enables collection of logs from system services. To view the logs, use `clusterous logging`.
 
@@ -192,7 +199,7 @@ When you (or your team) are running multiple clusters at once, you can switch be
 
     clusterous workon testcluster
 
-Note that Clusterous currently does not support launching more that one cluster from the same machine.
+Note that Clusterous currently does not support creating more that one cluster from the same machine.
 
 
 ## Connecting to a container
