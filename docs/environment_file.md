@@ -103,13 +103,13 @@ A consequence of this is that when specifying the `cpu` field or `count` field f
 
 The above example (with all associated files) is available in the Clusterous source under `subprojects/environments/basic_demo`.
 
-To launch the environment once your cluster has started, run the `launch` command, passing in the environment file. For example:
+To run the environment once your cluster has started, use the `run` command, passing in the environment file. For example:
 
 ```
-$ clusterous --verbose launch subprojects/environments/basic_demo/basic_env.yml
+$ clusterous run subprojects/environments/basic_demo/basic_env.yml
 ```
 
-The `--verbose` switch shows more information about what is happening.
+The optional `--verbose` switch can be used to show more information about what is happening.
 
 The first time you run this example, Clusterous may have to build the Docker image, which may take a few minutes. Additionally, there will be a few minute's wait when deploying the applications while the nodes download the newly built Docker image from the cluster's repository. Note that on subsequent runs on the same cluster, this delay doesn't happen as the nodes will be able to use a cached copy of the image.
 
@@ -124,16 +124,16 @@ Visit that URL in a browser and you will see a web page with a directory listing
 
 ## Stopping the environment
 
-To kill the launched environment, use the `destroy` command:
+To kill the launched environment, use the `quit` command:
 
 ```
-$ clusterous destroy
+$ clusterous quit
 ```
 
-Upon confirmation, Clusterous will kill the running container processes and destroy any SSH tunnel from your machine to the cluster. The `destroy` command leaves the built Docker image(s) untouched, and does not delete any files from the shared storage.
+Upon confirmation, Clusterous will kill the running container processes and destroy any SSH tunnel from your machine to the cluster. The `quit` command leaves the built Docker image(s) untouched, and does not delete any files from the shared storage.
 
-To stop the cluster itself, use the `terminate` command.
+To stop the cluster itself, use the `destroy` command.
 
 
 ## Next steps
-A more sophisticated example is available under `subprojects/environments/ipython-lite`. This example launches a configured IPython Parallel environment, and includes three different intercommunicating components and a number of configuration files.
+A more sophisticated example is available under `subprojects/environments/ipython-lite`. This example runs a configured IPython Parallel environment, and includes three different intercommunicating components and a number of configuration files.
