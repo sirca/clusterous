@@ -1,6 +1,53 @@
-# Clusterous
+# Clusterous changelog 
 
-## 0.3.1
+## Version 0.4.0
+
+This version has a number of refinements and bug fixes and adds the ability to use your own EBS volume as the cluster's shared volume.
+
+The most immediately obvious change is that the some command names have changed. Instead of using "start" and "terminate" to create and destroy a cluster, you now use "create" and "destroy" to do the same. Additionally, instead of using "launch" and "destroy" for environments, you now use "run" and "quit".
+
+### Improvements
+* Bring your own shared volume: you can have your cluster use your own EBS volume as the shared volume
+* When terminating the cluster, you can chose to not delete the shared volume and then reuse it on another cluster
+* Improved validation and error checking. Clusterous now checks for more types of errors in environment and profile files, and gives clear error messages
+* Status command has been overhauled: nodes and running applications now listed in easy to understand form
+* Some of the command names have been changed to reduce confusing between "terminate" and "destroy". You now "create" and "destroy" a cluster and "run" and "quit" an environment
+
+## Upgrading
+
+Clusterous 0.4.0 is not compatible with clusters created with an older version of Clusterous. Before installing the new version, terminate any existing clusters using the `terminate` command. The following are the steps to take:
+
+#### 1. Terminate any existing cluster
+
+```shell
+$ clusterous status
+$ clusterous terminate
+```
+
+#### 2. Uninstall existing version
+
+```shell
+$ pip freeze | grep clusterous
+$ pip uninstall clusterous
+```
+
+(note that if you installed from source by checking out the code and using setup.py, the uninstallation procedure will be different)
+
+#### 3. Install new version
+
+Full instructions in [README.md](https://github.com/sirca/bdkd_cluster/blob/master/README.md)
+
+#### 4. Note the new command names in v0.4.0
+
+```shell
+$ clusterous --version
+$ clusterous --help
+```
+
+Make sure to use the new `create` command (instead of `start`) to create your cluster.
+
+
+## Version 0.3.1
 
 ### Bugfix:
 * Fixed installation issue when using pip

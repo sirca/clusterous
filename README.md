@@ -1,7 +1,7 @@
 # Clusterous
 Run and manage a compute cluster on AWS using Docker.
 
-Latest release is v0.3.1.
+Latest release is v0.4.0.
 
 Written in Python. Requires Linux or OS X and Python 2.7.
 
@@ -13,9 +13,9 @@ There are two ways to install Clusterous: either via pip, or by checking out the
 
 To install Clusterous via Pip, you need to obtain the .zip package file. A copy is available via the GitHub page under the 'releases' section (download one of the source code zip files). Then run the following on the command line:
 
-    sudo pip install clusterous-v0.3.1.zip
+    sudo pip install clusterous-v0.4.0.zip
     
-Substitute `clusterous-v0.3.1.zip` with the exact file name.
+Substitute `clusterous-v0.4.0.zip` with the exact file name.
 
 ## Install from source (alternative)
 
