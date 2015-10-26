@@ -2,26 +2,27 @@ import logging
 import yaml
 import os.path
 
-class ParseError(Exception):
-    def __init__(self, msg, parents=[]):
-        self.msg = msg
-        self.parents = parents
+import helpers
+from helpers import SchemaEntry
+import defaults
 
-    def __str__(self):
-        p = ''
-        if self.parents:
-            p = 'In {0}'.format(' > '.join(self.parents))
+class EnvironmentSpecError(Exception):
+    pass
 
-        return '{0}: {1}'.format(p, self.msg)
+class ParseError(EnvironmentSpecError):
+    pass
 
-class UnknownValue(Exception):
+class UnknownValue(EnvironmentSpecError):
     """
     For use when unknown "$" value found in environment file.
     Usually means user hasn't supplied the value in the profile file.
     """
-    pass
+    def __str__(self):
+        return 'The following parameter was expected but not supplied: "{0}"'.format(self.message)
 
 class DictValidator(object):
+    # TODO: helpers.validate could potentiall replace this, if it supports
+    # arbitrary fields (like under the components section)
     """
     Simple class for validating a dictionary.
     Takes a trivial schema that states which keys
@@ -57,9 +58,16 @@ class EnvironmentFile(object):
     Reads and parses an environment file
     """
 
-    def __init__(self, env_file, params={}):
+    def __init__(self, env_file, params={}, profile_file_path=None):
         self._logger = logging.getLogger(__name__)
-        self._env_filename = env_file
+
+        # Obtain actual path of environment file (which may be relative to profile_file_path)
+        if profile_file_path:
+            profile_base = os.path.dirname(os.path.abspath(os.path.expanduser(profile_file_path)))
+            self._env_filename = os.path.join(profile_base, env_file)
+        else:
+            self._env_filename = env_file
+
         yaml_data = self._read_yaml(self._env_filename)
 
         # Get base path
@@ -80,57 +88,80 @@ class EnvironmentFile(object):
         Loads environment file into yaml dictionary
         """
 
+        if not os.path.isfile(environment_file):
+            raise EnvironmentSpecError('Cannot open file')
+
         stream = open(environment_file, 'r')
-        contents = yaml.load(stream)
+
+        try:
+            contents = yaml.load(stream)
+        except yaml.YAMLError as e:
+            raise EnvironmentSpecError('Invalid YAML format: ' + str(e))
+
         stream.close()
-        #TODO handle error
         return contents
 
     def _parse_environment_file(self, data, params):
         parsed = {}
-        try:
-            if not 'name' in data:
-                raise ParseError('Expected "name" section')
-            parsed['name'] = data['name']
+        tunnel_schema = {
+                    'service': SchemaEntry(True, '', str, None),
+                    'message': SchemaEntry(True, '', str, None)
+        }
+        env_schema = {
+                    'copy': SchemaEntry(False, [], list, None),
+                    'image': SchemaEntry(False, [], list, None),
+                    'components': SchemaEntry(True, {}, dict, None),
+                    'expose_tunnel': SchemaEntry(False, {}, dict, tunnel_schema)
+        }
+        top_schema = {
+                    'name': SchemaEntry(True, '', str, None),
+                    'environment': SchemaEntry(False, {}, dict, env_schema),
+                    'cluster': SchemaEntry(False, {}, dict, None)
+        }
 
-            parsed['environment'] = {}
-            parsed['cluster'] = {}
-            if 'environment' in data:
-                parsed['environment'] = self._parse_environment_section(data['environment'])
+        is_valid, message, validated = helpers.validate(data, top_schema)
 
-            if 'cluster' in data:
-                parsed['cluster'] = self._parse_cluster_section(data['cluster'], params)
+        if not is_valid:
+            raise ParseError(message)
 
-        except ParseError as e:
-            self._logger.error(e)
-        except UnknownValue as e:
-            self._logger.error('Expected value "{0}" not present'.format(e))
+        if not defaults.taggable_name_re.match(validated['name']):
+            raise ParseError('Invalid characters in name')
 
-        return parsed
+        if 'components' in validated.get('environment', {}):
+            validated['environment']['components'] = self._parse_components_section(validated['environment']['components'])
 
-    def _parse_environment_section(self, env):
-        # Validate environment section
+        if 'cluster' in validated:
+            validated['cluster'] = self._parse_cluster_section(validated['cluster'], params)
+
+        return validated
+
+    def _parse_components_section(self, comps):
+        # Validate environment section using DictValidator
         component_schema = {
                             'machine': (True,),
                             'cpu': (True,),
                             'image': (True,),
                             'cmd': (True,),
-                            'attach_volume': (False, 'yes'),
+                            'attach_volume': (False, True),
                             'ports': (False, ''),
                             'count': (False, 1),
                             'depends': (False, '')
                             }
         validator = DictValidator(component_schema)
-        new_env = {}
-        new_env['components'] = {}
-        for component, fields in env['components'].iteritems():
+        new_comps = {}
+        for component, fields in comps.iteritems():
             validated_fields = validator.validate(fields)
-            new_env['components'][component] = validated_fields
+            if (validated_fields['cpu'] != 'auto' and
+                    not type(validated_fields['cpu']) in (int, float)):
+                raise ParseError('In "{0}", invalid value for "cpu": {1}'.format(component, type(validated_fields['cpu'])))
+            if (isinstance(validated_fields['cpu'], (int, float)) and
+                not validated_fields['cpu'] > 0):
+                raise ParseError('In "{0}", "cpu" must be positive'.format(component))
+            if validated_fields['attach_volume'] not in (True, False):
+                raise ParseError('In "{0}", "attach_volume" must be a boolean yes/no value'.format(component))
+            new_comps[component] = validated_fields
 
-        new_env['image'] = env.get('image',{})
-        new_env['copy'] = env.get('copy',{})
-        new_env['expose_tunnel'] = env.get('expose_tunnel',{})
-        return new_env
+        return new_comps
 
     def _parse_cluster_section(self, cluster, params):
         new_cluster = {}
@@ -173,6 +204,8 @@ class EnvironmentFile(object):
                 var_val = params[var]
                 if not isinstance(var_val, int):
                     raise ParseError('Expected integer value for "{0}"'.format(var))
+                if var_val <= 0:
+                    raise ParseError('Expected positive value for "{0}"'.format(var))
 
                 # Ensure right hand argument is also an int
                 right = tokens[1].strip()

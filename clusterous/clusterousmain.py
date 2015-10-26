@@ -3,23 +3,34 @@ import os
 import sys
 import logging
 import logging.config
+import re
+
 import boto
 
 import defaults
 import cluster
 import clusterbuilder
 from environmentfile import EnvironmentFile
+import environmentfile
+
 import environment
-from helpers import AnsibleHelper
+import helpers
+from helpers import SchemaEntry
 
 
-class ClusterousError(Exception):
+class FileError(Exception):
+    def __init__(self, message, filename=''):
+        super(FileError, self).__init__(message)
+        self.filename = filename
+
+class ConfigError(FileError):
     pass
 
-class ConfigError(Exception):
-    def __init__(self, message, filename):
-        super(ConfigError, self).__init__(message)
-        self.filename = filename
+class EnvironmentFileError(FileError):
+    pass
+
+class ProfileError(Exception):
+    pass
 
 class Clusterous(object):
     """
@@ -67,37 +78,40 @@ class Clusterous(object):
         """
         full_path = os.path.abspath(os.path.expanduser(profile_file))
         if not os.path.isfile(full_path):
-            raise ClusterousError('Cannot open file "{0}"'.format(profile_file))
+            raise ProfileError('Cannot open file "{0}"'.format(profile_file))
         stream = open(full_path, 'r')
         try:
             contents = yaml.load(stream)
         except yaml.YAMLError as e:
-            raise ClusterousError('Error processing YAML file {0}'.format(e))
+            raise ProfileError('Invalid YAML format {0}'.format(e))
+
+        main_schema = {
+            'cluster_name': SchemaEntry(True, None, str, None),
+            'controller_instance_type': SchemaEntry(False, '', str, None),
+            'shared_volume_size': SchemaEntry(False, 0, int, None),
+            'central_logging_level': SchemaEntry(False, 0, int, None),
+            'environment_file': SchemaEntry(False, '', str, None),
+            'shared_volume_id': SchemaEntry(False, '', str, None),
+            'parameters': SchemaEntry(True, {}, dict, None)
+        }
+
 
         # Validate profile file
-        validated = {}
-        try:
-            validated['cluster_name'] = contents['cluster_name']
-        except KeyError as e:
-            raise ClusterousError('No "cluster_name" field in "{0}"'.format(profile_file))
+        is_valid, message, validated = helpers.validate(contents, main_schema)
 
-        validated['central_logging_level'] = contents.get('central_logging_level', 0)
-        validated['shared_volume_size'] = contents.get('shared_volume_size', defaults.shared_volume_size)
-        validated['controller_instance_type'] = contents.get('controller_instance_type', defaults.controller_instance_type)
-        validated['parameters'] = contents.get('parameters', {})
+        if not is_valid:
+            raise ProfileError(message)
 
-        environment_file = None
-        if 'environment_file' in contents:
-            # Get absolute path of environment file
-            # The given file path is assumed to be relative to the location of the profile file
-            base_path = os.path.dirname(full_path)
-            environment_file = os.path.join(base_path, contents['environment_file'])
+        if not defaults.taggable_name_re.match(validated['cluster_name']):
+            raise ProfileError('Unsupported characters in cluster_name "{0}"'.format(validated['cluster_name']))
+        if len(validated['cluster_name']) > defaults.taggable_name_max_length:
+            raise ProfileError('"cluster_name" cannot be more than {0} characters'.format(defaults.taggable_name_max_length))
 
-        validated['environment_file'] = environment_file
+        if not 0 <= validated['central_logging_level'] <= 2:
+            raise ProfileError('"central_logging_level" must be either 0, 1 or 2')
 
-        for key in contents.keys():
-            if key not in validated.keys():
-                raise ClusterousError('Unknown field "{0}" in profile file "{1}"'.format(key, profile_file))
+        if validated['shared_volume_size'] < 0:
+            raise ProfileError('"shared_volume_size" cannot be negative')
 
         return validated
 
@@ -107,23 +121,34 @@ class Clusterous(object):
         else:
             return self._cluster_class(self._config, cluster_name, cluster_name_required)
 
-    def start_cluster(self, profile_file, launch_env=True):
+
+    def create_cluster(self, profile_file, launch_env=True):
         """
         Create a new cluster from profile file
         """
         profile = self._read_profile(profile_file)
         env_file = None
         cluster_spec = None
-        if profile['environment_file']:
-            env_file = EnvironmentFile(profile['environment_file'], profile['parameters'])
 
-        # If necessary, obtain cluster spec
-        if not env_file or (not env_file.spec['cluster']):
-            default_file_path = defaults.get_script(defaults.default_cluster_def_filename)
-            cluster_env_file = EnvironmentFile(default_file_path, profile['parameters'])
-            cluster_spec = cluster_env_file.spec['cluster']
-        else:
-            cluster_spec = env_file.spec['cluster']
+        try:
+            if profile['environment_file']:
+                env_file = EnvironmentFile(profile['environment_file'], profile['parameters'], profile_file)
+
+            # If necessary, obtain cluster spec
+            if not env_file or (not env_file.spec['cluster']):
+                default_file_path = defaults.get_script(defaults.default_cluster_def_filename)
+                cluster_env_file = EnvironmentFile(default_file_path, profile['parameters'])
+                cluster_spec = cluster_env_file.spec['cluster']
+            else:
+                cluster_spec = env_file.spec['cluster']
+
+        except environmentfile.UnknownValue as e:
+            # If unknown value found, probably an error in the profile (i.e. user params)
+            raise ProfileError(str(e))
+        except environmentfile.EnvironmentSpecError as e:
+            # Otherwise it's a problem in the environment file itself
+            raise EnvironmentFileError(str(e), filename=profile['environment_file'])
+
 
         self._logger.debug('Actual cluster spec: {0}'.format(cluster_spec))
 
@@ -131,50 +156,52 @@ class Clusterous(object):
         cl = self.make_cluster_object(cluster_name_required=False)
 
         builder = clusterbuilder.ClusterBuilder(cl)
-        self._logger.info('Starting cluster...')
-        started = builder.start_cluster(profile['cluster_name'], cluster_spec, profile['central_logging_level'],
-                                        profile['shared_volume_size'], profile['controller_instance_type'])
+        self._logger.info('Creating cluster...')
+        created = builder.create_cluster(profile['cluster_name'], cluster_spec, profile['central_logging_level'],
+                                        profile['shared_volume_size'], profile['controller_instance_type'], profile['shared_volume_id'])
 
-        if not started:
+        if not created:
             return False, ''
-        self._logger.info('Cluster "{0}" started'.format(profile['cluster_name']))
+        self._logger.info('Cluster "{0}" created'.format(profile['cluster_name']))
 
         message = ''
-        # Launch environment if environment file is available
+        # Run environment if environment file is available
         if env_file:
-            self._logger.info('Launching environment')
+            self._logger.info('Running environment...')
             try:
                 env = environment.Environment(cl)
-                # Launch environment (but wait 10 seconds for Mesos to init)
+                # Run environment (but wait 10 seconds for Mesos to init)
                 success, message = env.launch_from_spec(env_file, 10)
-                self._logger.info('Environment launched')
+                self._logger.info('Environment is running')
             except environment.Environment.LaunchError as e:
                 self._logger.error(e)
-                self._logger.error('Failed to launch environment')
+                self._logger.error('Failed to run environment')
                 return False, message
 
         return True, message
 
-    def launch_environment(self, environment_file):
+    def run_environment(self, environment_file):
         cl = self.make_cluster_object()
 
         try:
             env_file = EnvironmentFile(environment_file)
             env = environment.Environment(cl)
             success, message = env.launch_from_spec(env_file)
+        except environmentfile.EnvironmentSpecError as e:
+            raise EnvironmentFileError(e, filename=environment_file)
         except environment.Environment.LaunchError as e:
             self._logger.error(e)
-            self._logger.error('Failed to launch environment')
+            self._logger.error('Failed to run environment')
             return False, ''
 
         return success, message
 
-    def destroy_environment(self, tunnel_only=False):
+    def quit_environment(self, tunnel_only=False):
         cl = self.make_cluster_object()
 
         success = True
         if not tunnel_only:
-            # Destroy running apps
+            # Quit running apps
             env = environment.Environment(cl)
             success &= env.destroy()
         else:
@@ -274,17 +301,29 @@ class Clusterous(object):
 
     def central_logging(self):
         cl = self.make_cluster_object()
-        return cl.central_logging()
+        return cl.connect_to_central_logging()
 
     def cluster_status(self):
         cl = self.make_cluster_object()
         env = environment.Environment(cl)
-        all_info = {'cluster': cl.info_status(),
-                    'instances': cl.info_instances(),
-                    'applications': env.get_running_component_info(),
-                    'volume': cl.info_shared_volume()
-                    }
-        return (True, all_info)
+        info = cl.get_cluster_info()
+        component_info =  env.get_running_components_by_node()
+
+        # Fill in information about running components
+        for node in info.get('nodes', {}):
+            components = []
+            for c in component_info.get(node, []):
+                component = {}
+                component['name'] = c.get('app_id', '').strip('/')
+                component['count'] = c.get('instance_count', 0)
+                components.append(component)
+            info['nodes'][node]['components'] = components
+
+
+        # Add information about shared volume usage
+        info['shared_volume'] = cl.get_shared_volume_usage_info()
+
+        return True, info
 
     def workon(self, cluster_name):
         """
@@ -298,7 +337,21 @@ class Clusterous(object):
             message = 'Could not switch to cluster {0}'.format(cluster_name)
         return success, message
 
-    def terminate_cluster(self):
+    def destroy_cluster(self, leave_shared_volume, force_delete_shared_volume):
         cl = self.make_cluster_object()
-        self._logger.info('Terminating cluster {0}'.format(cl.cluster_name))
-        cl.terminate_cluster()
+        self._logger.info('Destroying cluster {0}'.format(cl.cluster_name))
+        cl.terminate_cluster(leave_shared_volume, force_delete_shared_volume)
+
+    def ls_volumes(self):
+        """
+        List available shared volumes left behind from destroyed cluster
+        """
+        cl = self.make_cluster_object(cluster_name_required=False)
+        return (True, cl.ls_volumes())
+
+    def rm_volume(self, volume_id):
+        """
+        Deletes a shared volume left behind from destroyed cluster
+        """
+        cl = self.make_cluster_object(cluster_name_required=False)
+        return cl.rm_volume(volume_id)
