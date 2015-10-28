@@ -3,19 +3,31 @@ Run and manage a compute cluster on AWS using Docker.
 
 Latest release is v0.4.0.
 
-Written in Python. Requires Linux or OS X and Python 2.7.
+Requires Linux or OS X and Python 2.7.
 
 # Install
 
 There are two ways to install Clusterous: either via pip, or by checking out the code from the git repository.
 
+
 ## Install via pip
 
-To install Clusterous via Pip, you need to obtain the .zip package file. A copy is available via the GitHub page under the 'releases' section (download one of the source code zip files). Then run the following on the command line:
+To install Clusterous via pip, you need to obtain the .zip package file. A copy is available via the GitHub page under the 'releases' section (download one of the source code zip files). Then run the following on the command line:
 
     sudo pip install clusterous-v0.4.0.zip
     
 Substitute `clusterous-v0.4.0.zip` with the exact file name.
+
+### Note on Python versions
+Clusterous is written in Python 2.7, and currently will not work under Python 3. If you are in an environment with Python 2.x and 3.x installed side-by-side, you have to ensure Clusterous is installed to work with the correct version of Python. Check which version of pip you have:
+
+    pip --version
+    
+If it is the Python 3.x version, you will have to install the Python 2.x version of pip using your system's packaging tool. This version of pip can be run as `pip2`. You can verify this with:
+
+    pip2 --version
+    
+Use `pip2` to install Clusterous.
 
 ## Install from source (alternative)
 
@@ -25,6 +37,8 @@ Alternatively, you may check out the Clusterous source and install from source. 
     git clone https://<username>@github.com/sirca/bdkd_cluster.git
     cd bdkd_cluster
     python setup.py develop
+
+Note that you will have to ensure that Python 2.7 is used.
     
 ## Verify
 
