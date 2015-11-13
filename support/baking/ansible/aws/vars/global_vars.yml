@@ -1,11 +1,11 @@
 # General
-cluster_name: bdkd-cluster
+cluster_name: clustername
 region: ap-southeast-2
-keypair: bdkd-sirca
-vpc_id: vpc-18fd1f7d
-vpc_subnet_id: subnet-f17e8f94
+keypair: keypairname
+vpc_id: vpc-1235
+vpc_subnet_id: subnet-21345
 security_group_name: "{{ cluster_name }}-sg"
-billing_tag: "BDKD+BDKD_CC+dev"
+billing_tag: "mytag"
 
 # Baking
 ami_version: "20150910"
