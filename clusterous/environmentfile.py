@@ -142,7 +142,7 @@ class EnvironmentFile(object):
                             'cpu': (True,),
                             'image': (True,),
                             'cmd': (True,),
-                            'attach_volume': (False, 'yes'),
+                            'attach_volume': (False, True),
                             'ports': (False, ''),
                             'count': (False, 1),
                             'depends': (False, '')
@@ -157,8 +157,8 @@ class EnvironmentFile(object):
             if (isinstance(validated_fields['cpu'], (int, float)) and
                 not validated_fields['cpu'] > 0):
                 raise ParseError('In "{0}", "cpu" must be positive'.format(component))
-            if validated_fields['attach_volume'] not in ('yes', 'no'):
-                raise ParseError('In "{0}", "attach_volume" must be either yes or no'.format(component))
+            if validated_fields['attach_volume'] not in (True, False):
+                raise ParseError('In "{0}", "attach_volume" must be a boolean yes/no value'.format(component))
             new_comps[component] = validated_fields
 
         return new_comps

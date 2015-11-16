@@ -154,12 +154,16 @@ class Environment(object):
         marathon_tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
         marathon_tunnel.connect()
 
-        node_info = self._get_running_components_by_node(tunnel=marathon_tunnel)
+        node_info = self.get_running_components_by_node(marathon_tunnel=marathon_tunnel)
 
         if not node_name in node_info:
             return False, 'No app running on ' + node_name
+        if len(node_info[node_name]) > 1:
+            # Currently this should never happen, as scalable nodes can only
+            # have one component
+            return False, 'Scaling not possible because multiple components are running'
 
-        running_instances = node_info[node_name]['instance_count']
+        running_instances = node_info[node_name][0]['instance_count']
 
         instances_per_node = int(float(running_instances) / original_nodes_count)
 
@@ -172,11 +176,11 @@ class Environment(object):
         client = marathon.MarathonClient(servers=marathon_url, timeout=600)
 
         # Tell Marathon to scale app
-        client.scale_app(node_info[node_name]['app_id'], delta=num_instances_changed, force=True)
+        client.scale_app(node_info[node_name][0]['app_id'], delta=num_instances_changed, force=True)
 
         # Log info
         info_format = '{0} {1} running instances of component "{2}"'
-        app_name = node_info[node_name]['app_id'].strip('/')
+        app_name = node_info[node_name][0]['app_id'].strip('/')
         if num_nodes_changed < 0:
             action_str = 'Removed'
         else:
@@ -364,11 +368,17 @@ class Environment(object):
 
         return running_components
 
-    def _get_running_components_by_node(self, tunnel):
+    def get_running_components_by_node(self, marathon_tunnel=None):
         """
         Queries Marathon and gets names of each running component by worker, and number
         of instances of each
         """
+        if not marathon_tunnel:
+            tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
+            tunnel.connect()
+        else:
+            tunnel = marathon_tunnel
+
         marathon_url = 'http://localhost:{0}'.format(tunnel.local_port)
         client = marathon.MarathonClient(servers=marathon_url, timeout=600)
 
@@ -380,9 +390,13 @@ class Environment(object):
             con = app.constraints[0]
             if con.field == 'name' and con.operator == 'CLUSTER':
                 if con.value not in node_info:
-                    node_info[con.value] = {'app_id': app.id,
+                    node_info[con.value] = [{'app_id': app.id,
                                             'instance_count': app.instances
-                                            }
+                                            }]
+                else:
+                    node_info[con.value].append({'app_id': app.id,
+                                                'instance_count': app.instances
+                                                })
 
         return node_info
 
