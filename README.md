@@ -238,6 +238,14 @@ When you (or your team) are running multiple clusters at once, you can switch be
 Note that Clusterous currently does not support creating more that one cluster from the same machine.
 
 
+## Logging system
+
+If the logging system is enabled (see section on advanced options), you can access the logs with the help of the `logging` command:
+
+    clusterous logging
+    
+This command will create an SSH tunnel from your local machine to the logging instance on the cluster and will present you with a URL to access the logging system's web interface.
+
 ## Connecting to a container
 When you have an environment running, you may connect to one of your containers' shell via the `connect` command. For example, if your environment has a 'master' component, you can use:
 
