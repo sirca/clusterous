@@ -1,9 +1,15 @@
 # Clusterous
-Run and manage a compute cluster on AWS using Docker.
+Clusterous is a general purpose tool for cluster computing on AWS. It allows you to create and manage a cluster on AWS and deploy your software in the form of Docker containers.
 
-Latest release is v0.4.0.
+Clusterous is currently under active development. While it is currently usable, it should be regarded as pre-release software. 
 
 Requires Linux or OS X and Python 2.7.
+
+## About
+
+Clusterous is being developed by [SIRCA](http://www.sirca.org.au/) as part of the Big Data Knowledge Discovery (BDKD) project funded by [SIEF](http://www.sief.org.au).
+
+We are aiming to release a stable version 1.0 in Q1 2016. Leading up to the stable release we will be focusing on bugs, security, stability and platform support. We will also be adding some features and refining some existing functionality.
 
 # Install
 
@@ -204,12 +210,28 @@ You can easily delete a directory on the shared volume via `rm`:
 
     clusterous rm main
 
+## Custom shared volumes
+By default, Clusterous creates a shared volume when creating the cluster. Alternatively, you may set the `shared_volume_id` field in the profile file to the id of an EBS volume you want to use as the shared volume. If this field is specified, Clusterous does not create a shared volume for the cluster; instead, the specified volume is mounted in the same way.
+
+There are a couple of extra options related to custom shared volumes. When destroying a cluster, you may specify that the shared volume be left undeleted for use in another cluster. This can be useful if you want to avoid copying the data to your system and then copying it again to the shared volume of a new cluster. When issuing the `destroy` command, specify `--leave-shared-volume` to detach the shared volume before the cluster is terminated.
+
+To list previously detached shared volumes, use the `ls-volumes` command. This command will only show volumes that were created by Clusterous:
+
+    clusterous ls-volumes
+
+To delete a detached volume that isn't needed any more, use the `rm-volumes` command:
+
+    clusterous rm-volumes
+    
+Note that a given shared volume can only be attached to a single cluster at any time.
+
+By default, when destroying a cluster that has a custom shared volume, the shared volume isn't automatically destroyed. Use the `--force-delete-shared-volume` argument of the `destroy` command to delete the custom shared volume when destroying the cluster.
+
 
 # Other commands
 ## Set working cluster
 
 When you (or your team) are running multiple clusters at once, you can switch between them using the `workon` command.
-
 
     clusterous workon testcluster
 
@@ -238,6 +260,11 @@ The `image_dir` argument in the example is the directory containing a `Dockerfil
 You may obtain information about a Docker image in your private registry:
 
     clusterous image-info bdkd:sample_v1
+    
+# Licensing
+Clusterous is available under the Apache License (2.0). See the LICENSE.md file.
+
+Copyright NICTA 2015.
 
 
 
