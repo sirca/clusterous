@@ -1,7 +1,7 @@
 # Clusterous
 Clusterous is a general purpose tool for cluster computing on AWS. It allows you to create and manage a cluster on AWS and deploy your software in the form of Docker containers.
 
-Clusterous is currently under active development. While it is currently usable, it should be regarded as pre-release software. 
+Clusterous is currently under active development. While it is currently usable, it should be regarded as pre-release software. The latest release is 0.4.1. 
 
 Requires Linux or OS X and Python 2.7.
 
