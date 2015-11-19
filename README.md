@@ -219,9 +219,9 @@ To list previously detached shared volumes, use the `ls-volumes` command. This c
 
     clusterous ls-volumes
 
-To delete a detached volume that isn't needed any more, use the `rm-volumes` command:
+To delete a detached volume that isn't needed any more, use the `rm-volume` command:
 
-    clusterous rm-volumes
+    clusterous rm-volume
     
 Note that a given shared volume can only be attached to a single cluster at any time.
 
