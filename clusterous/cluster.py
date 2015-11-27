@@ -1,3 +1,17 @@
+# Copyright 2015 Nicta
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import subprocess
 import tempfile
 import sys
@@ -640,7 +654,7 @@ class AWSCluster(Cluster):
                                                                                                                             shared_volume.zone))
             except boto.exception.EC2ResponseError as e:
                 raise ClusterException('Volume "{0}" does not exist'.format(shared_volume_id))
-    
+
         # Create Security group
         self._logger.info('Creating security group')
         sg_id = self._create_security_group(cluster_name, conn)
@@ -714,14 +728,14 @@ class AWSCluster(Cluster):
             self._logger.debug('Shared volume {0} created'.format(shared_vol.id))
             conn.create_tags([shared_vol.id], {'Name': defaults.controller_name_format.format(cluster_name),
                                                defaults.instance_tag_key: cluster_name})
-    
+
             attach = shared_vol.attach(controller_res.instances[0].id, '/dev/sdf')
             while shared_vol.attachment_state() != 'attached':
                 time.sleep(2)
                 shared_vol.update()
 
         # Extra variables used by ansible scripts
-        extra_vars = {'central_logging_level': logging_level, 
+        extra_vars = {'central_logging_level': logging_level,
                       'central_logging_ip': '',
                       'byo_volume': 1 if shared_volume_id else 0
                       }
@@ -927,7 +941,7 @@ class AWSCluster(Cluster):
         else:
             volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
             shared_volume = volumes[0]
-        
+
         if leave_shared_volume:
             self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
         else:
@@ -938,7 +952,7 @@ class AWSCluster(Cluster):
                     self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, shared_volume.id))
             else:
                 self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
-            
+
         # Delete security group
         sg = conn.get_all_security_groups(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
         sg_deleted = [ g.delete() for g in sg ]
@@ -1337,7 +1351,7 @@ class AWSCluster(Cluster):
         for v in volumes:
             if v.status == 'available':
                 utc = datetime.strptime(v.create_time, '%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=tz.tzutc())
-                shared_volumes.append({'id': v.id, 'created_ts': utc.astimezone(tz.tzlocal()).strftime("%Y-%m-%d %H:%M:%S"), 
+                shared_volumes.append({'id': v.id, 'created_ts': utc.astimezone(tz.tzlocal()).strftime("%Y-%m-%d %H:%M:%S"),
                                        'size':v.size, 'cluster_name':v.tags.get(defaults.instance_tag_key,'')})
         return shared_volumes
 

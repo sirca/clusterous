@@ -1,3 +1,17 @@
+# Copyright 2015 Nicta
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
@@ -80,7 +94,7 @@ class MarathonManager:
                               "hostPort": int(i.split(":")[0]),
                               "containerPort": int(i.split(":")[1])}
                         port_mappings.append(pair)
-                
+
                 # Volumes
                 volume_mappings = []
                 volumes=self.module.params.get('volumes')
@@ -97,7 +111,7 @@ class MarathonManager:
                 force_pull_image=True
                 network="BRIDGE"
                 privileged=True
-                docker={"image": image, 
+                docker={"image": image,
                         "force_pull_image":force_pull_image,
                         "port_mappings":port_mappings,
                         "network":network,
