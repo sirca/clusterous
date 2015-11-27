@@ -1,5 +1,15 @@
 # Clusterous changelog 
 
+
+## Version 0.4.1
+
+### Improvements
+* Documentation and licensing has been update
+
+### Bugfix:
+* On installation explicitly use python2
+
+ 
 ## Version 0.4.0
 
 This version has a number of refinements and bug fixes and adds the ability to use your own EBS volume as the cluster's shared volume.
