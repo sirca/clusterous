@@ -3,6 +3,9 @@
 
 ## Version 0.4.1
 
+### Improvements
+* Documentation and licensing has been update
+
 ### Bugfix:
 * On installation explicitly use python2
 
