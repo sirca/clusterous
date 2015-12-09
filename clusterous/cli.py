@@ -23,6 +23,7 @@ import tabulate
 from dateutil import relativedelta
 
 import clusterousmain
+import cluster
 from clusterous import __version__, __prog_name__
 from helpers import NoWorkingClusterException
 
@@ -213,7 +214,7 @@ class CLIParser(object):
             return 1
 
         app = self._init_clusterous_object(args)
-        cl = app.make_cluster_object()
+        cl = app.make_cluster_object(cluster_must_be_running=False)
         if not args.no_prompt:
             prompt_str = 'This will destroy the cluster {0}. All data on the cluster will be deleted. Continue (y/n)? '.format(cl.cluster_name)
             cont = raw_input(prompt_str)
@@ -482,6 +483,12 @@ class CLIParser(object):
         # TODO: this exception should not be caught here
         except NoWorkingClusterException as e:
             pass
+        except clusterousmain.ClusterError as e:
+            print >> sys.stderr, e
+            print 'Use the "destroy" command to destroy the cluster'
+        except cluster.ClusterNotRunningException as e:
+            print >> sys.stderr, e
+            print 'Use "destroy" to clean up'
 
         return status
 

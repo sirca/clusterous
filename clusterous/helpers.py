@@ -21,6 +21,7 @@ import logging
 import collections
 
 from sshtunnel import SSHTunnelForwarder
+import sshtunnel
 from defaults import get_script
 
 
@@ -112,6 +113,9 @@ class NoWorkingClusterException(Exception):
     pass
 
 class SSHTunnel(object):
+    class TunnelException(Exception):
+        pass
+
     def __init__(self, host, username, key_file, remote_port, host_port=22):
         """
         Returns tuple consisting of local port and sshtunnel SSHTunnelForwarder object.
@@ -120,9 +124,13 @@ class SSHTunnel(object):
         logger = logging.getLogger('sshtunnel')
         logger.setLevel(logging.ERROR)
 
-        self._server = SSHTunnelForwarder((host, host_port),
-                ssh_username=username, ssh_private_key=key_file,
-                remote_bind_address=('127.0.0.1', remote_port), logger=logger)
+        try:
+            self._server = SSHTunnelForwarder((host, host_port),
+                    ssh_username=username, ssh_private_key=key_file,
+                    remote_bind_address=('127.0.0.1', remote_port), logger=logger)
+        except sshtunnel.BaseSSHTunnelForwarderError as e:
+            raise self.TunnelException(e)
+
 
     def connect(self):
         self._server.start()
