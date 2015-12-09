@@ -95,11 +95,14 @@ class Cluster(object):
 
     Prepares cluster to a stage where applications can be run on it
     """
-    def __init__(self, config, cluster_name=None, cluster_name_required=True):
+    def __init__(self, config, cluster_name=None, cluster_name_required=True, cluster_must_be_running=True):
         self._config = config
         self._running = False
         self._logger = logging.getLogger(__name__)
         self._controller_ip = ''
+        cluster_info = self._get_cluster_info()
+        cluster_running = cluster_info.get('running', False)
+        print "cluster running", cluster_running
         if cluster_name_required and not cluster_name:
             name = self._get_working_cluster_name()
             if not name:
@@ -110,11 +113,16 @@ class Cluster(object):
         elif cluster_name:
             self.cluster_name = cluster_name
 
+        if cluster_must_be_running and not cluster_running:
+            # Error
+            raise ClusterException('Cluster {0} is not currently running'.format(self._get_working_cluster_name()))
+
+
 
     def _get_cluster_info(self):
         cluster_info_file = os.path.expanduser(defaults.cluster_info_file)
         if not os.path.isfile(cluster_info_file):
-            return None
+            return {}
 
         f = open(os.path.expanduser(cluster_info_file), 'r')
         cluster_info = yaml.load(f)
@@ -618,170 +626,195 @@ class AWSCluster(Cluster):
 
         c = self._config
 
-        conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
-                                            aws_secret_access_key=c['secret_access_key'])
-        if not conn:
-            raise ClusterException('Cannot connect to AWS')
+        # Start of big try/catch block
+        try:
+            conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
+                                                aws_secret_access_key=c['secret_access_key'])
+            if not conn:
+                raise ClusterException('Cannot connect to AWS')
 
-        # Check if cluster by this name is already running
-        if self._get_instances(cluster_name, connection=conn):
-            self._logger.error('A cluster by the name "{0}" is already running, cannot start'.format(cluster_name))
-            raise ClusterException('Another cluster by the same name is running')
+            # Check if cluster by this name is already running
+            if self._get_instances(cluster_name, connection=conn):
+                self._logger.error('A cluster by the name "{0}" is already running, cannot start'.format(cluster_name))
+                raise ClusterException('Another cluster by the same name is running')
 
-        # Create registry bucket if it doesn't already exist
-        s3conn = boto.s3.connection.S3Connection(c['access_key_id'], c['secret_access_key'])
-        if not s3conn.lookup(c['clusterous_s3_bucket']):
-            try:
-                self._logger.info('Creating S3 bucket')
-                s3conn.create_bucket(c['clusterous_s3_bucket'], location=c['region'])
-            except boto.exception.S3CreateError as e:
-                self._logger.error('Unable to create S3 bucket due to an AWS conflict. Try again later.')
-                self._logger.error(e)
-                raise ClusterException('Unrecoverable error while trying to start cluster')
+            # Create registry bucket if it doesn't already exist
+            s3conn = boto.s3.connection.S3Connection(c['access_key_id'], c['secret_access_key'])
+            if not s3conn.lookup(c['clusterous_s3_bucket']):
+                try:
+                    self._logger.info('Creating S3 bucket')
+                    s3conn.create_bucket(c['clusterous_s3_bucket'], location=c['region'])
+                except boto.exception.S3CreateError as e:
+                    self._logger.error('Unable to create S3 bucket due to an AWS conflict. Try again later.')
+                    self._logger.error(e)
+                    raise ClusterException('Unrecoverable error while trying to start cluster')
 
-        # Shared volume
-        if shared_volume_id:
-            try:
-                shared_volume = conn.get_all_volumes([shared_volume_id])[0]
-                if shared_volume.status != 'available':
-                    raise ClusterException('Volume "{0}" is not available'.format(shared_volume_id))
-                vpc_conn = boto.vpc.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],aws_secret_access_key=c['secret_access_key'])
-                subnet = vpc_conn.get_all_subnets([c['subnet_id']])[0]
-                if subnet.availability_zone != shared_volume.zone:
-                    raise ClusterException('Conflict on availability zone. Sub-net "{0}" in "{1}" and Volume "{2}" in "{3}"'.format(c['subnet_id'],
-                                                                                                                            subnet.availability_zone,
-                                                                                                                            shared_volume_id,
-                                                                                                                            shared_volume.zone))
-            except boto.exception.EC2ResponseError as e:
-                raise ClusterException('Volume "{0}" does not exist'.format(shared_volume_id))
+            # Shared volume
+            if shared_volume_id:
+                try:
+                    shared_volume = conn.get_all_volumes([shared_volume_id])[0]
+                    if shared_volume.status != 'available':
+                        raise ClusterException('Volume "{0}" is not available'.format(shared_volume_id))
+                    vpc_conn = boto.vpc.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],aws_secret_access_key=c['secret_access_key'])
+                    subnet = vpc_conn.get_all_subnets([c['subnet_id']])[0]
+                    if subnet.availability_zone != shared_volume.zone:
+                        raise ClusterException('Conflict in availability zone. Subnet "{0}" in "{1}" and Volume "{2}" in "{3}"'.format(c['subnet_id'],
+                                                                                                                                subnet.availability_zone,
+                                                                                                                                shared_volume_id,
+                                                                                                                                shared_volume.zone))
+                except boto.exception.EC2ResponseError as e:
+                    raise ClusterException('Volume "{0}" does not exist'.format(shared_volume_id))
 
-        # Create Security group
-        self._logger.info('Creating security group')
-        sg_id = self._create_security_group(cluster_name, conn)
+            # Create Security group
+            self._logger.info('Creating security group')
+            sg_id = self._create_security_group(cluster_name, conn)
 
-        #
-        # Launch all instances
-        #
+            # Cluster info file: Having created the first cluster resource, set cluster name and flag
+            self._set_cluster_info({'cluster_name': cluster_name, 'running': False})
 
-        # Launch controller
-        self._logger.info('Starting controller')
-        block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
-        root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True)
-        root_vol.size = defaults.controller_root_volume_size
+            #
+            # Launch all instances
+            #
 
-        block_devices['/dev/sda1'] = root_vol
-        controller_res = conn.run_instances(defaults.controller_ami_id, min_count=1,
-                                        key_name=c['key_pair'], instance_type=self._controller_instance_type,
-                                        subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
+            # Launch controller
+            self._logger.info('Starting controller')
+            block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
+            root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
+            root_vol.size = defaults.controller_root_volume_size
 
-        controller_tags = {'Name': defaults.controller_name_format.format(cluster_name),
-                            defaults.instance_node_type_tag_key: defaults.controller_name_tag_value}
-        controller_tags_and_res = [('controller', controller_tags, controller_res.instances)]
-
-        # Loop through node groups and launch all
-        self._logger.info('Starting all nodes')
-        node_tags_and_res = []
-        for num_nodes, instance_type, node_tag in nodes_info:
-            res = conn.run_instances(defaults.node_ami_id, min_count=num_nodes, max_count=num_nodes,
-                                key_name=c['key_pair'], instance_type=instance_type,
-                                subnet_id=c['subnet_id'], security_group_ids=[sg_id])
-            node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag),
-                        defaults.instance_node_type_tag_key: node_tag}
-            node_tags_and_res.append((node_tag, node_tags, res.instances))
-
-        # Launch logging instance if necessary
-        logging_tags_and_res = []
-        if logging_level > 0:
-            self._logger.info('Starting central logging instance')
-            logging_res = conn.run_instances(defaults.central_logging_ami_id, min_count=1,
-                                            key_name=c['key_pair'], instance_type=defaults.central_logging_instance_type,
+            block_devices['/dev/sda1'] = root_vol
+            controller_res = conn.run_instances(defaults.controller_ami_id, min_count=1,
+                                            key_name=c['key_pair'], instance_type=self._controller_instance_type,
                                             subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
-            logging_tags = {'Name': defaults.central_logging_name_format.format(cluster_name),
-                            defaults.instance_node_type_tag_key: defaults.central_logging_name_tag_value}
-            logging_tags_and_res = [('central-logging', logging_tags, logging_res.instances)]
+
+            controller_tags = {'Name': defaults.controller_name_format.format(cluster_name),
+                                defaults.instance_node_type_tag_key: defaults.controller_name_tag_value}
+            controller_tags_and_res = [('controller', controller_tags, controller_res.instances)]
+
+            # Loop through node groups and launch all
+            self._logger.info('Starting all nodes')
+            node_tags_and_res = []
+            for num_nodes, instance_type, node_tag in nodes_info:
+                node_block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
+                node_root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
+                node_block_devices['/dev/sda1'] = node_root_vol
+                res = conn.run_instances(defaults.node_ami_id, min_count=num_nodes, max_count=num_nodes,
+                                    key_name=c['key_pair'], instance_type=instance_type,
+                                    subnet_id=c['subnet_id'], block_device_map=node_block_devices, security_group_ids=[sg_id])
+                node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag),
+                            defaults.instance_node_type_tag_key: node_tag}
+                node_tags_and_res.append((node_tag, node_tags, res.instances))
+
+            # Launch logging instance if necessary
+            logging_tags_and_res = []
+            if logging_level > 0:
+                self._logger.info('Starting central logging instance')
+                logging_res = conn.run_instances(defaults.central_logging_ami_id, min_count=1,
+                                                key_name=c['key_pair'], instance_type=defaults.central_logging_instance_type,
+                                                subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
+                logging_tags = {'Name': defaults.central_logging_name_format.format(cluster_name),
+                                defaults.instance_node_type_tag_key: defaults.central_logging_name_tag_value}
+                logging_tags_and_res = [('central-logging', logging_tags, logging_res.instances)]
 
 
-        # Wait for controller to launch
-        controller = self._wait_and_tag_instance_reservations(controller_tags_and_res)
+            # Wait for controller to launch
+            controller = self._wait_and_tag_instance_reservations(controller_tags_and_res)
 
-        # Create cluster info file, so that user immediately has a working cluster set
-        self._set_cluster_info({'controller_ip': controller.values()[0].public_ips[0], 'cluster_name': cluster_name})
+            # Add controller IP to cluster info file
+            self._set_cluster_info({'controller_ip': controller.values()[0].public_ips[0], 'cluster_name': cluster_name})
+            controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
+            self._write_to_hosts_file(controller_inventory, [controller.values()[0].public_ips[0]], 'controller', overwrite=True)
 
-        controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
-        self._write_to_hosts_file(controller_inventory, [controller.values()[0].public_ips[0]], 'controller', overwrite=True)
+            # Shared volume
+            if shared_volume_id:
+                # Attach shared volume
+                self._logger.info('Attaching EBS volume "{0}"'.format(shared_volume_id))
+                conn.attach_volume(shared_volume_id, controller_res.instances[0].id, "/dev/sdf")
+                while conn.get_all_volumes([shared_volume_id])[0].status != 'in-use':
+                    time.sleep(2)
+                conn.create_tags([shared_volume_id], {'Attached': cluster_name})
+            else:
+                # Create and attach shared volume
+                self._logger.info('Creating shared volume')
+                shared_vol = conn.create_volume(self._shared_volume_size, zone=controller_res.instances[0].placement)
+                while shared_vol.status != 'available':
+                    time.sleep(2)
+                    shared_vol.update()
+                self._logger.debug('Shared volume {0} created'.format(shared_vol.id))
+                conn.create_tags([shared_vol.id], {'Name': defaults.controller_name_format.format(cluster_name),
+                                                   defaults.instance_tag_key: cluster_name})
 
-        # Shared volume
-        if shared_volume_id:
-            # Attach shared volume
-            self._logger.info('Attaching EBS volume "{0}"'.format(shared_volume_id))
-            conn.attach_volume(shared_volume_id, controller_res.instances[0].id, "/dev/sdf")
-            while conn.get_all_volumes([shared_volume_id])[0].status != 'in-use':
-                time.sleep(2)
-            conn.create_tags([shared_volume_id], {'Attached': cluster_name})
-        else:
-            # Create and attach shared volume
-            self._logger.info('Creating shared volume')
-            shared_vol = conn.create_volume(self._shared_volume_size, zone=controller_res.instances[0].placement)
-            while shared_vol.status != 'available':
-                time.sleep(2)
-                shared_vol.update()
-            self._logger.debug('Shared volume {0} created'.format(shared_vol.id))
-            conn.create_tags([shared_vol.id], {'Name': defaults.controller_name_format.format(cluster_name),
-                                               defaults.instance_tag_key: cluster_name})
+                attach = shared_vol.attach(controller_res.instances[0].id, '/dev/sdf')
+                while shared_vol.attachment_state() != 'attached':
+                    time.sleep(2)
+                    shared_vol.update()
 
-            attach = shared_vol.attach(controller_res.instances[0].id, '/dev/sdf')
-            while shared_vol.attachment_state() != 'attached':
-                time.sleep(2)
-                shared_vol.update()
+            # Tag central logging
+            central_logging = {}
+            if logging_tags_and_res:
+                self._logger.debug('Tagging central logging...')
+                central_logging = self._wait_and_tag_instance_reservations(logging_tags_and_res)
 
-        # Extra variables used by ansible scripts
-        extra_vars = {'central_logging_level': logging_level,
-                      'central_logging_ip': '',
-                      'byo_volume': 1 if shared_volume_id else 0
-                      }
-
-        # Configure controller
-        controller_vars_dict = self._controller_vars_dict()
-        controller_vars_dict.update(extra_vars)
-        controller_vars_file = self._make_vars_file(controller_vars_dict)
-
-        self._logger.info('Configuring controller instance...')
-        AnsibleHelper.run_playbook(defaults.get_script('ansible/01_configure_controller.yml'),
-                                   controller_vars_file.name, self._config['key_file'],
-                                   hosts_file=controller_inventory)
-
-        controller_vars_file.close()
-
-        self._copy_environment_to_controller()
+            # Tag all nodes
+            nodes = {}
+            if node_tags_and_res:
+                nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
 
 
-        # Wait for logging instance to launch and configure
-        if logging_tags_and_res:
-            self._logger.info('Configuring central logging...')
-            central_logging = self._wait_and_tag_instance_reservations(logging_tags_and_res)
-            extra_vars['central_logging_ip'] = central_logging.values()[0].private_ips[0]     # private ip
-            logging_inventory = tempfile.NamedTemporaryFile()
-            self._write_to_hosts_file(logging_inventory.name, [central_logging.values()[0].private_ips[0]], 'central-logging', overwrite=True)
-            logging_inventory.flush()
-            self._run_on_controller('configure_central_logging.yml', logging_inventory.name)
-            logging_inventory.close()
-        # Write logging vars to cluster info file
-        self._set_cluster_info(extra_vars)
+
+            # Extra variables used by ansible scripts
+            extra_vars = {'central_logging_level': logging_level,
+                          'central_logging_ip': '',
+                          'byo_volume': 1 if shared_volume_id else 0
+                          }
+
+            # Configure controller
+            controller_vars_dict = self._controller_vars_dict()
+            controller_vars_dict.update(extra_vars)
+            controller_vars_file = self._make_vars_file(controller_vars_dict)
+
+            self._logger.info('Configuring controller instance...')
+            AnsibleHelper.run_playbook(defaults.get_script('ansible/01_configure_controller.yml'),
+                                       controller_vars_file.name, self._config['key_file'],
+                                       hosts_file=controller_inventory)
+
+            controller_vars_file.close()
+
+            self._copy_environment_to_controller()
 
 
-        # Configure nodes
-        if node_tags_and_res:
-            self._configure_nodes(nodes_info, node_tags_and_res, controller.values()[0].public_ips[0], extra_vars)
+            # Wait for logging instance to launch and configure
+            if central_logging:
+                extra_vars['central_logging_ip'] = central_logging.values()[0].private_ips[0]     # private ip
+                logging_inventory = tempfile.NamedTemporaryFile()
+                self._write_to_hosts_file(logging_inventory.name, [central_logging.values()[0].private_ips[0]], 'central-logging', overwrite=True)
+                logging_inventory.flush()
+                self._run_on_controller('configure_central_logging.yml', logging_inventory.name)
+                logging_inventory.close()
+            # Write logging vars to cluster info file
+            self._set_cluster_info(extra_vars)
+
+
+            # Configure nodes
+            if nodes:
+                self._configure_nodes(nodes_info, nodes, controller.values()[0].public_ips[0], extra_vars)
+
+        except (boto.exception.BotoClientError, boto.exception.BotoServerError) as e:
+            self._logger.critical('An error occured accessing AWS and the cluster could not be launched. Use "destroy" to destroy the cluster')
+        except KeyboardInterrupt as e:
+            self._logger.error('Cluster creation was interrupted. Use "destroy" to destroy cluster')
+        except Exception as e:
+            self._logger.error('An unknown error occured during cluster creation. Use "destroy" to destroy cluster')
+
+
+        # Set "running" flag in cluster info file
+        self._set_cluster_info({'running': True})
 
         # TODO: this is useful for debugging, but remove at a later stage
         self.create_permanent_tunnel_to_controller(8080, 8080, prefix='marathon')
 
 
-    def _configure_nodes(self, nodes_info, node_tags_and_res, controller_ip, extra_vars={}):
-        nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
-        if not nodes:
-            return False
-
+    def _configure_nodes(self, nodes_info, nodes, controller_ip, extra_vars={}):
         nodes_inventory = tempfile.NamedTemporaryFile()
         for num_nodes, instance_type, node_tag in nodes_info:
             self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag].private_ips, node_tag, overwrite=False)

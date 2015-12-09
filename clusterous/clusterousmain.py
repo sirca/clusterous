@@ -129,11 +129,15 @@ class Clusterous(object):
 
         return validated
 
-    def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
+    def make_cluster_object(self, cluster_name=None, cluster_name_required=True, cluster_must_be_running=True):
         if not (self._cluster_class and self._config):
             return None
         else:
-            return self._cluster_class(self._config, cluster_name, cluster_name_required)
+            try:
+                return self._cluster_class(self._config, cluster_name, cluster_name_required, cluster_must_be_running)
+            except cluster.ClusterException as e:
+                self._logger.error(e)
+                return None
 
 
     def create_cluster(self, profile_file, launch_env=True):
@@ -167,7 +171,7 @@ class Clusterous(object):
         self._logger.debug('Actual cluster spec: {0}'.format(cluster_spec))
 
         # Init Cluster object
-        cl = self.make_cluster_object(cluster_name_required=False)
+        cl = self.make_cluster_object(cluster_name_required=False, cluster_must_be_running=False)
 
         builder = clusterbuilder.ClusterBuilder(cl)
         self._logger.info('Creating cluster...')
@@ -352,7 +356,7 @@ class Clusterous(object):
         return success, message
 
     def destroy_cluster(self, leave_shared_volume, force_delete_shared_volume):
-        cl = self.make_cluster_object()
+        cl = self.make_cluster_object(cluster_must_be_running=True)
         self._logger.info('Destroying cluster {0}'.format(cl.cluster_name))
         cl.terminate_cluster(leave_shared_volume, force_delete_shared_volume)
 
