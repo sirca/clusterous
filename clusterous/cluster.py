@@ -365,7 +365,7 @@ class AWSCluster(Cluster):
             if self._cluster_is_up():
                 raise ClusterException('The cluster is running, but could not connect to controller: {0}'.format(e))
             else:
-                raise ClusterNotRunningException('The cluster "{}" does not appear to be running'.format(self.cluster_name))
+                raise ClusterNotRunningException('The cluster "{0}" does not appear to be running'.format(self.cluster_name))
 
 
         return ssh
@@ -398,7 +398,7 @@ class AWSCluster(Cluster):
             if self._cluster_is_up():
                 raise ClusterException('Error connecting to cluster: {0}'.format(e))
             else:
-                raise ClusterNotRunningException('The cluster "{}" does not appear to be running'.format(self.cluster_name))
+                raise ClusterNotRunningException('The cluster "{0}" does not appear to be running'.format(self.cluster_name))
         return tunnel
 
     def make_tunnel_on_controller(self, controller_port, remote_host, remote_port):
