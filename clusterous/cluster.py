@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import subprocess
+import socket
 import tempfile
 import sys
 import os
@@ -88,6 +89,12 @@ class ClusterException(Exception):
     """
     pass
 
+class ClusterNotRunningException(ClusterException):
+    """
+    According to the cloud provider, the cluster is not running
+    """
+    pass
+
 class Cluster(object):
     """
     Represents infrastrucure aspects of the cluster. Includes high level operations
@@ -102,7 +109,6 @@ class Cluster(object):
         self._controller_ip = ''
         cluster_info = self._get_cluster_info()
         cluster_running = cluster_info.get('running', False)
-        print "cluster running", cluster_running
         if cluster_name_required and not cluster_name:
             name = self._get_working_cluster_name()
             if not name:
@@ -115,7 +121,7 @@ class Cluster(object):
 
         if cluster_must_be_running and not cluster_running:
             # Error
-            raise ClusterException('Cluster {0} is not currently running'.format(self._get_working_cluster_name()))
+            raise ClusterException('Cluster "{0}" is not in fully running state'.format(self._get_working_cluster_name()))
 
 
 
@@ -333,6 +339,19 @@ class AWSCluster(Cluster):
         instance_list = conn.get_only_instances(filters=instance_filters)
         return instance_list
 
+    def _cluster_is_up(self):
+        """
+        Returns true if the cluster has instances actually running on AWS
+        """
+        try:
+            instance_list = self._get_instances(self.cluster_name)
+        except socket.error as e:
+            # Probably connection problem
+            raise ClusterException(e)
+        if instance_list:
+            return True
+        return False
+
     def _ssh_to_controller(self):
         try:
             ssh = paramiko.SSHClient()
@@ -340,9 +359,14 @@ class AWSCluster(Cluster):
             ssh.connect(hostname = self._get_controller_ip(),
                         username = 'root',
                         key_filename = os.path.expanduser(self._config['key_file']))
-        except paramiko.AuthenticationException as e:
-            self._logger.error('Could not connect to controller')
-            raise e
+        except (paramiko.ssh_exception.AuthenticationException,
+                paramiko.ssh_exception.NoValidConnectionsError,
+                socket.error) as e:
+            if self._cluster_is_up():
+                raise ClusterException('The cluster is running, but could not connect to controller: {0}'.format(e))
+            else:
+                raise ClusterNotRunningException('The cluster "{}" does not appear to be running'.format(self.cluster_name))
+
 
         return ssh
 
@@ -367,8 +391,15 @@ class AWSCluster(Cluster):
         """
         Returns helpers.SSHTunnel object connected to remote_port on controller
         """
-        return SSHTunnel(self._get_controller_ip(), 'root',
-                os.path.expanduser(self._config['key_file']), remote_port)
+        try:
+            tunnel = SSHTunnel(self._get_controller_ip(), 'root',
+                    os.path.expanduser(self._config['key_file']), remote_port)
+        except SSHTunnel.TunnelException as e:
+            if self._cluster_is_up():
+                raise ClusterException('Error connecting to cluster: {0}'.format(e))
+            else:
+                raise ClusterNotRunningException('The cluster "{}" does not appear to be running'.format(self.cluster_name))
+        return tunnel
 
     def make_tunnel_on_controller(self, controller_port, remote_host, remote_port):
         """
@@ -760,8 +791,11 @@ class AWSCluster(Cluster):
             if node_tags_and_res:
                 nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
 
+            # Any errors that occur up until this point cannot be recovered from by destroy
+        except (Exception, KeyboardInterrupt) as e:
+            raise ClusterException('An error occured during cluster creation. Any created AWS resources will have to be deleted manually')
 
-
+        try:
             # Extra variables used by ansible scripts
             extra_vars = {'central_logging_level': logging_level,
                           'central_logging_ip': '',
@@ -802,9 +836,11 @@ class AWSCluster(Cluster):
         except (boto.exception.BotoClientError, boto.exception.BotoServerError) as e:
             self._logger.critical('An error occured accessing AWS and the cluster could not be launched. Use "destroy" to destroy the cluster')
         except KeyboardInterrupt as e:
-            self._logger.error('Cluster creation was interrupted. Use "destroy" to destroy cluster')
+            raise ClusterException('Cluster creation was interrupted. Use "destroy" to destroy cluster')
+        except socket.error as e:
+            raise ClusterException('A connection error was encountered during cluster creation. User "destroy" to destroy cluster')
         except Exception as e:
-            self._logger.error('An unknown error occured during cluster creation. Use "destroy" to destroy cluster')
+            raise ClusterException('An unknown error occured during cluster creation. Use "destroy" to destroy cluster')
 
 
         # Set "running" flag in cluster info file
@@ -1043,29 +1079,29 @@ class AWSCluster(Cluster):
 
         image_info = {}
         # TODO: rewrite to use make HTTP calls directly
-        with paramiko.SSHClient() as ssh:
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostname = self._get_controller_ip(),
-                        username = 'root',
-                        key_filename = os.path.expanduser(self._config['key_file']))
+        ssh = self._ssh_to_controller()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(hostname = self._get_controller_ip(),
+                    username = 'root',
+                    key_filename = os.path.expanduser(self._config['key_file']))
 
-            # get image_id
-            cmd = 'curl registry:5000/v1/repositories/library/{0}/tags/{1}'.format(image_name, tag_name)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            image_id = stdout.read().replace('"','')
-            if 'Tag not found' in image_id:
-                return None
+        # get image_id
+        cmd = 'curl registry:5000/v1/repositories/library/{0}/tags/{1}'.format(image_name, tag_name)
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        image_id = stdout.read().replace('"','')
+        if 'Tag not found' in image_id:
+            return None
 
-            # get image_info
-            cmd = 'curl registry:5000/v1/images/{0}/json'.format(image_id)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            json_results = json.loads(stdout.read())
-            image_info = { 'image_name': image_name,
-                           'tag_name': tag_name,
-                           'image_id': image_id,
-                           'author': json_results.get('author',''),
-                           'created': json_results.get('created','')
-                           }
+        # get image_info
+        cmd = 'curl registry:5000/v1/images/{0}/json'.format(image_id)
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        json_results = json.loads(stdout.read())
+        image_info = { 'image_name': image_name,
+                       'tag_name': tag_name,
+                       'image_id': image_id,
+                       'author': json_results.get('author',''),
+                       'created': json_results.get('created','')
+                       }
         return image_info
 
     def sync_put(self, local_path, remote_path):
@@ -1107,18 +1143,19 @@ class AWSCluster(Cluster):
 
         # Check remote path
         remote_path = '/home/data/{0}'.format(remote_path)
-        with paramiko.SSHClient() as ssh:
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostname = self._get_controller_ip(), username = 'root',
-                        key_filename = os.path.expanduser(self._config['key_file']))
 
-            # check if folder exists
-            cmd = "ls -d '{0}'".format(remote_path)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            output_content = stdout.read()
-            if 'cannot access' in stderr.read():
-                message = "Error: Folder '{0}' does not exists.".format(remote_path)
-                return (False, message)
+        ssh = self._ssh_to_controller()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(hostname = self._get_controller_ip(), username = 'root',
+                    key_filename = os.path.expanduser(self._config['key_file']))
+
+        # check if folder exists
+        cmd = "ls -d '{0}'".format(remote_path)
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        output_content = stdout.read()
+        if 'cannot access' in stderr.read():
+            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            return (False, message)
 
         src_path = remote_path
         vars_dict={
@@ -1140,49 +1177,49 @@ class AWSCluster(Cluster):
         """
         List content of a folder on the on cluster
         """
-        with paramiko.SSHClient() as ssh:
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostname = self._get_controller_ip(), username = 'root',
-                        key_filename = os.path.expanduser(self._config['key_file']))
+        ssh = self._ssh_to_controller()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(hostname = self._get_controller_ip(), username = 'root',
+                    key_filename = os.path.expanduser(self._config['key_file']))
 
-            remote_path = '/home/data/{0}'.format(remote_path)
-            cmd = "ls -al '{0}'".format(remote_path)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            output_content = stdout.read()
-            if 'cannot access' in stderr.read():
-                message = "Error: Folder '{0}' does not exists.".format(remote_path)
-                return (False, message)
+        remote_path = '/home/data/{0}'.format(remote_path)
+        cmd = "ls -al '{0}'".format(remote_path)
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        output_content = stdout.read()
+        if 'cannot access' in stderr.read():
+            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            return (False, message)
 
-            return (True, output_content)
+        return (True, output_content)
 
 
     def rm(self, remote_path):
         """
         Delete content of a folder on the on cluster
         """
-        with paramiko.SSHClient() as ssh:
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostname = self._get_controller_ip(), username = 'root',
-                        key_filename = os.path.expanduser(self._config['key_file']))
+        ssh = self._ssh_to_controller()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(hostname = self._get_controller_ip(), username = 'root',
+                    key_filename = os.path.expanduser(self._config['key_file']))
 
-            # check if folder exists
-            remote_path = '/home/data/{0}'.format(remote_path)
-            cmd = "ls -d '{0}'".format(remote_path)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            output_content = stdout.read()
-            if 'cannot access' in stderr.read():
-                message = "Error: Folder '{0}' does not exists.".format(remote_path)
-                return (False, message)
+        # check if folder exists
+        remote_path = '/home/data/{0}'.format(remote_path)
+        cmd = "ls -d '{0}'".format(remote_path)
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        output_content = stdout.read()
+        if 'cannot access' in stderr.read():
+            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            return (False, message)
 
-            cmd = "rm -fr '{0}'".format(remote_path)
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            output_content = stdout.read()
-            # TODO: More error checking may need to be added
-            if 'cannot access' in stderr.read():
-                message = "Error: Failed to delete folder '{0}'.".format(remote_path)
-                return (False, message)
+        cmd = "rm -fr '{0}'".format(remote_path)
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        output_content = stdout.read()
+        # TODO: More error checking may need to be added
+        if 'cannot access' in stderr.read():
+            message = "Error: Failed to delete folder '{0}'.".format(remote_path)
+            return (False, message)
 
-            return (True, 'Ok')
+        return (True, 'Ok')
 
 
     def workon(self):
