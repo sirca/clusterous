@@ -793,7 +793,7 @@ class AWSCluster(Cluster):
 
             # Any errors that occur up until this point cannot be recovered from by destroy
         except (Exception, KeyboardInterrupt) as e:
-            raise ClusterException('An error occured during cluster creation. Any created AWS resources will have to be deleted manually')
+            raise ClusterException('An error occured during cluster creation. Any created AWS EC2 instances will have to be terminated manually')
 
         try:
             # Extra variables used by ansible scripts
