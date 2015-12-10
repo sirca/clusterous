@@ -95,6 +95,12 @@ class ClusterNotRunningException(ClusterException):
     """
     pass
 
+class ConnectionException(Exception):
+    """
+    When unable to connect to the cluster. Might be a transient error
+    """
+    pass
+
 class Cluster(object):
     """
     Represents infrastrucure aspects of the cluster. Includes high level operations
@@ -396,7 +402,7 @@ class AWSCluster(Cluster):
                     os.path.expanduser(self._config['key_file']), remote_port)
         except SSHTunnel.TunnelException as e:
             if self._cluster_is_up():
-                raise ClusterException('Error connecting to cluster: {0}'.format(e))
+                raise ConnectionException('Error connecting to cluster: {0}'.format(e))
             else:
                 raise ClusterNotRunningException('The cluster "{0}" does not appear to be running'.format(self.cluster_name))
         return tunnel
