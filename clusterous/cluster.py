@@ -95,6 +95,12 @@ class ClusterNotRunningException(ClusterException):
     """
     pass
 
+class ConnectionException(Exception):
+    """
+    When unable to connect to the cluster. Might be a transient error
+    """
+    pass
+
 class Cluster(object):
     """
     Represents infrastrucure aspects of the cluster. Includes high level operations
@@ -396,7 +402,7 @@ class AWSCluster(Cluster):
                     os.path.expanduser(self._config['key_file']), remote_port)
         except SSHTunnel.TunnelException as e:
             if self._cluster_is_up():
-                raise ClusterException('Error connecting to cluster: {0}'.format(e))
+                raise ConnectionException('Error connecting to cluster: {0}'.format(e))
             else:
                 raise ClusterNotRunningException('The cluster "{0}" does not appear to be running'.format(self.cluster_name))
         return tunnel
@@ -793,7 +799,7 @@ class AWSCluster(Cluster):
 
             # Any errors that occur up until this point cannot be recovered from by destroy
         except (Exception, KeyboardInterrupt) as e:
-            raise ClusterException('An error occured during cluster creation. Any created AWS resources will have to be deleted manually')
+            raise ClusterException('An error occured during cluster creation. Any created AWS EC2 instances will have to be terminated manually')
 
         try:
             # Extra variables used by ansible scripts

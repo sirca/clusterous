@@ -169,7 +169,7 @@ class Clusterous(object):
             # Otherwise it's a problem in the environment file itself
             raise EnvironmentFileError(str(e), filename=profile['environment_file'])
         except cluster.ClusterException as e:
-            raise ClusterError(e)    
+            raise ClusterError(e)
 
 
         self._logger.debug('Actual cluster spec: {0}'.format(cluster_spec))

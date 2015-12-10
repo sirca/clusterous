@@ -489,6 +489,8 @@ class CLIParser(object):
         except cluster.ClusterNotRunningException as e:
             print >> sys.stderr, e
             print 'Use "destroy" to clean up'
+        except cluster.ConnectionException as e:
+            print >> sys.stderr, e
 
         return status
 
