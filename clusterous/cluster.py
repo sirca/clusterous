@@ -34,6 +34,7 @@ import boto.ec2
 import boto.vpc
 import boto.s3.connection
 import paramiko
+from network import *
 
 import defaults
 from defaults import get_script
@@ -701,6 +702,27 @@ class AWSCluster(Cluster):
                                                                                                                                 shared_volume.zone))
                 except boto.exception.EC2ResponseError as e:
                     raise ClusterException('Volume "{0}" does not exist'.format(shared_volume_id))
+                
+
+            # === NAT begins
+            NAT_AMI_IMAGE              = "ami-e7ee9edd"
+            NAT_MACHINE_SIZE           = "t2.micro"
+            VPC_ID                     = None
+
+            vpc_conn = boto.vpc.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'], aws_secret_access_key=c['secret_access_key'])
+            net_setup = NetSetup(cluster_name = cluster_name, vpc_conn = vpc_conn, ec2_conn = conn, region = c['region'], vpc_id = VPC_ID)
+            net_setup.link_publi_subnet_to_gateway()
+            nat_instance = net_setup.create_nat_instance('nat', c['key_pair'], NAT_AMI_IMAGE, NAT_MACHINE_SIZE)
+            time.sleep(90)
+
+            # Wait until NAT instance is 'running'
+            net_setup.link_private_subnet_to_nat(nat_instance.id)
+            nat_instance.modify_attribute('sourceDestCheck',False)  # Disable sourceDestCheck on NAT instance
+            controller_instance = net_setup.create_controller_instance('controller', c['key_pair'], defaults.controller_ami_id, self._controller_instance_type)
+            raise e
+            # === NAT ends
+
+
 
             # Create Security group
             self._logger.info('Creating security group')
@@ -799,7 +821,8 @@ class AWSCluster(Cluster):
 
             # Any errors that occur up until this point cannot be recovered from by destroy
         except (Exception, KeyboardInterrupt) as e:
-            raise ClusterException('An error occured during cluster creation. Any created AWS EC2 instances will have to be terminated manually')
+            raise e
+            #raise ClusterException('An error occured during cluster creation. Any created AWS EC2 instances will have to be terminated manually')
 
         try:
             # Extra variables used by ansible scripts
