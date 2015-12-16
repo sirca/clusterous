@@ -1,0 +1,16 @@
+{
+  "registration": 31000,
+  "control": 31001,
+  "task": 31002,
+  "notification": 31003,
+  "mux": 31004,
+  "iopub": 31005,
+  "ssh": "",
+  "key": "301bc469-debf-42f3-8df1-ede0e1e5c323",
+  "task_scheme": "leastload",
+  "interface": "tcp://*",
+  "signature_scheme": "hmac-sha256",
+  "pack": "json",
+  "unpack": "json",
+  "location": "controller.marathon.mesos"
+}
