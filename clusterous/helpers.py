@@ -116,7 +116,7 @@ class SSHTunnel(object):
     class TunnelException(Exception):
         pass
 
-    def __init__(self, host, username, key_file, remote_port, host_port=22):
+    def __init__(self, host, username, key_file, remote_port, host_port=22000):
         """
         Returns tuple consisting of local port and sshtunnel SSHTunnelForwarder object.
         Caller must call stop() on object when finished

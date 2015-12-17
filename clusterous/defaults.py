@@ -39,6 +39,9 @@ taggable_name_re = re.compile('^[\w-]+$')       # For user supplied strings such
 taggable_name_max_length = 64       # Arbitrary but ample, keeping in mind AWS keys can be max 127 chars
 
 security_group_name_format = '{0}-sg'
+nat_name_format = '{0}-nat'
+nat_name_tag_value = 'nat'
+nat_instance_type = 't2.small'
 controller_name_format = '{0}-controller'
 controller_name_tag_value = 'controller'
 controller_instance_type = 't2.small'
@@ -50,6 +53,7 @@ central_logging_name_format = '{0}-central-logging'
 central_logging_name_tag_value = 'central-logging'
 central_logging_instance_type = 't2.small'
 central_logging_ami_id = 'ami-45eaad7f'
+nat_ami_id = 'ami-e7ee9edd'
 controller_ami_id = 'ami-fd4708c7'
 node_ami_id = 'ami-47eaad7d'
 

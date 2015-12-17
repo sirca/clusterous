@@ -19,7 +19,7 @@
     - local_action:
         module: wait_for
         host: "{{ inventory_hostname }}"
-        port: 22
+        port: 22000
         delay: 20
         timeout: 300
         state: started
