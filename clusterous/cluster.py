@@ -876,7 +876,6 @@ class AWSCluster(Cluster):
                                          instance_type=defaults.nat_instance_type,
                                          network_interfaces=nat_network_interfaces)
             nat_instance = nat_res.instances[0]
-            time.sleep(45)
     
             nat_tags = {'Name': defaults.nat_name_format.format(cluster_name),
                                 defaults.instance_node_type_tag_key: defaults.nat_name_tag_value}
@@ -1027,7 +1026,7 @@ class AWSCluster(Cluster):
             controller_vars_file = self._make_vars_file(controller_vars_dict)
     
     
-            time.sleep(30) # TBD
+            time.sleep(30)
     
             self._logger.info('Configuring controller instance...')
             AnsibleHelper.run_playbook(defaults.get_script('ansible/01_configure_controller.yml'),
