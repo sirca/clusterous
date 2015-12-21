@@ -31,7 +31,7 @@ cached_environment_file_path = local_environment_dir + '/' + cached_environment_
 
 remote_environment_dir = '/root/environment'
 
-current_controller_ip_file = local_config_dir + '/' + 'current_controller'
+current_nat_ip_file = local_config_dir + '/' + 'current_controller'
 cluster_info_file = local_config_dir + '/' + 'cluster_info.yml'
 
 
@@ -41,7 +41,7 @@ taggable_name_max_length = 64       # Arbitrary but ample, keeping in mind AWS k
 security_group_name_format = '{0}-sg'
 nat_name_format = '{0}-nat'
 nat_name_tag_value = 'nat'
-nat_instance_type = 't2.small'
+nat_instance_type = 't2.micro'
 controller_name_format = '{0}-controller'
 controller_name_tag_value = 'controller'
 controller_instance_type = 't2.small'
@@ -56,6 +56,7 @@ central_logging_ami_id = 'ami-45eaad7f'
 nat_ami_id = 'ami-e7ee9edd'
 controller_ami_id = 'ami-fd4708c7'
 node_ami_id = 'ami-47eaad7d'
+default_zone = 'a'
 
 controller_root_volume_size = 10    # GB
 
@@ -74,6 +75,7 @@ container_id_script_file = 'container_id.sh'
 mesos_port = 5050
 marathon_port = 8080
 central_logging_port = 8081
+nat_ssh_port_forwarding = 22000
 
 # How many seconds to wait for all Marathon applications to reach "started" state
 # Currently 30 minutes
