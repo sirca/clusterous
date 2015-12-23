@@ -41,8 +41,10 @@
           Name: "{{ instance_name_controller }}"
           group: controller
         volumes:
+          # Docker cache
           - device_name: /dev/sdb
             volume_size: 40
+            volume_type: gp2
             delete_on_termination: true
       register: ec2
 

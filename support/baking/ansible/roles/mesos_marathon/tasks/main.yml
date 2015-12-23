@@ -14,11 +14,7 @@
 
 # Marathon
 ---
-- name: check if marathon is present
-  stat: path=/usr/bin/marathon
-  register: result
 - name: installing marathon
-  yum: pkg=marathon-0.8.2 state=present
-  when: result.stat.exists == false
+  apt: name=marathon=0.8.2-1.0.306.ubuntu1404 state=present
 - name: start marathon
   service: name=marathon state=started enabled=yes

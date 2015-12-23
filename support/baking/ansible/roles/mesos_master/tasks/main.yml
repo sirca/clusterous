@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# MESOS MASTER
+# Mesos master
 ---
+- name: configure zookeeper
+  lineinfile: dest=/etc/zookeeper/conf/myid line=1 state=present create=yes
+- name: start up zookeeper
+  service: name=zookeeper state=started enabled=yes
 - name: start up the mesos-master
   service: name=mesos-master state=started enabled=yes

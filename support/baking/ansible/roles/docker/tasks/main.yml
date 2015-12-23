@@ -12,22 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# DOCKER
+# Docker
 ---
-- name: check if docker is present
-  stat: path=/mnt/docker/docker
-  register: result
-  ignore_errors: True
-- name: install the required packages for docker
-  yum: name={{ item }} state=latest
-  with_items:
-    - e4fsprogs
-  when: result.stat.exists == false
 - name: docker config
   template: src=docker.j2 dest=/etc/sysconfig/docker mode=0755
-  when: result.stat.exists == false
-- name: install the docker packages
-  yum: pkg=docker state=present
-  when: result.stat.exists == false
-- name: start docker
+- name: install Docker from Ubuntu repo
+  apt: name=docker.io state=present
+- name: start docker service
   service: name=docker state=started enabled=yes
+  
