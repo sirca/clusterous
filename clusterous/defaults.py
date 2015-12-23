@@ -38,7 +38,6 @@ cluster_info_file = local_config_dir + '/' + 'cluster_info.yml'
 taggable_name_re = re.compile('^[\w-]+$')       # For user supplied strings such as cluster name
 taggable_name_max_length = 64       # Arbitrary but ample, keeping in mind AWS keys can be max 127 chars
 
-security_group_name_format = '{0}-sg'
 nat_name_format = '{0}-nat'
 nat_name_tag_value = 'nat'
 nat_instance_type = 't2.micro'

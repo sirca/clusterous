@@ -68,7 +68,6 @@ A template of the contents of the file is as follows:
     key_pair: xxx
     key_file: xxx.pem
     vpc_id: vpc-xxx
-    subnet_id: subnet-xxx
     region: xxx
     clusterous_s3_bucket: xxx
 ```

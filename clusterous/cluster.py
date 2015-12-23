@@ -516,22 +516,6 @@ class AWSCluster(Cluster):
 
         return all_deleted
 
-    def _get_current_sg_id(self, conn):
-        """
-        Given a connection object, return the id of the security
-        group for current cluster. Returns None if zero or multiple matches
-        """
-        if not self.cluster_name:
-            return None
-        sg_name = defaults.security_group_name_format.format(self.cluster_name)
-        sg_list = conn.get_all_security_groups(filters={'tag:Name':sg_name})
-        if not sg_list or len(sg_list) != 1:
-            # Returns None if no match, or multiple matches
-            return None
-
-        return sg_list[0].id
-
-
     def _wait_and_tag_instance_reservations(self, tag_and_inst_list, sleep_interval=5):
         launched = {}
         launched_ids = {}
@@ -666,6 +650,20 @@ class AWSCluster(Cluster):
             clusterous_tag.update({'Name': self.cluster_name + '-'+str(resource_name)})
 
         return clusterous_tag
+
+    def _get_vpc(self, vpc_conn):
+        vpc = None
+        vpc_id = self._config.get('vpc_id')
+        if vpc_id:
+            try:
+                vpcs = vpc_conn.get_all_vpcs(vpc_ids=[vpc_id])
+                if len(vpcs) > 0:
+                    vpc = vpcs[0]
+            except boto.exception.EC2ResponseError as e:
+                raise ClusterException('VPC id provided "{0}" does not exist'.format(vpc_id))
+        else:
+            vpc = self._create_vpc(vpc_conn, vpc_id)
+        return vpc
     
     def _create_vpc(self, vpc_conn, vpc_id = None):
         vpc = None
@@ -841,16 +839,7 @@ class AWSCluster(Cluster):
     
             # Configuring VPC
             self._logger.info('Configuring VPC')
-            vpc_id = self._config.get('vpc_id')
-            if vpc_id:
-                try:
-                    vpcs = vpc_conn.get_all_vpcs(vpc_ids=[vpc_id])
-                    vpc = vpcs[0]
-                except boto.exception.EC2ResponseError as e:
-                    raise ClusterException('VPC id provided "{0}" does not exist'.format(vpc_id))
-            else:
-                vpc = self._create_vpc(vpc_conn, vpc_id)
-            
+            vpc = self._get_vpc(vpc_conn)
             gateway = self._create_gateway(vpc_conn, vpc, 'gateway')
             public_subnet = self._create_subnet(vpc_conn, vpc, 'public-subnet')
             private_subnet = self._create_subnet(vpc_conn, vpc, 'private-subnet')
@@ -877,7 +866,7 @@ class AWSCluster(Cluster):
             vpc_conn.associate_route_table(public_route_table.id, public_subnet.id)
     
             # Launch NAT instance
-            self._logger.debug('Starting NAT')
+            self._logger.info('Starting NAT')
             nat_interface = boto.ec2.networkinterface.NetworkInterfaceSpecification(subnet_id=public_subnet.id,
                                                                                     groups=[public_security_group.id, ],
                                                                                     associate_public_ip_address=True)
@@ -897,7 +886,7 @@ class AWSCluster(Cluster):
             # Wait for NAT to launch
             nat_not_used = self._wait_and_tag_instance_reservations(nat_tags_and_res)
             if not retry_ssh(nat_instance.ip_address, 22, 5, 45):
-                raise ClusterException('Error: Unable to SSH NAT instance.')
+                raise ClusterException('Unable to SSH NAT instance')
             
             nat_instance.modify_attribute('sourceDestCheck',False)  # Disable sourceDestCheck on NAT instance
             
@@ -1075,9 +1064,13 @@ class AWSCluster(Cluster):
 
 
     def _configure_nodes(self, nodes_info, nodes, nat_ip, extra_vars={}):
+        private_ips = []
         nodes_inventory = tempfile.NamedTemporaryFile()
-        for num_nodes, instance_type, node_tag in nodes_info:
-            self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag].private_ips, node_tag, overwrite=False)
+        for _, _, node_tag in nodes_info:
+            for _, _, i in nodes:
+                for j in i:
+                    private_ips.append(j.private_ip_address)
+        self._write_to_hosts_file(nodes_inventory.name, private_ips, node_tag, overwrite=False)
         nodes_inventory.flush()
         self._logger.info('Configuring nodes...')
         self._run_on_controller('configure_nodes.yml', nodes_inventory.name, extra_vars)
@@ -1117,20 +1110,25 @@ class AWSCluster(Cluster):
 
         conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
                                             aws_secret_access_key=c['secret_access_key'])
-        if not conn:
+        vpc_conn = boto.vpc.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'], 
+                                              aws_secret_access_key=c['secret_access_key'])
+        if not (conn or vpc_conn):
             raise ClusterException('Cannot connect to AWS')
 
-
-        sg_id = self._get_current_sg_id(conn)
-        if not sg_id:
-            return False
-
-        res = conn.run_instances(defaults.node_ami_id, min_count=num_nodes, max_count=num_nodes,
-                                key_name=c['key_pair'], instance_type=instance_type,
-                                subnet_id=c['subnet_id'], security_group_ids=[sg_id])
+        vpc = self._get_vpc(vpc_conn)
+        private_subnet = self._create_subnet(vpc_conn, vpc, 'private-subnet')
+        private_security_group = self._create_private_sg(vpc_conn, vpc, "private-sg")
+        res = conn.run_instances(defaults.node_ami_id, 
+                                 min_count=num_nodes, 
+                                 max_count=num_nodes,
+                                 key_name=c['key_pair'], 
+                                 instance_type=instance_type,
+                                 subnet_id=private_subnet.id, 
+                                 security_group_ids=[private_security_group.id])
         node_tags = {'Name': defaults.node_name_format.format(self.cluster_name, node_name),
                     defaults.instance_node_type_tag_key: node_name}
         node_tags_and_res = [(node_name, node_tags, res.instances)]
+        self._wait_and_tag_instance_reservations(node_tags_and_res)
 
         self._logger.info('Waiting for nodes to start...')
         return self._configure_nodes(nodes_info, node_tags_and_res, nat_ip, logging_vars)
@@ -1217,12 +1215,15 @@ class AWSCluster(Cluster):
 
         if not (conn or vpc_conn):
             raise ClusterException('Cannot connect to AWS')
+        
+        resource_terminated = False
 
         # Delete instances
         instance_list = self._get_instances(self.cluster_name, connection=conn)
         num_instances = len(instance_list)
         instances = [ i.id for i in instance_list ]
         if instances:
+            resource_terminated = True
             self._logger.info('Terminating {0} instances'.format(num_instances))
             self._terminate_instances_and_wait(conn, instances)
 
@@ -1272,6 +1273,7 @@ class AWSCluster(Cluster):
         if not subnet_deleted:
             self._logger.error('Unable to delete subnets for {0}'.format(self.cluster_name))
         else:
+            resource_terminated = True
             self._logger.debug('Deleted subnets')
 
         # Delete route tables
@@ -1283,6 +1285,7 @@ class AWSCluster(Cluster):
         if not rt_deleted:
             self._logger.error('Unable to delete Route Tables for {0}'.format(self.cluster_name))
         else:
+            resource_terminated = True
             self._logger.debug('Deleted Route Tables')
 
         # If VPC was created
@@ -1298,6 +1301,7 @@ class AWSCluster(Cluster):
             if not gw_deleted:
                 self._logger.error('Unable to delete Gateway for {0}'.format(self.cluster_name))
             else:
+                resource_terminated = True
                 self._logger.debug('Deleted Gateway')
 
             # Delete ACL
@@ -1309,6 +1313,7 @@ class AWSCluster(Cluster):
             if not acl_deleted:
                 self._logger.error('Unable to delete ACL for {0}'.format(self.cluster_name))
             else:
+                resource_terminated = True
                 self._logger.debug('Deleted ACL')
 
             # Delete VPC
@@ -1320,9 +1325,13 @@ class AWSCluster(Cluster):
             if not vpc_deleted:
                 self._logger.error('Unable to delete VPC for {0}'.format(self.cluster_name))
             else:
+                resource_terminated = True
                 self._logger.debug('Deleted VPC')
 
         # Delete cluster info
+        if not resource_terminated:
+            self._logger.info('Nothing terminated')
+        self._logger.info('Cleaning up')
         self._delete_cluster_info()
 
         return True
