@@ -1632,7 +1632,7 @@ class AWSCluster(Cluster):
                     if not stderr.readlines():
                         break
                     retry += 1
-                    self._logger.info('Retry: {0}'.format(retry))
+                    self._logger.debug('Retry: {0}'.format(retry))
                     time.sleep(3)
                 return (retry <3 ), stdout
 
@@ -1658,9 +1658,9 @@ class AWSCluster(Cluster):
 
         # Shell
         node = '{0}.marathon.mesos'.format(component_name)
-        cmd='ssh -i {0} -oStrictHostKeyChecking=no -A -t root@{1} \
-             ssh -i {2} -oStrictHostKeyChecking=no -A -t {3} \
-             docker exec -ti {4} bash'.format(key_file_local, self._get_nat_ip(),
+        cmd='ssh -i {0} -p {1} -oStrictHostKeyChecking=no -A -t root@{2} \
+             ssh -i {3} -oStrictHostKeyChecking=no -A -t {4} \
+             docker exec -ti {5} bash'.format(key_file_local, defaults.nat_ssh_port_forwarding, self._get_nat_ip(),
                          key_file_remote, node, container_id)
         os.system(cmd)
 
