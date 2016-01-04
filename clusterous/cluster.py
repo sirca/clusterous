@@ -1066,7 +1066,6 @@ class AWSCluster(Cluster):
     def _configure_nodes(self, nodes_info, nodes, nat_ip, extra_vars={}):
         nodes_inventory = tempfile.NamedTemporaryFile()
         for num_nodes, instance_type, node_tag in nodes_info:
-            print nodes_inventory.name, '->', nodes[node_tag].private_ips, '->', node_tag
             self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag].private_ips, node_tag, overwrite=False)
         nodes_inventory.flush()
         self._logger.info('Configuring nodes...')
