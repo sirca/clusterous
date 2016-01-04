@@ -67,13 +67,11 @@ def retry_ssh(host, port, sleep_interval, timeout_secs=300):
             s.connect((host, port))
             success = True
         except socket.error as e:
-            if e.message == 'Connection refused':
-                if time.time() >= start_time + timeout_secs:
-                    success = False
-            else:
-                # Assume SSH is ready
+            if e.errno != errno.ECONNREFUSED:
                 success = True
-        time.sleep(sleep_interval)
+            elif time.time() >= start_time + timeout_secs:
+                break
+            time.sleep(sleep_interval)
     s.close()
     return success
 
@@ -623,6 +621,8 @@ class AWSCluster(Cluster):
     def _nat_ssh_port_forwarding(self, nat_public_ip, controller_private_ip):
         self._logger.debug('Forwarding port {0} on NAT ({1}) to Controller ({2}) port 22'.format(
             defaults.nat_ssh_port_forwarding, nat_public_ip, controller_private_ip))
+        if not retry_ssh(nat_public_ip, 22, 5, 60):
+            raise ClusterException('Unable to SSH NAT instance')
 
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -1002,7 +1002,7 @@ class AWSCluster(Cluster):
             nodes = {}
             if node_tags_and_res:
                 nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
-    
+
             # Any errors that occur up until this point cannot be recovered from by destroy
         except (Exception, KeyboardInterrupt) as e:
             raise ClusterException('An error occured during cluster creation. Any created AWS EC2 instances will have to be terminated manually')
@@ -1053,7 +1053,7 @@ class AWSCluster(Cluster):
         except socket.error as e:
             raise ClusterException('A connection error was encountered during cluster creation. User "destroy" to destroy cluster')
         except Exception as e:
-            raise ClusterException('An unknown error occured during cluster creation. Use "destroy" to destroy cluster')
+            raise ClusterException('An unknown error occured during cluster creation: {0}\nUse "destroy" to destroy cluster'.format(e))
 
 
         # Set "running" flag in cluster info file
@@ -1064,13 +1064,10 @@ class AWSCluster(Cluster):
 
 
     def _configure_nodes(self, nodes_info, nodes, nat_ip, extra_vars={}):
-        private_ips = []
         nodes_inventory = tempfile.NamedTemporaryFile()
-        for _, _, node_tag in nodes_info:
-            for _, _, i in nodes:
-                for j in i:
-                    private_ips.append(j.private_ip_address)
-        self._write_to_hosts_file(nodes_inventory.name, private_ips, node_tag, overwrite=False)
+        for num_nodes, instance_type, node_tag in nodes_info:
+            print nodes_inventory.name, '->', nodes[node_tag].private_ips, '->', node_tag
+            self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag].private_ips, node_tag, overwrite=False)
         nodes_inventory.flush()
         self._logger.info('Configuring nodes...')
         self._run_on_controller('configure_nodes.yml', nodes_inventory.name, extra_vars)
@@ -1128,10 +1125,9 @@ class AWSCluster(Cluster):
         node_tags = {'Name': defaults.node_name_format.format(self.cluster_name, node_name),
                     defaults.instance_node_type_tag_key: node_name}
         node_tags_and_res = [(node_name, node_tags, res.instances)]
-        self._wait_and_tag_instance_reservations(node_tags_and_res)
-
+        nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
         self._logger.info('Waiting for nodes to start...')
-        return self._configure_nodes(nodes_info, node_tags_and_res, nat_ip, logging_vars)
+        return self._configure_nodes(nodes_info, nodes, nat_ip, logging_vars)
 
     def rm_nodes(self, num_nodes, node_name):
         c = self._config
