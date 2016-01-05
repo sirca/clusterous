@@ -342,16 +342,13 @@ class CLIParser(object):
             return 1
 
         # Format cluster info
-        central_logging_frag = '' if not info['central_logging'] else ' and central logging'
+        central_logging_frag = 'nat and controller' if not info['central_logging'] else 'nat, controller and central logging'
         instance_plural = '' if info['instance_count'] == 1 else 's'
-        print '{0} has {1} instance{2} running, including controller{3}'.format(
+        print '{0} has {1} instance{2} running, including {3}'.format(
                                             self.boldify(info['cluster_name']),
                                             info['instance_count'],
                                             instance_plural,
                                             central_logging_frag)
-        # print
-        print 'Controller IP:\t{0}'.format(info['controller']['ip'])
-
         # Calculate uptime
         rd = relativedelta.relativedelta(seconds=info['controller']['uptime'])
         uptime_str = ''
@@ -359,6 +356,9 @@ class CLIParser(object):
         if uptime_str or rd.hours: uptime_str += '{0} hours '.format(rd.hours)  # 0 hours is valid if preceeded by "days"
         if rd.minutes: uptime_str += '{0} minutes'.format(rd.minutes)
         print 'Uptime:\t\t{0}'.format(uptime_str)
+
+        print '\n', self.boldify('Controller')
+        print 'IP: {0}  Port: {1}'.format(info['nat']['ip'], defaults.nat_ssh_port_forwarding)
 
         # Prepare node information table
         nodes_headers = map(self.boldify, ['Node Name', 'Instance Type', 'Count', 'Running Components'])
@@ -369,6 +369,9 @@ class CLIParser(object):
 
         if info['central_logging']:
             nodes_table.append(['[logging]', info['central_logging']['type'], 1, '--'])
+
+        if info['nat']:
+            nodes_table.append(['[nat]', info['nat']['type'], 1, '--'])
 
         # Add regular nodes
         for node_name, node_info in info['nodes'].iteritems():

@@ -1541,6 +1541,7 @@ class AWSCluster(Cluster):
         nodes_info = {}
         controller_info = {}
         central_logging_info = {}
+        nat_info = {}
         instances = self._get_instances(self.cluster_name)
 
         for instance in instances:
@@ -1553,7 +1554,6 @@ class AWSCluster(Cluster):
                 launch_time = parser.parse(instance.launch_time)
                 uptime = (datetime.now(launch_time.tzinfo) - launch_time).total_seconds()
                 controller_info = {
-                                    'ip': str(instance.ip_address),
                                     'type': instance.instance_type,
                                     'uptime': int(uptime)
                 }
@@ -1564,6 +1564,11 @@ class AWSCluster(Cluster):
                 central_logging_info = {
                                     'type': instance.instance_type
                 }
+            elif node_name == defaults.nat_name_tag_value:
+                nat_info = {
+                            'ip': str(instance.ip_address),
+                            'type': instance.instance_type
+                            }
             else:
                 if node_name not in nodes_info:
                     nodes_info[node_name] = {
@@ -1578,7 +1583,8 @@ class AWSCluster(Cluster):
                 'instance_count': len(instances),
                 'nodes': nodes_info,
                 'controller': controller_info,
-                'central_logging': central_logging_info
+                'central_logging': central_logging_info,
+                'nat': nat_info
         }
 
         return info
