@@ -34,38 +34,60 @@ class ClusterE2ETest(unittest.TestCase):
         # Destroy if cluster present
         if self._cluster_running() or self._cluster_wrong_state():
             self._cluster_destroy()
-
+ 
         # Create cluster
         rc, stdout, stderr = self._cli_run('create data/test-cluster.yml')
         self.assertEqual(rc, 0)
         self.assertRegexpMatches(stderr, 'Cluster "e2etestcluster" created')
         self.assertTrue(self._cluster_running())
- 
+   
     def test_cluster_status(self):
         if self._cluster_running():
             rc, stdout, stderr = self._cli_run('status')
+            self.assertEqual(rc, 0)
             self.assertTrue('e2etestcluster' in stdout and 'running' in stdout)
-
-#     def test_cluster_run(self):
-#         if self._cluster_running():
-#             rc, stdout, stderr = self._cli_run('run  data/cluster-envs/basic-python-env.yml')
-#             self.assertRegexpMatches(stderr, '1 nodes of type "worker" added')
-
+        else:
+            self.assertTrue('Cluster is not running')
+  
     def test_cluster_add_nodes(self):
         if self._cluster_running():
             rc, stdout, stderr = self._cli_run('add-nodes 1')
+            self.assertTrue(rc)
             self.assertRegexpMatches(stderr, '1 nodes of type "worker" added')
-  
+        else:
+            self.assertTrue('Cluster is not running')
+     
     def test_cluster_rm_nodes(self):
         if self._cluster_running():
             rc, stdout, stderr = self._cli_run('rm-nodes 1')
+            self.assertTrue(rc)
             self.assertRegexpMatches(stderr, '1 nodes of type "worker" removed')
+        else:
+            self.assertTrue('Cluster is not running')
+
+    def test_cluster_run(self):
+        if self._cluster_running():
+            rc, stdout, stderr = self._cli_run('run data/cluster-envs/basic-python-env.yml')
+            self.assertEqual(rc, 0)
+            self.assertTrue(('Launched' in stderr and 'components' in stderr) or ('Environment already' in stderr ))
+        else:
+            self.assertTrue('Cluster is not running')
+
+    def test_cluster_quit(self):
+        if self._cluster_running():
+            rc, stdout, stderr = self._cli_run('quit --confirm')
+            self.assertEqual(rc, 0)
+            self.assertTrue('applications successfully destroyed' in stderr or 'No application to destroy' in stderr)
+        else:
+            self.assertTrue('Cluster is not running')
 
     def test_cluster_destroy(self):
         if self._cluster_running() or self._cluster_wrong_state():
             rc, stdout, stderr = self._cli_run('destroy --confirm')
             self.assertEqual(rc, 0)
             self.assertTrue(self._no_cluster_running())
+        else:
+            self.assertTrue('Cluster is not running')
 
 if __name__ == '__main__':
     unittest.main()
