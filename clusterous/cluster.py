@@ -38,6 +38,7 @@ import paramiko
 import defaults
 from defaults import get_script
 from helpers import AnsibleHelper, SSHTunnel, NoWorkingClusterException
+from netaddr import IPNetwork
 
 # TODO: Move to another module as appropriate, as this is very general purpose
 def retry_till_true(func, sleep_interval, timeout_secs=300):
@@ -57,6 +58,22 @@ def retry_till_true(func, sleep_interval, timeout_secs=300):
 
     return success
 
+def retry_ssh(host, port, sleep_interval, timeout_secs=300):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    success = False
+    start_time = time.time()
+    while not success:
+        try:
+            s.connect((host, port))
+            success = True
+        except socket.error as e:
+            if e.errno != errno.ECONNREFUSED:
+                success = True
+            elif time.time() >= start_time + timeout_secs:
+                break
+            time.sleep(sleep_interval)
+    s.close()
+    return success
 
 def read_config(config):
     """
@@ -112,7 +129,7 @@ class Cluster(object):
         self._config = config
         self._running = False
         self._logger = logging.getLogger(__name__)
-        self._controller_ip = ''
+        self._nat_ip = ''
         cluster_info = self._get_cluster_info()
         cluster_running = cluster_info.get('running', False)
         if cluster_name_required and not cluster_name:
@@ -160,13 +177,13 @@ class Cluster(object):
         return logging_vars
 
 
-    def _get_controller_ip(self):
-        if self._controller_ip:
-            return self._controller_ip
+    def _get_nat_ip(self):
+        if self._nat_ip:
+            return self._nat_ip
 
         info = self._get_cluster_info()
 
-        return info.get('controller_ip', None)
+        return info.get('nat_ip', None)
 
     def controller_tunnel(self, remote_port):
         """
@@ -213,15 +230,16 @@ class AWSCluster(Cluster):
     @staticmethod
     def validate_config(fields):
         mandatory_fields = ['access_key_id', 'secret_access_key', 'key_pair', 'key_file',
-                            'vpc_id', 'clusterous_s3_bucket', 'subnet_id', 'region']
+                            'clusterous_s3_bucket', 'region']
+        optional_fields = ['vpc_id']
+        
 
         vpc_re = re.compile('^vpc-\w+$')
-        subnet_re = re.compile('^subnet-\w+$')
 
         # Check for unrecognised fields
         unrecog_fields = []
         for f in fields.keys():
-            if not f in mandatory_fields:
+            if f not in mandatory_fields and f not in optional_fields:
                 unrecog_fields.append(f)
 
         if unrecog_fields:
@@ -254,11 +272,8 @@ class AWSCluster(Cluster):
             message = 'Error in S3 bucket name "{0}": {1}'.format(fields['clusterous_s3_bucket'], s3_msg)
             return False, message
 
-        if not vpc_re.search(fields['vpc_id']):
+        if fields.get('vpc_id') and not vpc_re.search(fields['vpc_id']):
             return False, 'vpc_id "{0}" is not in valid format'.format(fields['vpc_id'])
-
-        if not subnet_re.search(fields['subnet_id']):
-            return False, 'subnet_id "{0}" is not in valid format'.format(fields['subnet_id'])
 
         return True, ''
 
@@ -311,7 +326,7 @@ class AWSCluster(Cluster):
 
         AnsibleHelper.run_playbook(get_script('ansible/run_remote.yml'),
                       local_vars_file.name, self._config['key_file'],
-                      hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+                      hosts_file=os.path.expanduser(defaults.current_nat_ip_file))
 
         local_vars_file.close()
         remote_vars_file.close()
@@ -362,11 +377,12 @@ class AWSCluster(Cluster):
         try:
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(hostname = self._get_controller_ip(),
+
+            ssh.connect(hostname = self._get_nat_ip(),
+                        port = defaults.nat_ssh_port_forwarding,
                         username = defaults.cluster_username,
                         key_filename = os.path.expanduser(self._config['key_file']))
         except (paramiko.ssh_exception.AuthenticationException,
-                paramiko.ssh_exception.NoValidConnectionsError,
                 socket.error) as e:
             if self._cluster_is_up():
                 raise ClusterException('The cluster is running, but could not connect to controller: {0}'.format(e))
@@ -398,7 +414,7 @@ class AWSCluster(Cluster):
         Returns helpers.SSHTunnel object connected to remote_port on controller
         """
         try:
-            tunnel = SSHTunnel(self._get_controller_ip(), defaults.cluster_username,
+            tunnel = SSHTunnel(self._get_nat_ip(), defaults.cluster_username,
                     os.path.expanduser(self._config['key_file']), remote_port)
         except SSHTunnel.TunnelException as e:
             if self._cluster_is_up():
@@ -456,12 +472,12 @@ class AWSCluster(Cluster):
 
         # Ensure that any previously created tunnel is destroyed
         reset_cmd = ['ssh', '-S', ssh_sock_file, '-O', 'exit',
-                self._get_controller_ip()]
+                self._get_nat_ip()]
 
         # Normal tunnel command
-        connect_cmd = ['ssh', '-i', key_file, '-N', '-f', '-M',
+        connect_cmd = ['ssh', '-p', '{0}'.format(defaults.nat_ssh_port_forwarding), '-i', key_file, '-N', '-f', '-M',
                 '-S', ssh_sock_file, '-o', 'ExitOnForwardFailure=yes',
-                '{0}@{1}'.format(defaults.cluster_username, self._get_controller_ip()),
+                '{0}@{1}'.format(defaults.cluster_username, self._get_nat_ip()),
                 '-L', '{0}:127.0.0.1:{1}'.format(local_port, remote_port)]
 
         # If socket file doesn't exist, it will return with an error. This is normal
@@ -490,7 +506,7 @@ class AWSCluster(Cluster):
                     continue
 
             reset_cmd = ['ssh', '-S', sock, '-O', 'exit',
-                            self._get_controller_ip()]
+                            self._get_nat_ip()]
             process = subprocess.Popen(reset_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=None)
             output, error = process.communicate()
 
@@ -500,49 +516,12 @@ class AWSCluster(Cluster):
 
         return all_deleted
 
-    def _create_security_group(self, cluster_name, conn):
-        """
-        Given a cluster name and Boto EC2 connection, creates a
-        cluster security group (before deleting any existing one)
-        and returns the SG id
-        """
-        sg_name = defaults.security_group_name_format.format(cluster_name)
-        descr = 'Security group for {0}'.format(cluster_name)
-        for s in conn.get_all_security_groups():
-            if s.name == sg_name:
-                self._logger.debug('Security group "{0}" already exists'.format(sg_name))
-                return s.id
-        sg = conn.create_security_group(sg_name, descr, vpc_id = self._config['vpc_id'])
-        sg.add_tag(key='Name', value=sg_name)
-        sg.add_tag(key=defaults.instance_tag_key, value=cluster_name)
-        sg.authorize(ip_protocol='tcp', from_port='22', to_port='22', cidr_ip='0.0.0.0/0')
-        sg.authorize(ip_protocol='tcp', from_port='80', to_port='80', cidr_ip='0.0.0.0/0')
-        # Boto documentation is misleading: need to specify protocol to -1 to mean all protocols
-        sg.authorize(ip_protocol=-1, src_group=sg)
-        return sg.id
-
-    def _get_current_sg_id(self, conn):
-        """
-        Given a connection object, return the id of the security
-        group for current cluster. Returns None if zero or multiple matches
-        """
-        if not self.cluster_name:
-            return None
-        sg_name = defaults.security_group_name_format.format(self.cluster_name)
-        sg_list = conn.get_all_security_groups(filters={'tag:Name':sg_name})
-        if not sg_list or len(sg_list) != 1:
-            # Returns None if no match, or multiple matches
-            return None
-
-        return sg_list[0].id
-
-
     def _wait_and_tag_instance_reservations(self, tag_and_inst_list, sleep_interval=5):
         launched = {}
         launched_ids = {}
         inst_list = []
         inst_to_tag = {}
-        LaunchInfo = namedtuple('LaunchInfo', 'public_ips private_ips')
+        LaunchInfo = namedtuple('LaunchInfo', 'private_ips')
         for (label, tag, insts) in tag_and_inst_list:
             inst_list.extend(insts)
             for i in insts:
@@ -552,19 +531,16 @@ class AWSCluster(Cluster):
             time.sleep(sleep_interval)
             for inst in inst_list:
                 if inst.state == 'running' and inst.id not in launched_ids:
-                    if inst.ip_address:
+                    if inst.private_ip_address:
                         launched_ids[inst.id] = True
                         label, tags = inst_to_tag[inst.id]
-                        # Add default "clusterous" tag
                         t = tags.copy()
-                        clusterous_tag = {defaults.instance_tag_key: self.cluster_name}
-                        t.update(clusterous_tag)
+                        t.update(self._clusterous_tag())
                         inst.add_tags(t)
                         if not label in launched:
-                            launched[label] = LaunchInfo([], [])
-                        launched[label].public_ips.append(inst.ip_address)
+                            launched[label] = LaunchInfo([])
                         launched[label].private_ips.append(inst.private_ip_address)
-                        self._logger.debug('Running {0} {1} {2}'.format(inst.ip_address, tags, inst.id))
+                        self._logger.debug('Running {0} {1} {2}'.format(inst.private_ip_address, tags, inst.id))
                 # There is no good reason for this to happen in practice
                 elif inst.state in ('terminated', 'stopped', 'stopping'):
                     raise ClusterException('Problem with instance {0}, now in "{1}" state'.format(inst.id, inst.state))
@@ -641,6 +617,176 @@ class AWSCluster(Cluster):
 
         return spec
 
+    def _nat_ssh_port_forwarding(self, nat_public_ip, controller_private_ip):
+        self._logger.debug('Forwarding port {0} on NAT ({1}) to Controller ({2}) port 22'.format(
+            defaults.nat_ssh_port_forwarding, nat_public_ip, controller_private_ip))
+        if not retry_ssh(nat_public_ip, 22, 5, 60):
+            raise ClusterException('Unable to SSH NAT instance')
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(hostname = nat_public_ip,
+                    username = 'ec2-user',
+                    key_filename = os.path.expanduser(self._config['key_file']))
+        cmd = 'sudo iptables -t nat -A PREROUTING -p tcp --dport {0} -j DNAT --to-destination {1}:22'.format(
+             defaults.nat_ssh_port_forwarding, controller_private_ip)
+        # Using 'invoke_shell' because it is 'sudo' cmd
+        channel = ssh.invoke_shell()
+        channel.send('{0}\n'.format(cmd))
+        time.sleep(3)
+        output = channel.recv(99999)
+        ssh.close()
+        
+        if '000 -j DNAT' not in output:
+            message = 'Error: Setting SSH port forwarding on NAT instance.'
+            return (False, message)
+
+        return (True, '')
+
+    def _clusterous_tag(self, resource_name = None):
+        clusterous_tag = {defaults.instance_tag_key: self.cluster_name}
+        if resource_name is not None:
+            clusterous_tag.update({'Name': self.cluster_name + '-'+str(resource_name)})
+
+        return clusterous_tag
+
+    def _get_vpc(self, vpc_conn):
+        vpc = None
+        vpc_id = self._config.get('vpc_id')
+        if vpc_id:
+            try:
+                vpcs = vpc_conn.get_all_vpcs(vpc_ids=[vpc_id])
+                if len(vpcs) > 0:
+                    vpc = vpcs[0]
+            except boto.exception.EC2ResponseError as e:
+                raise ClusterException('VPC id provided "{0}" does not exist'.format(vpc_id))
+        else:
+            vpc = self._create_vpc(vpc_conn, vpc_id)
+        return vpc
+    
+    def _create_vpc(self, vpc_conn, vpc_id = None):
+        vpc = None
+
+        if vpc_id is None:
+            vpc_name_full = "{0}-vpc".format(self.cluster_name)
+            
+            # Get list of VPCs
+            vpcs = vpc_conn.get_all_vpcs()
+            for i in vpcs:
+                if i.tags.get('Name','') == vpc_name_full:
+                    vpc = i
+        
+            if vpc is None:
+                # Create VPC
+                vpc = vpc_conn.create_vpc('10.2.0.0/16')
+                vpc.add_tags(self._clusterous_tag('vpc'))
+                vpc_conn.modify_vpc_attribute(vpc.id, enable_dns_support=True)
+                vpc_conn.modify_vpc_attribute(vpc.id, enable_dns_hostnames=True)
+        
+                # Create network acl
+                network_acl = vpc_conn.create_network_acl(vpc.id)
+                network_acl.add_tags(self._clusterous_tag('acl'))
+
+        else:
+            vpcs = vpc_conn.get_all_vpcs(vpc_ids=[vpc_id])
+            if len(vpcs) > 0:
+                vpc = vpcs[0]
+    
+        return vpc
+    
+    def _create_private_sg(self, vpc_conn, vpc, sg_name):
+        security_group = None
+        security_group_name_full = "{0}-{1}".format(self.cluster_name, sg_name)
+        security_groups = vpc_conn.get_all_security_groups()
+        for i in security_groups:
+            if i.tags.get('Name','') == security_group_name_full:
+                security_group = i
+    
+        if security_group is None:
+            # Private Security group
+            security_group = vpc_conn.create_security_group(self.cluster_name+"-{0}".format(sg_name), 'Private security group for ' + self.cluster_name, vpc.id)
+            security_group.add_tags(self._clusterous_tag(sg_name))
+            security_group.authorize(ip_protocol='-1', from_port=0, to_port=65535, cidr_ip='0.0.0.0/0')
+        
+        return security_group
+
+    def _create_public_sg(self, vpc_conn, vpc, sg_name):
+        security_group = None
+        security_group_name_full = "{0}-{1}".format(self.cluster_name, sg_name)
+        security_groups = vpc_conn.get_all_security_groups()
+        for i in security_groups:
+            if i.tags.get('Name','') == security_group_name_full:
+                security_group = i
+    
+        if security_group is None:
+            # Public Security group
+            private_security_group = self._create_private_sg(vpc_conn, vpc, "private-sg")
+            security_group = vpc_conn.create_security_group(self.cluster_name+"-{0}".format(sg_name), 'Public security group for ' + self.cluster_name, vpc.id)
+            security_group.add_tags(self._clusterous_tag(sg_name))
+            security_group.authorize(ip_protocol='tcp', from_port=22, to_port=22, cidr_ip='0.0.0.0/0')
+            security_group.authorize(ip_protocol='tcp', from_port=defaults.nat_ssh_port_forwarding, to_port=defaults.nat_ssh_port_forwarding, cidr_ip='0.0.0.0/0')
+            security_group.authorize(ip_protocol='-1', from_port=0, to_port=65535, src_group=private_security_group)
+        
+        return security_group
+
+    def _create_subnet(self, vpc_conn, vpc, subnet_name):
+        subnet = None
+        subnet_name_full = "{0}-{1}-{2}".format(self.cluster_name, subnet_name, defaults.default_zone)
+        # Get list of subnets
+        subnets = vpc_conn.get_all_subnets(filters={'vpcId': vpc.id})
+        cidr_list = []
+        for i in subnets:
+            if i.tags.get('Name','') == subnet_name_full:
+                subnet = i
+            else:
+                cidr_list.append(IPNetwork(i.cidr_block))
+    
+        if subnet is None:
+            if cidr_list:
+                cidr_list.sort()
+                next_cidr = cidr_list[-1:][0]
+                next_cidr.value = next_cidr.last + 1
+                next_cidr.prefixlen = 24
+                cidr = next_cidr
+            else:
+                vpc_cidr = vpc.cidr_block.split('.')
+                cidr = '{0}.{1}.0.0/24'.format(vpc_cidr[0], vpc_cidr[1])
+
+            subnet = vpc_conn.create_subnet(vpc.id, cidr, availability_zone=self._config['region'] + defaults.default_zone)
+            subnet.add_tags(self._clusterous_tag("{0}-{1}".format(subnet_name, defaults.default_zone)))
+
+        return subnet
+    
+    def _create_gateway(self, vpc_conn, vpc, gateway_name):
+        gateway = None
+
+        # Check if VPC has default gateway
+        gateways = vpc_conn.get_all_internet_gateways(filters={'attachment.vpc-id': vpc.id})
+        if len(gateways) == 0:
+            # Create a internet gateway
+            gateway = vpc_conn.create_internet_gateway()
+            gateway.add_tags(self._clusterous_tag(gateway_name))
+            vpc_conn.attach_internet_gateway(gateway.id, vpc.id)
+        else:
+            gateway = gateways[0]
+    
+        return gateway
+    
+    def _create_route_table(self, vpc_conn, vpc, route_table_name):
+        route_table = None
+        route_table_name_full = "{0}-{1}".format(self.cluster_name, route_table_name)
+        # Get list of route tables
+        route_tables = vpc_conn.get_all_route_tables(filters={'vpc_id': vpc.id})
+        for i in route_tables:
+            if i.tags.get('Name','') == route_table_name_full:
+                route_table = i
+
+        if route_table is None:
+            # Create a Route Table
+            route_table = vpc_conn.create_route_table(vpc.id)
+            route_table.add_tags(self._clusterous_tag(route_table_name))
+    
+        return route_table
 
     def init_cluster(self, cluster_name, cluster_spec, nodes_info=[], logging_level=0,
                      shared_volume_size=None, controller_instance_type=None, shared_volume_id=None):
@@ -665,14 +811,17 @@ class AWSCluster(Cluster):
         try:
             conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
                                                 aws_secret_access_key=c['secret_access_key'])
-            if not conn:
+            vpc_conn = boto.vpc.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'], 
+                                                  aws_secret_access_key=c['secret_access_key'])
+    
+            if not (conn or vpc_conn):
                 raise ClusterException('Cannot connect to AWS')
-
+    
             # Check if cluster by this name is already running
             if self._get_instances(cluster_name, connection=conn):
                 self._logger.error('A cluster by the name "{0}" is already running, cannot start'.format(cluster_name))
                 raise ClusterException('Another cluster by the same name is running')
-
+    
             # Create registry bucket if it doesn't already exist
             s3conn = boto.s3.connection.S3Connection(c['access_key_id'], c['secret_access_key'])
             if not s3conn.lookup(c['clusterous_s3_bucket']):
@@ -683,7 +832,21 @@ class AWSCluster(Cluster):
                     self._logger.error('Unable to create S3 bucket due to an AWS conflict. Try again later.')
                     self._logger.error(e)
                     raise ClusterException('Unrecoverable error while trying to start cluster')
-
+    
+            # Cluster info file: Having created the first cluster resource, set cluster name and flag
+            self._set_cluster_info({'cluster_name': cluster_name, 'running': False})
+    
+            # Configuring VPC
+            self._logger.info('Configuring VPC')
+            vpc = self._get_vpc(vpc_conn)
+            gateway = self._create_gateway(vpc_conn, vpc, 'gateway')
+            public_subnet = self._create_subnet(vpc_conn, vpc, 'public-subnet')
+            private_subnet = self._create_subnet(vpc_conn, vpc, 'private-subnet')
+            public_route_table = self._create_route_table(vpc_conn, vpc, 'public-route-table')
+            private_route_table = self._create_route_table(vpc_conn, vpc, 'private-route-table')
+            private_security_group = self._create_private_sg(vpc_conn, vpc, "private-sg")
+            public_security_group = self._create_public_sg(vpc_conn, vpc, "public-sg")
+    
             # Shared volume
             if shared_volume_id:
                 try:
@@ -691,41 +854,66 @@ class AWSCluster(Cluster):
                     if shared_volume.status != 'available':
                         raise ClusterException('Volume "{0}" is not available'.format(shared_volume_id))
                     vpc_conn = boto.vpc.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],aws_secret_access_key=c['secret_access_key'])
-                    subnet = vpc_conn.get_all_subnets([c['subnet_id']])[0]
-                    if subnet.availability_zone != shared_volume.zone:
-                        raise ClusterException('Conflict in availability zone. Subnet "{0}" in "{1}" and Volume "{2}" in "{3}"'.format(c['subnet_id'],
-                                                                                                                                subnet.availability_zone,
-                                                                                                                                shared_volume_id,
-                                                                                                                                shared_volume.zone))
+                    if private_subnet.availability_zone != shared_volume.zone:
+                        raise ClusterException('Conflict in availability zone. Subnet "{0}" in "{1}" and Volume "{2}" in "{3}"'.format(private_subnet.id,
+                                                private_subnet.availability_zone, shared_volume_id, shared_volume.zone))
                 except boto.exception.EC2ResponseError as e:
                     raise ClusterException('Volume "{0}" does not exist'.format(shared_volume_id))
-
-            # Create Security group
-            self._logger.info('Creating security group')
-            sg_id = self._create_security_group(cluster_name, conn)
-
-            # Cluster info file: Having created the first cluster resource, set cluster name and flag
-            self._set_cluster_info({'cluster_name': cluster_name, 'running': False})
-
-            #
-            # Launch all instances
-            #
-
+    
+            # Connect public subnet to the gateway
+            vpc_conn.create_route(public_route_table.id, destination_cidr_block="0.0.0.0/0", gateway_id=gateway.id)
+            vpc_conn.associate_route_table(public_route_table.id, public_subnet.id)
+    
+            # Launch NAT instance
+            self._logger.info('Starting NAT')
+            nat_interface = boto.ec2.networkinterface.NetworkInterfaceSpecification(subnet_id=public_subnet.id,
+                                                                                    groups=[public_security_group.id, ],
+                                                                                    associate_public_ip_address=True)
+            nat_network_interfaces = boto.ec2.networkinterface.NetworkInterfaceCollection(nat_interface)
+            nat_res = conn.run_instances(defaults.nat_ami_id, 
+                                         min_count=1,
+                                         key_name=c['key_pair'], 
+                                         instance_type=defaults.nat_instance_type,
+                                         network_interfaces=nat_network_interfaces)
+            nat_instance = nat_res.instances[0]
+    
+            nat_tags = {'Name': defaults.nat_name_format.format(cluster_name),
+                                defaults.instance_node_type_tag_key: defaults.nat_name_tag_value}
+            nat_tags_and_res = [('nat', nat_tags, nat_res.instances)]
+    
+            
+            # Wait for NAT to launch
+            nat_not_used = self._wait_and_tag_instance_reservations(nat_tags_and_res)
+            if not retry_ssh(nat_instance.ip_address, 22, 5, 45):
+                raise ClusterException('Unable to SSH NAT instance')
+            
+            nat_instance.modify_attribute('sourceDestCheck',False)  # Disable sourceDestCheck on NAT instance
+            
+            # Connect private subnet to the nat instance
+            vpc_conn.create_route(private_route_table.id, destination_cidr_block="0.0.0.0/0", instance_id=nat_instance.id)
+            vpc_conn.associate_route_table(private_route_table.id, private_subnet.id)
+    
             # Launch controller
             self._logger.info('Starting controller')
             block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
             root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
             root_vol.size = defaults.controller_root_volume_size
-
+    
             block_devices['/dev/sda1'] = root_vol
-            controller_res = conn.run_instances(defaults.controller_ami_id, min_count=1,
-                                            key_name=c['key_pair'], instance_type=self._controller_instance_type,
-                                            subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
-
+    
+            controller_res = conn.run_instances(defaults.controller_ami_id, 
+                                                min_count=1,
+                                                key_name=c['key_pair'], 
+                                                instance_type=self._controller_instance_type,
+                                                block_device_map=block_devices, 
+                                                subnet_id=private_subnet.id, 
+                                                security_group_ids=[private_security_group.id])
+            controller_instance = controller_res.instances[0]
+    
             controller_tags = {'Name': defaults.controller_name_format.format(cluster_name),
                                 defaults.instance_node_type_tag_key: defaults.controller_name_tag_value}
             controller_tags_and_res = [('controller', controller_tags, controller_res.instances)]
-
+    
             # Loop through node groups and launch all
             self._logger.info('Starting all nodes')
             node_tags_and_res = []
@@ -733,33 +921,52 @@ class AWSCluster(Cluster):
                 node_block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
                 node_root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
                 node_block_devices['/dev/sda1'] = node_root_vol
-                res = conn.run_instances(defaults.node_ami_id, min_count=num_nodes, max_count=num_nodes,
-                                    key_name=c['key_pair'], instance_type=instance_type,
-                                    subnet_id=c['subnet_id'], block_device_map=node_block_devices, security_group_ids=[sg_id])
+    
+                res = conn.run_instances(defaults.node_ami_id, 
+                                         min_count=num_nodes, 
+                                         max_count=num_nodes,
+                                         key_name=c['key_pair'], 
+                                         instance_type=instance_type,
+                                         block_device_map=node_block_devices, 
+                                         subnet_id=private_subnet.id, 
+                                         security_group_ids=[private_security_group.id])
                 node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag),
                             defaults.instance_node_type_tag_key: node_tag}
                 node_tags_and_res.append((node_tag, node_tags, res.instances))
-
+    
             # Launch logging instance if necessary
             logging_tags_and_res = []
             if logging_level > 0:
                 self._logger.info('Starting central logging instance')
-                logging_res = conn.run_instances(defaults.central_logging_ami_id, min_count=1,
-                                                key_name=c['key_pair'], instance_type=defaults.central_logging_instance_type,
-                                                subnet_id=c['subnet_id'], block_device_map=block_devices, security_group_ids=[sg_id])
+    
+                logging_res = conn.run_instances(defaults.central_logging_ami_id, 
+                                                 min_count=1,
+                                                 key_name=c['key_pair'], 
+                                                 instance_type=defaults.central_logging_instance_type,
+                                                 block_device_map=block_devices, 
+                                                 subnet_id=private_subnet.id, 
+                                                 security_group_ids=[private_security_group.id])
                 logging_tags = {'Name': defaults.central_logging_name_format.format(cluster_name),
                                 defaults.instance_node_type_tag_key: defaults.central_logging_name_tag_value}
                 logging_tags_and_res = [('central-logging', logging_tags, logging_res.instances)]
-
-
+    
+    
             # Wait for controller to launch
             controller = self._wait_and_tag_instance_reservations(controller_tags_and_res)
-
+            if not retry_ssh(nat_instance.ip_address, defaults.nat_ssh_port_forwarding, 5, 45):
+                raise ClusterException('Error: Unable to SSH Controller instance.')
+    
+            # Setup ssh port forwarding on NAT instance
+            self._nat_ssh_port_forwarding(nat_instance.ip_address, controller_instance.private_ip_address)
+    
             # Add controller IP to cluster info file
-            self._set_cluster_info({'controller_ip': controller.values()[0].public_ips[0], 'cluster_name': cluster_name})
-            controller_inventory = os.path.expanduser(defaults.current_controller_ip_file)
-            self._write_to_hosts_file(controller_inventory, [controller.values()[0].public_ips[0]], 'controller', overwrite=True)
-
+            self._set_cluster_info({'nat_ip': nat_instance.ip_address, 'cluster_name': cluster_name})
+            controller_inventory = os.path.expanduser(defaults.current_nat_ip_file)
+    
+            self._write_to_hosts_file(controller_inventory, 
+                                      ['{0}:{1}'.format(nat_instance.ip_address, defaults.nat_ssh_port_forwarding)], 
+                                      'controller', overwrite=True)
+    
             # Shared volume
             if shared_volume_id:
                 # Attach shared volume
@@ -778,18 +985,18 @@ class AWSCluster(Cluster):
                 self._logger.debug('Shared volume {0} created'.format(shared_vol.id))
                 conn.create_tags([shared_vol.id], {'Name': defaults.controller_name_format.format(cluster_name),
                                                    defaults.instance_tag_key: cluster_name})
-
+    
                 attach = shared_vol.attach(controller_res.instances[0].id, '/dev/sdf')
                 while shared_vol.attachment_state() != 'attached':
                     time.sleep(2)
                     shared_vol.update()
-
+    
             # Tag central logging
             central_logging = {}
             if logging_tags_and_res:
                 self._logger.debug('Tagging central logging...')
                 central_logging = self._wait_and_tag_instance_reservations(logging_tags_and_res)
-
+    
             # Tag all nodes
             nodes = {}
             if node_tags_and_res:
@@ -803,24 +1010,25 @@ class AWSCluster(Cluster):
             # Extra variables used by ansible scripts
             extra_vars = {'central_logging_level': logging_level,
                           'central_logging_ip': '',
-                          'byo_volume': 1 if shared_volume_id else 0
+                          'byo_volume': 1 if shared_volume_id else 0,
+                          'nat_ssh_port_forwarding': defaults.nat_ssh_port_forwarding
                           }
-
+    
             # Configure controller
             controller_vars_dict = self._controller_vars_dict()
             controller_vars_dict.update(extra_vars)
             controller_vars_file = self._make_vars_file(controller_vars_dict)
-
+    
             self._logger.info('Configuring controller instance...')
             AnsibleHelper.run_playbook(defaults.get_script('ansible/01_configure_controller.yml'),
                                        controller_vars_file.name, self._config['key_file'],
                                        hosts_file=controller_inventory)
-
+    
             controller_vars_file.close()
-
+    
             self._copy_environment_to_controller()
-
-
+    
+    
             # Wait for logging instance to launch and configure
             if central_logging:
                 extra_vars['central_logging_ip'] = central_logging.values()[0].private_ips[0]     # private ip
@@ -831,11 +1039,11 @@ class AWSCluster(Cluster):
                 logging_inventory.close()
             # Write logging vars to cluster info file
             self._set_cluster_info(extra_vars)
-
-
+    
+    
             # Configure nodes
             if nodes:
-                self._configure_nodes(nodes_info, nodes, controller.values()[0].public_ips[0], extra_vars)
+                self._configure_nodes(nodes_info, nodes, nat_instance.ip_address, extra_vars)
 
         except (boto.exception.BotoClientError, boto.exception.BotoServerError) as e:
             self._logger.critical('An error occured accessing AWS and the cluster could not be launched. Use "destroy" to destroy the cluster')
@@ -844,8 +1052,6 @@ class AWSCluster(Cluster):
         except socket.error as e:
             raise ClusterException('A connection error was encountered during cluster creation. User "destroy" to destroy cluster')
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             raise ClusterException('An error occured during cluster creation: {0}. Use "destroy" to destroy cluster'.format(e))
 
 
@@ -857,7 +1063,7 @@ class AWSCluster(Cluster):
         self.create_permanent_tunnel_to_controller(5050, 5050, prefix='mesos')
 
 
-    def _configure_nodes(self, nodes_info, nodes, controller_ip, extra_vars={}):
+    def _configure_nodes(self, nodes_info, nodes, nat_ip, extra_vars={}):
         nodes_inventory = tempfile.NamedTemporaryFile()
         for num_nodes, instance_type, node_tag in nodes_info:
             self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag].private_ips, node_tag, overwrite=False)
@@ -895,28 +1101,32 @@ class AWSCluster(Cluster):
 
         c = self._config
         nodes_info = [(num_nodes, instance_type, node_name)]
-        controller_ip = self._get_controller_ip()
+        nat_ip = self._get_nat_ip()
         logging_vars = self._get_logging_vars()
 
         conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
                                             aws_secret_access_key=c['secret_access_key'])
-        if not conn:
+        vpc_conn = boto.vpc.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'], 
+                                              aws_secret_access_key=c['secret_access_key'])
+        if not (conn or vpc_conn):
             raise ClusterException('Cannot connect to AWS')
 
-
-        sg_id = self._get_current_sg_id(conn)
-        if not sg_id:
-            return False
-
-        res = conn.run_instances(defaults.node_ami_id, min_count=num_nodes, max_count=num_nodes,
-                                key_name=c['key_pair'], instance_type=instance_type,
-                                subnet_id=c['subnet_id'], security_group_ids=[sg_id])
+        vpc = self._get_vpc(vpc_conn)
+        private_subnet = self._create_subnet(vpc_conn, vpc, 'private-subnet')
+        private_security_group = self._create_private_sg(vpc_conn, vpc, "private-sg")
+        res = conn.run_instances(defaults.node_ami_id, 
+                                 min_count=num_nodes, 
+                                 max_count=num_nodes,
+                                 key_name=c['key_pair'], 
+                                 instance_type=instance_type,
+                                 subnet_id=private_subnet.id, 
+                                 security_group_ids=[private_security_group.id])
         node_tags = {'Name': defaults.node_name_format.format(self.cluster_name, node_name),
                     defaults.instance_node_type_tag_key: node_name}
         node_tags_and_res = [(node_name, node_tags, res.instances)]
-
+        nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
         self._logger.info('Waiting for nodes to start...')
-        return self._configure_nodes(nodes_info, node_tags_and_res, controller_ip, logging_vars)
+        return self._configure_nodes(nodes_info, nodes, nat_ip, logging_vars)
 
     def rm_nodes(self, num_nodes, node_name):
         c = self._config
@@ -955,7 +1165,7 @@ class AWSCluster(Cluster):
 
 
     def _delete_cluster_info(self):
-        files = [defaults.cluster_info_file, defaults.current_controller_ip_file,
+        files = [defaults.cluster_info_file, defaults.current_nat_ip_file,
                  defaults.cached_cluster_file_path, defaults.cached_environment_file_path]
         for f in files:
             full = os.path.expanduser(f)
@@ -988,56 +1198,135 @@ class AWSCluster(Cluster):
         return True
 
     def terminate_cluster(self, leave_shared_volume, force_delete_shared_volume):
+        # Connect to EC2 services
         conn = boto.ec2.connect_to_region(self._config['region'],
                     aws_access_key_id=self._config['access_key_id'],
                     aws_secret_access_key=self._config['secret_access_key'])
 
-        if not conn:
-            raise ClusterException('Cannot connect to AWS')
+        # Connect to VPC services
+        vpc_conn = boto.vpc.connect_to_region(self._config['region'],
+                    aws_access_key_id=self._config['access_key_id'],
+                    aws_secret_access_key=self._config['secret_access_key'])
 
+        if not (conn or vpc_conn):
+            raise ClusterException('Cannot connect to AWS')
+        
+        resource_terminated = False
+
+        # Delete instances
         instance_list = self._get_instances(self.cluster_name, connection=conn)
         num_instances = len(instance_list)
         instances = [ i.id for i in instance_list ]
+        if instances:
+            resource_terminated = True
+            self._logger.info('Terminating {0} instances'.format(num_instances))
+            self._terminate_instances_and_wait(conn, instances)
 
-        if not instances:
-            self._logger.info('Nothing to terminate. Cleaning up.')
-            self._delete_cluster_info()
-            return True
-
-        self._logger.info('Terminating {0} instances'.format(num_instances))
-
-        self._terminate_instances_and_wait(conn, instances)
-
-        # Shared volume
+        # Delete shared volume
         volumes = conn.get_all_volumes(filters={'tag:Attached':self.cluster_name})
-        byo_volume = True if volumes else False
-        if byo_volume:
-            shared_volume = volumes[0]
-            shared_volume.remove_tags({'Attached': self.cluster_name})
-        else:
-            volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
-            shared_volume = volumes[0]
-
-        if leave_shared_volume:
-            self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
-        else:
-            if force_delete_shared_volume or not byo_volume:
-                if shared_volume.delete():
-                    self._logger.info('Shared volume "{0}" has been deleted'.format(shared_volume.id))
-                else:
-                    self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, shared_volume.id))
+        if volumes:
+            byo_volume = True if volumes else False
+            if byo_volume:
+                shared_volume = volumes[0]
+                shared_volume.remove_tags({'Attached': self.cluster_name})
             else:
+                volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
+                shared_volume = volumes[0]
+    
+            if leave_shared_volume:
                 self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
+            else:
+                if force_delete_shared_volume or not byo_volume:
+                    if shared_volume.delete():
+                        self._logger.info('Shared volume "{0}" has been deleted'.format(shared_volume.id))
+                    else:
+                        self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, shared_volume.id))
+                else:
+                    self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
 
         # Delete security group
-        sg = conn.get_all_security_groups(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
+        sg = conn.get_all_security_groups(filters={'tag:Name':'{0}-public-sg'.format(self.cluster_name),
+                                                   'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
+        private_sg = conn.get_all_security_groups(filters={
+                                                           'tag:Name':'{0}-private-sg'.format(self.cluster_name),
+                                                           'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
+        for g in private_sg:
+            sg.append(g)
+
         sg_deleted = [ g.delete() for g in sg ]
         if False in sg_deleted:
             self._logger.error('Unable to delete security group for {0}'.format(self.cluster_name))
         else:
             self._logger.debug('Deleted security group')
 
+        # Delete subnets
+        subnet_deleted = True
+        for i in vpc_conn.get_all_subnets(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name}):
+            if not vpc_conn.delete_subnet(i.id):
+                subnet_deleted = False
+                break
+        if not subnet_deleted:
+            self._logger.error('Unable to delete subnets for {0}'.format(self.cluster_name))
+        else:
+            resource_terminated = True
+            self._logger.debug('Deleted subnets')
+
+        # Delete route tables
+        rt_deleted = True
+        for i in vpc_conn.get_all_route_tables(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name}):
+            if not vpc_conn.delete_route_table(i.id):
+                rt_deleted = False
+                break
+        if not rt_deleted:
+            self._logger.error('Unable to delete Route Tables for {0}'.format(self.cluster_name))
+        else:
+            resource_terminated = True
+            self._logger.debug('Deleted Route Tables')
+
+        # If VPC was created
+        vpcs = vpc_conn.get_all_vpcs(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
+        if vpcs:
+            vpc = vpcs[0]
+            gw_deleted = True
+            for i in vpc_conn.get_all_internet_gateways(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name}):
+                vpc_conn.detach_internet_gateway(internet_gateway_id = i.id, vpc_id = vpc.id) 
+                if not vpc_conn.delete_internet_gateway(i.id):
+                    gw_deleted = False
+                    break
+            if not gw_deleted:
+                self._logger.error('Unable to delete Gateway for {0}'.format(self.cluster_name))
+            else:
+                resource_terminated = True
+                self._logger.debug('Deleted Gateway')
+
+            # Delete ACL
+            acl_deleted = True
+            for i in vpc_conn.get_all_network_acls(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name}):
+                if not vpc_conn.delete_network_acl(i.id):
+                    acl_deleted = False
+                    break
+            if not acl_deleted:
+                self._logger.error('Unable to delete ACL for {0}'.format(self.cluster_name))
+            else:
+                resource_terminated = True
+                self._logger.debug('Deleted ACL')
+
+            # Delete VPC
+            vpc_deleted = True
+            for i in vpc_conn.get_all_vpcs(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name}):
+                if not vpc_conn.delete_vpc(i.id):
+                    vpc_deleted = False
+                    break
+            if not vpc_deleted:
+                self._logger.error('Unable to delete VPC for {0}'.format(self.cluster_name))
+            else:
+                resource_terminated = True
+                self._logger.debug('Deleted VPC')
+
         # Delete cluster info
+        if not resource_terminated:
+            self._logger.info('Nothing terminated')
+        self._logger.info('Cleaning up')
         self._delete_cluster_info()
 
         return True
@@ -1069,7 +1358,7 @@ class AWSCluster(Cluster):
                                    vars_file.name,
                                    self._config['key_file'],
                                    env=self._ansible_env_credentials(),
-                                   hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+                                   hosts_file=os.path.expanduser(defaults.current_nat_ip_file))
         vars_file.close()
         self._logger.info('Finished building docker image')
         return True
@@ -1087,10 +1376,6 @@ class AWSCluster(Cluster):
         image_info = {}
         # TODO: rewrite to use make HTTP calls directly
         ssh = self._ssh_to_controller()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(hostname = self._get_controller_ip(),
-                    username = defaults.cluster_username,
-                    key_filename = os.path.expanduser(self._config['key_file']))
 
         # get image_id
         cmd = 'curl registry:5000/v1/repositories/library/{0}/tags/{1}'.format(image_name, tag_name)
@@ -1132,7 +1417,7 @@ class AWSCluster(Cluster):
                                    vars_file.name,
                                    self._config['key_file'],
                                    env=self._ansible_env_credentials(),
-                                   hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+                                   hosts_file=os.path.expanduser(defaults.current_nat_ip_file))
         vars_file.close()
         self._logger.debug('Finished sync folder')
         return (True, 'Ok')
@@ -1152,9 +1437,6 @@ class AWSCluster(Cluster):
         remote_path = '/home/data/{0}'.format(remote_path)
 
         ssh = self._ssh_to_controller()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(hostname = self._get_controller_ip(), username = defaults.cluster_username,
-                    key_filename = os.path.expanduser(self._config['key_file']))
 
         # check if folder exists
         cmd = "ls -d '{0}'".format(remote_path)
@@ -1175,7 +1457,7 @@ class AWSCluster(Cluster):
                                    vars_file.name,
                                    self._config['key_file'],
                                    env=self._ansible_env_credentials(),
-                                   hosts_file=os.path.expanduser(defaults.current_controller_ip_file))
+                                   hosts_file=os.path.expanduser(defaults.current_nat_ip_file))
         vars_file.close()
         self._logger.debug('Finished sync folder')
         return (True, 'Ok')
@@ -1185,9 +1467,6 @@ class AWSCluster(Cluster):
         List content of a folder on the on cluster
         """
         ssh = self._ssh_to_controller()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(hostname = self._get_controller_ip(), username = defaults.cluster_username,
-                    key_filename = os.path.expanduser(self._config['key_file']))
 
         remote_path = '/home/data/{0}'.format(remote_path)
         cmd = "ls -al '{0}'".format(remote_path)
@@ -1205,9 +1484,6 @@ class AWSCluster(Cluster):
         Delete content of a folder on the on cluster
         """
         ssh = self._ssh_to_controller()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(hostname = self._get_controller_ip(), username = defaults.cluster_username,
-                    key_filename = os.path.expanduser(self._config['key_file']))
 
         # check if folder exists
         remote_path = '/home/data/{0}'.format(remote_path)
@@ -1235,21 +1511,21 @@ class AWSCluster(Cluster):
         """
         # Getting cluster info
         instances = self._get_instances(self.cluster_name)
-        controller_ip = None
+        nat_ip = None
         cluster_name = None
         for instance in instances:
             if defaults.controller_name_format.format(self.cluster_name) in instance.tags['Name']:
-                controller_ip = instance.ip_address
+                nat_ip = instance.ip_address
                 cluster_name = self.cluster_name
 
-        if not controller_ip:
+        if not nat_ip:
             return False
 
         self._create_config_dirs()
-        # Write controller_ip
-        self._set_cluster_info({'controller_ip': controller_ip, 'cluster_name': cluster_name})
-        ip_file = os.path.expanduser(defaults.current_controller_ip_file)
-        self._write_to_hosts_file(ip_file, [controller_ip], 'controller', overwrite=True)
+        # Write nat_ip
+        self._set_cluster_info({'nat_ip': nat_ip, 'cluster_name': cluster_name})
+        ip_file = os.path.expanduser(defaults.current_nat_ip_file)
+        self._write_to_hosts_file(ip_file, [nat_ip], 'controller', overwrite=True)
 
         # Sync from controller
         self._copy_environment_from_controller()
@@ -1265,6 +1541,7 @@ class AWSCluster(Cluster):
         nodes_info = {}
         controller_info = {}
         central_logging_info = {}
+        nat_info = {}
         instances = self._get_instances(self.cluster_name)
 
         for instance in instances:
@@ -1277,7 +1554,6 @@ class AWSCluster(Cluster):
                 launch_time = parser.parse(instance.launch_time)
                 uptime = (datetime.now(launch_time.tzinfo) - launch_time).total_seconds()
                 controller_info = {
-                                    'ip': str(instance.ip_address),
                                     'type': instance.instance_type,
                                     'uptime': int(uptime)
                 }
@@ -1288,6 +1564,11 @@ class AWSCluster(Cluster):
                 central_logging_info = {
                                     'type': instance.instance_type
                 }
+            elif node_name == defaults.nat_name_tag_value:
+                nat_info = {
+                            'ip': str(instance.ip_address),
+                            'type': instance.instance_type
+                            }
             else:
                 if node_name not in nodes_info:
                     nodes_info[node_name] = {
@@ -1302,7 +1583,8 @@ class AWSCluster(Cluster):
                 'instance_count': len(instances),
                 'nodes': nodes_info,
                 'controller': controller_info,
-                'central_logging': central_logging_info
+                'central_logging': central_logging_info,
+                'nat': nat_info
         }
 
         return info
@@ -1357,7 +1639,7 @@ class AWSCluster(Cluster):
                     if not stderr.readlines():
                         break
                     retry += 1
-                    self._logger.info('Retry: {0}'.format(retry))
+                    self._logger.debug('Retry: {0}'.format(retry))
                     time.sleep(3)
                 return (retry < 3 ), stdout
 
@@ -1384,10 +1666,11 @@ class AWSCluster(Cluster):
 
         # Shell
         node = '{0}.marathon.mesos'.format(component_name)
-        cmd='ssh -i {0} -oStrictHostKeyChecking=no -A -t {1}@{2} \
-             ssh -i {3} -oStrictHostKeyChecking=no -A -t {4} \
-             sudo docker exec -ti {5} bash'.format(key_file_local, defaults.cluster_username, 
-                            self._get_controller_ip(), key_file_remote, node, container_id)
+
+        cmd='ssh -i {0} -p {1} -oStrictHostKeyChecking=no -A -t {2}@{3} \
+             ssh -i {4} -oStrictHostKeyChecking=no -A -t {5} \
+             sudo docker exec -ti {5} bash'.format(key_file_local, defaults.nat_ssh_port_forwarding,
+                         defaults.cluster_username, self._get_nat_ip(), key_file_remote, node, container_id)
         os.system(cmd)
 
         # Remove keys

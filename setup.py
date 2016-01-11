@@ -30,6 +30,6 @@ setup(name='clusterous',
                     ]},
       install_requires=['pyyaml', 'pytest', 'mock', 'paramiko',
                         'boto', 'ansible', 'requests', 'marathon', 'sshtunnel',
-                        'python-dateutil', 'tabulate'],
+                        'python-dateutil', 'tabulate', 'netaddr'],
       **extra
       )

@@ -22,7 +22,7 @@ import collections
 
 from sshtunnel import SSHTunnelForwarder
 import sshtunnel
-from defaults import get_script
+from defaults import get_script, nat_ssh_port_forwarding
 
 
 class AnsibleHelper(object):
@@ -119,7 +119,7 @@ class SSHTunnel(object):
     class TunnelException(Exception):
         pass
 
-    def __init__(self, host, username, key_file, remote_port, host_port=22):
+    def __init__(self, host, username, key_file, remote_port, host_port=nat_ssh_port_forwarding):
         """
         Returns tuple consisting of local port and sshtunnel SSHTunnelForwarder object.
         Caller must call stop() on object when finished
