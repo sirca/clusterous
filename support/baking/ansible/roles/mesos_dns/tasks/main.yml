@@ -16,9 +16,11 @@
 ---
 - name: create mesos-dns dir
   file: path=/opt/mesos-dns state=directory mode=0755
-  # This is the latest version as of Jan 2016
+  # This is a known working version
 - name: download mesos-dns release binary
-  get_url: url=https://github.com/mesosphere/mesos-dns/releases/download/v0.5.1/mesos-dns-v0.5.1-linux-amd64 dest=/opt/mesos-dns/mesos-dns
+  get_url: url=https://github.com/mesosphere/mesos-dns/releases/download/v0.4.0/mesos-dns-v0.4.0-linux-amd64.gz dest=/opt/mesos-dns/mesos-dns.gz
+- name: unzip
+  command: gunzip /opt/mesos-dns/mesos-dns.gz
 - name: make mesos-dns executable
   file: path=/opt/mesos-dns/mesos-dns state=file mode="a+x"
 - name: mesos-dns config

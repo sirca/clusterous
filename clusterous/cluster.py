@@ -567,10 +567,7 @@ class AWSCluster(Cluster):
                         self._logger.debug('Running {0} {1} {2}'.format(inst.ip_address, tags, inst.id))
                 # There is no good reason for this to happen in practice
                 elif inst.state in ('terminated', 'stopped', 'stopping'):
-                    self._logger.error('Instance {0} is in state "{1}"'.format(inst.id, inst.state))
-                    self._logger.error('Problem creating instance')
-                    # Unrecoverable error, exit to prevent infinite loop
-                    return None
+                    raise ClusterException('Problem with instance {0}, now in "{1}" state'.format(inst.id, inst.state))
                 else:
                     # Refresh instance data
                     inst.update()
@@ -1362,7 +1359,7 @@ class AWSCluster(Cluster):
                     retry += 1
                     self._logger.info('Retry: {0}'.format(retry))
                     time.sleep(3)
-                return (retry <3 ), stdout
+                return (retry < 3 ), stdout
 
             # Copy script to node
             cmd='scp -i {0} -oStrictHostKeyChecking=no {1} {2}:{3}'.format(key_file_remote,
@@ -1376,6 +1373,7 @@ class AWSCluster(Cluster):
             # Get container id
             cmd='ssh -i {0} -oStrictHostKeyChecking=no {1} source {2} {3}'.format(key_file_remote,
                                                                                   node, container_id_script_node, component_name)
+
             success, stdout = _retry(cmd)
             if not success:
                 self._logger.debug("Failed to get container id for '{0}' component".format(component_name))
@@ -1388,7 +1386,7 @@ class AWSCluster(Cluster):
         node = '{0}.marathon.mesos'.format(component_name)
         cmd='ssh -i {0} -oStrictHostKeyChecking=no -A -t {1}@{2} \
              ssh -i {3} -oStrictHostKeyChecking=no -A -t {4} \
-             docker exec -ti {5} bash'.format(key_file_local, defaults.cluster_username, 
+             sudo docker exec -ti {5} bash'.format(key_file_local, defaults.cluster_username, 
                             self._get_controller_ip(), key_file_remote, node, container_id)
         os.system(cmd)
 

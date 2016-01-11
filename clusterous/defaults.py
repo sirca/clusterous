@@ -50,9 +50,9 @@ central_logging_name_format = '{0}-central-logging'
 central_logging_name_tag_value = 'central-logging'
 central_logging_instance_type = 't2.small'
 
-controller_ami_id = 'ami-0fc09a6c'	#'ami-fd4708c7'
-node_ami_id = 'ami-2bc19b48'	#'ami-47eaad7d'
-central_logging_ami_id = 'ami-0ee3b96d' #'ami-45eaad7f'
+controller_ami_id = 'ami-9e684dfd'	#'ami-fd4708c7'
+node_ami_id = 'ami-376b4e54'	#'ami-47eaad7d'
+central_logging_ami_id = 'ami-2f6a4f4c' #'ami-45eaad7f'
 
 controller_root_volume_size = 50    # GB
 
