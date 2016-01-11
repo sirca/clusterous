@@ -16,11 +16,14 @@
 ---
 - name: create mesos-dns dir
   file: path=/opt/mesos-dns state=directory mode=0755
+  # This is the latest version as of Jan 2016
 - name: download mesos-dns release binary
   get_url: url=https://github.com/mesosphere/mesos-dns/releases/download/v0.5.1/mesos-dns-v0.5.1-linux-amd64 dest=/opt/mesos-dns/mesos-dns
 - name: make mesos-dns executable
   file: path=/opt/mesos-dns/mesos-dns state=file mode="a+x"
 - name: mesos-dns config
   template: src=config.json.j2 dest=/opt/mesos-dns/config.json mode=0755
-- name: mesos-dns upstart script
-  template: src=mesos-dns.conf.j2 dest=/etc/init/mesos-dns mode=0755
+- name: mesos-dns Sys V init script
+  template: src=mesos-dns.conf.j2 dest=/etc/init/mesos-dns.conf mode=0755
+- name: mesos-dns Upstart script
+  template: src=mesos-dns.init.j2 dest=/etc/init/mesos-dns mode=0755

@@ -29,7 +29,7 @@ cached_environment_file = 'environment.yml'
 cached_cluster_file_path = local_environment_dir + '/' + cached_cluster_file
 cached_environment_file_path = local_environment_dir + '/' + cached_environment_file
 
-remote_environment_dir = '/root/environment'
+remote_environment_dir = '/home/ubuntu/environment'
 
 current_controller_ip_file = local_config_dir + '/' + 'current_controller'
 cluster_info_file = local_config_dir + '/' + 'cluster_info.yml'
@@ -49,11 +49,15 @@ registry_s3_path = '/docker-registry'
 central_logging_name_format = '{0}-central-logging'
 central_logging_name_tag_value = 'central-logging'
 central_logging_instance_type = 't2.small'
-central_logging_ami_id = 'ami-45eaad7f'
-controller_ami_id = 'ami-fd4708c7'
-node_ami_id = 'ami-47eaad7d'
 
-controller_root_volume_size = 10    # GB
+controller_ami_id = 'ami-0fc09a6c'	#'ami-fd4708c7'
+node_ami_id = 'ami-2bc19b48'	#'ami-47eaad7d'
+central_logging_ami_id = 'ami-0ee3b96d' #'ami-45eaad7f'
+
+controller_root_volume_size = 50    # GB
+
+cluster_username = 'ubuntu'
+cluster_user_home_dir = '/home/ubuntu'
 
 shared_volume_path = '/home/data/'
 shared_volume_size = 20     # GB

@@ -12,6 +12,9 @@ ansible-playbook -vvvv -i ec2.py 2_create_controller.yml
 ansible-playbook -vvvv -i ec2.py 2_create_node.yml
 ansible-playbook -vvvv -i ec2.py 2_create_elk.yml
 
+# Refresh Ansible dynamic inventory cache
+./ec2.py --refresh-cache
+
 # Packages
 ansible-playbook -vvvv -i ec2.py 3_install_controller.yml
 ansible-playbook -vvvv -i ec2.py 3_install_node.yml

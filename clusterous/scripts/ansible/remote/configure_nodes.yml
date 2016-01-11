@@ -19,9 +19,8 @@
 
 - name: configure all nodes
   hosts: all
-  user: root
+  user: ubuntu
   sudo: True
-  gather_facts: False
   tasks:
     # Wait for ssh before connecting
     - local_action:
@@ -32,8 +31,15 @@
         timeout: 300
         state: started
 
-    - name: add entry to hosts file
+    - name: register aws assigned hostname 
+      shell: hostname
+      register: default_hostname
+
+    - name: add controller/registry entry to hosts file
       lineinfile: dest=/etc/hosts line="{{ hostvars.localhost.ansible_default_ipv4.address }} controller registry"
+    
+    - name: add hostname entry to hosts file
+      lineinfile: dest=/etc/hosts line="{{ ansible_eth0.ipv4.address }} {{ default_hostname.stdout }}"
 
     - name: add mesos-dns to resolv.conf
       lineinfile: >
@@ -49,6 +55,12 @@
 
     - name: add node name to mesos attributes file
       lineinfile: dest=/etc/mesos-slave/attributes line="name:{{ group_names[0] }}" create=yes
+
+    - name: stop mesos-slave
+      service: name=mesos-slave state=stopped
+
+    - name: clean up mesos state because it will have the old hostname in it
+      file: path=/tmp/mesos/meta state=absent
 
     - name: start mesos-slave
       service: name=mesos-slave state=started

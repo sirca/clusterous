@@ -15,7 +15,7 @@
 # Docker
 ---
 - name: docker config
-  template: src=docker.j2 dest=/etc/sysconfig/docker mode=0755
+  template: src=docker.j2 dest=/etc/default/docker mode=0755
 - name: install Docker from Ubuntu repo
   apt: name=docker.io state=present
 - name: start docker service

@@ -303,7 +303,7 @@ class AWSCluster(Cluster):
                 'hosts_file_name': os.path.basename(hosts_file),
                 'vars_file_src': remote_vars_file.name,
                 'vars_file_name': os.path.basename(remote_vars_file.name),
-                'remote_dir': defaults.remote_host_scripts_dir,
+                'remote_dir': '{0}/{1}'.format(defaults.cluster_user_home_dir, defaults.remote_host_scripts_dir),
                 'playbook_file': playbook
                 }
 
@@ -363,7 +363,7 @@ class AWSCluster(Cluster):
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(hostname = self._get_controller_ip(),
-                        username = 'root',
+                        username = defaults.cluster_username,
                         key_filename = os.path.expanduser(self._config['key_file']))
         except (paramiko.ssh_exception.AuthenticationException,
                 paramiko.ssh_exception.NoValidConnectionsError,
@@ -398,7 +398,7 @@ class AWSCluster(Cluster):
         Returns helpers.SSHTunnel object connected to remote_port on controller
         """
         try:
-            tunnel = SSHTunnel(self._get_controller_ip(), 'root',
+            tunnel = SSHTunnel(self._get_controller_ip(), defaults.cluster_username,
                     os.path.expanduser(self._config['key_file']), remote_port)
         except SSHTunnel.TunnelException as e:
             if self._cluster_is_up():
@@ -412,13 +412,14 @@ class AWSCluster(Cluster):
         Create an ssh tunnel from the controller to a cluster node. Note that this
         doesn't expose a port on the local machine
         """
-        remote_key_path = '/root/{0}'.format(os.path.basename(self._config['key_file']))
+        remote_key_path = '{0}/{1}'.format(defaults.cluster_user_home_dir,
+                                        os.path.basename(self._config['key_file']))
 
         ssh_sock_file = '/tmp/clusterous_tunnel_%h_{0}.sock'.format(controller_port)
         create_cmd = ('ssh -4 -i {0} -f -N -M -S {1} -o ExitOnForwardFailure=yes ' +
               '-o StrictHostKeyChecking=no ' +
-              'root@{2} -L {3}:127.0.0.1:{4}').format(remote_key_path,
-              ssh_sock_file, remote_host, controller_port,
+              '{2}@{3} -L {4}:127.0.0.1:{5}').format(remote_key_path,
+              ssh_sock_file, defaults.cluster_username, remote_host, controller_port,
               remote_port)
 
 
@@ -460,7 +461,7 @@ class AWSCluster(Cluster):
         # Normal tunnel command
         connect_cmd = ['ssh', '-i', key_file, '-N', '-f', '-M',
                 '-S', ssh_sock_file, '-o', 'ExitOnForwardFailure=yes',
-                'root@{0}'.format(self._get_controller_ip()),
+                '{0}@{1}'.format(defaults.cluster_username, self._get_controller_ip()),
                 '-L', '{0}:127.0.0.1:{1}'.format(local_port, remote_port)]
 
         # If socket file doesn't exist, it will return with an error. This is normal
@@ -799,7 +800,7 @@ class AWSCluster(Cluster):
 
             # Any errors that occur up until this point cannot be recovered from by destroy
         except (Exception, KeyboardInterrupt) as e:
-            raise ClusterException('An error occured during cluster creation. Any created AWS EC2 instances will have to be terminated manually')
+            raise ClusterException('An error occured during cluster creation: {0}. Any created AWS EC2 instances will have to be terminated manually'.format(e))
 
         try:
             # Extra variables used by ansible scripts
@@ -846,7 +847,9 @@ class AWSCluster(Cluster):
         except socket.error as e:
             raise ClusterException('A connection error was encountered during cluster creation. User "destroy" to destroy cluster')
         except Exception as e:
-            raise ClusterException('An unknown error occured during cluster creation. Use "destroy" to destroy cluster')
+            import traceback
+            traceback.print_exc()
+            raise ClusterException('An error occured during cluster creation: {0}. Use "destroy" to destroy cluster'.format(e))
 
 
         # Set "running" flag in cluster info file
@@ -854,6 +857,7 @@ class AWSCluster(Cluster):
 
         # TODO: this is useful for debugging, but remove at a later stage
         self.create_permanent_tunnel_to_controller(8080, 8080, prefix='marathon')
+        self.create_permanent_tunnel_to_controller(5050, 5050, prefix='mesos')
 
 
     def _configure_nodes(self, nodes_info, nodes, controller_ip, extra_vars={}):
@@ -1088,7 +1092,7 @@ class AWSCluster(Cluster):
         ssh = self._ssh_to_controller()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(hostname = self._get_controller_ip(),
-                    username = 'root',
+                    username = defaults.cluster_username,
                     key_filename = os.path.expanduser(self._config['key_file']))
 
         # get image_id
@@ -1152,7 +1156,7 @@ class AWSCluster(Cluster):
 
         ssh = self._ssh_to_controller()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(hostname = self._get_controller_ip(), username = 'root',
+        ssh.connect(hostname = self._get_controller_ip(), username = defaults.cluster_username,
                     key_filename = os.path.expanduser(self._config['key_file']))
 
         # check if folder exists
@@ -1185,7 +1189,7 @@ class AWSCluster(Cluster):
         """
         ssh = self._ssh_to_controller()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(hostname = self._get_controller_ip(), username = 'root',
+        ssh.connect(hostname = self._get_controller_ip(), username = defaults.cluster_username,
                     key_filename = os.path.expanduser(self._config['key_file']))
 
         remote_path = '/home/data/{0}'.format(remote_path)
@@ -1205,7 +1209,7 @@ class AWSCluster(Cluster):
         """
         ssh = self._ssh_to_controller()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(hostname = self._get_controller_ip(), username = 'root',
+        ssh.connect(hostname = self._get_controller_ip(), username = defaults.cluster_username,
                     key_filename = os.path.expanduser(self._config['key_file']))
 
         # check if folder exists
@@ -1332,9 +1336,10 @@ class AWSCluster(Cluster):
         Connects to a docker container and gets an interactive shell
         '''
         key_file_local = os.path.expanduser(self._config['key_file'])
-        key_file_remote = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir, defaults.remote_host_key_file)
+        key_file_remote = '{0}/{1}/{2}'.format(defaults.cluster_user_home_dir,
+                                        defaults.remote_host_scripts_dir, defaults.remote_host_key_file)
         container_id_script_local = defaults.get_script(defaults.container_id_script_file)
-        container_id_script_remote = '/root/{0}/{1}'.format(defaults.remote_host_scripts_dir,defaults.container_id_script_file)
+        container_id_script_remote = '{0}/{1}/{2}'.format(defaults.cluster_user_home_dir, defaults.remote_host_scripts_dir,defaults.container_id_script_file)
         container_id_script_node = '/tmp/{0}'.format(defaults.container_id_script_file)
         node = '{0}.marathon.mesos'.format(component_name)
 
@@ -1381,10 +1386,10 @@ class AWSCluster(Cluster):
 
         # Shell
         node = '{0}.marathon.mesos'.format(component_name)
-        cmd='ssh -i {0} -oStrictHostKeyChecking=no -A -t root@{1} \
-             ssh -i {2} -oStrictHostKeyChecking=no -A -t {3} \
-             docker exec -ti {4} bash'.format(key_file_local, self._get_controller_ip(),
-                         key_file_remote, node, container_id)
+        cmd='ssh -i {0} -oStrictHostKeyChecking=no -A -t {1}@{2} \
+             ssh -i {3} -oStrictHostKeyChecking=no -A -t {4} \
+             docker exec -ti {5} bash'.format(key_file_local, defaults.cluster_username, 
+                            self._get_controller_ip(), key_file_remote, node, container_id)
         os.system(cmd)
 
         # Remove keys

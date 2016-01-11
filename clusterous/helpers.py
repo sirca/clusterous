@@ -64,6 +64,9 @@ class AnsibleHelper(object):
             logger.info(output)
             logger.error(error)
             raise AnsibleHelper.AnsibleError(playbook_file, process.returncode, output, error)
+        else:
+            logger.debug(output)
+            logger.debug(error)
 
         return process.returncode
 

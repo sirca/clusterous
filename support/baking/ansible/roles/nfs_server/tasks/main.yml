@@ -16,7 +16,7 @@
 ---
 # NFS
 - name: nfs package
-  apt: name={{ item }} state=present
+  apt: name={{ item }} state=present update_cache=yes
   with_items:
     - nfs-kernel-server
     - rpcbind
@@ -30,18 +30,3 @@
   with_items:
     - rpcbind
     - nfs-kernel-server
-- name: check if /dev/xvdb exists
-  stat: path=/dev/xvdb
-  register: result
-  ignore_errors: True
-- name: format volume
-  shell: mkfs -t ext4 /dev/xvdb
-  when: result.stat.exists == True
-  ignore_errors: True
-- file: path=/mnt/docker state=directory mode=0755
-  when: result.stat.exists == True
-  ignore_errors: True
-- name: mount volume /mnt/docker
-  mount: name=/mnt/docker src=/dev/xvdb fstype=ext4 state=mounted
-  when: result.stat.exists == True
-  ignore_errors: True

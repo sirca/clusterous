@@ -5,6 +5,6 @@ input {
   }
 }
 output {
-  elasticsearch { host => localhost }
+  elasticsearch { hosts => "localhost" }
   stdout { codec => rubydebug }
 }

@@ -14,7 +14,9 @@
 
 # Mesos master
 ---
-- name: configure zookeeper
+- name: clear zookeeper id
+  file: dest=/etc/zookeeper/conf/myid state=absent
+- name: set zookeeper id
   lineinfile: dest=/etc/zookeeper/conf/myid line=1 state=present create=yes
 - name: start up zookeeper
   service: name=zookeeper state=started enabled=yes

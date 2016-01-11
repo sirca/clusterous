@@ -14,7 +14,8 @@
 
 # Marathon
 ---
+# This version of Marathon is known to be compatible with marathon-python
 - name: installing marathon
   apt: name=marathon=0.8.2-1.0.306.ubuntu1404 state=present
 - name: start marathon
-  service: name=marathon state=started enabled=yes
+  service: name=marathon state=stopped enabled=yes

@@ -15,5 +15,5 @@
 # Install NFS client on nodes
 # NFS
 - name: nfs package
-  apt: name=nfs-common state=present
+  apt: name=nfs-common state=present update_cache=yes
 
