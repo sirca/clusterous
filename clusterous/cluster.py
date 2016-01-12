@@ -1669,7 +1669,7 @@ class AWSCluster(Cluster):
 
         cmd='ssh -i {0} -p {1} -oStrictHostKeyChecking=no -A -t {2}@{3} \
              ssh -i {4} -oStrictHostKeyChecking=no -A -t {5} \
-             sudo docker exec -ti {5} bash'.format(key_file_local, defaults.nat_ssh_port_forwarding,
+             sudo docker exec -ti {6} bash'.format(key_file_local, defaults.nat_ssh_port_forwarding,
                          defaults.cluster_username, self._get_nat_ip(), key_file_remote, node, container_id)
         os.system(cmd)
 
