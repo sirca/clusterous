@@ -16,7 +16,7 @@ environment:    # change to "application"?
       image: "registry:5000/ipython-lite"   # docker image
       cmd: "/bin/bash /home/data/ipython/launch_scripts/01_ipcontroller.sh"
       attach_volume: yes    # (optional, default is yes) Whether to mount shared storage to container
-      ports: 31000,31001,31002,31003,31004,31005,31006,31007,31008,31009,31010,31011
+      ports: 2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011
 
     notebook:
       machine: master
@@ -24,7 +24,7 @@ environment:    # change to "application"?
       cpu: auto
       image: "registry:5000/ipython-lite"
       cmd: "/bin/bash /home/data/ipython/launch_scripts/03_ipnotebook.sh"
-      ports: 31080:8888
+      ports: 8888:8888
 
     engine:
       machine: worker
@@ -35,7 +35,7 @@ environment:    # change to "application"?
       cmd: "/bin/bash /home/data/ipython/launch_scripts/02_ipengine.sh"
 
   expose_tunnel:      # create an ssh tunnel
-    service: 8888:notebook:31080    # source port 31080 on master to 8888 on localhost
+    service: 8888:notebook:8888    # source port 8888 on master to 8888 on localhost
     message: |
           The IPython engines may take up to 30 seconds to become available.
           The connection file is located at:

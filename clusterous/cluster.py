@@ -621,7 +621,7 @@ class AWSCluster(Cluster):
         self._logger.debug('Forwarding port {0} on NAT ({1}) to Controller ({2}) port 22'.format(
             defaults.nat_ssh_port_forwarding, nat_public_ip, controller_private_ip))
         if not retry_ssh(nat_public_ip, 22, 5, 60):
-            raise ClusterException('Unable to SSH NAT instance')
+            raise ClusterException('Unable to connect to NAT instance')
 
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -885,7 +885,7 @@ class AWSCluster(Cluster):
             # Wait for NAT to launch
             nat_not_used = self._wait_and_tag_instance_reservations(nat_tags_and_res)
             if not retry_ssh(nat_instance.ip_address, 22, 5, 45):
-                raise ClusterException('Unable to SSH NAT instance')
+                raise ClusterException('Unable to connect to NAT instance')
             
             nat_instance.modify_attribute('sourceDestCheck',False)  # Disable sourceDestCheck on NAT instance
             

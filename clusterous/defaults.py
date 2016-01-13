@@ -53,9 +53,9 @@ central_logging_name_tag_value = 'central-logging'
 central_logging_instance_type = 't2.small'
 
 nat_ami_id = 'ami-e7ee9edd'
-controller_ami_id = 'ami-9e684dfd'
-node_ami_id = 'ami-376b4e54'
-central_logging_ami_id = 'ami-2f6a4f4c'
+controller_ami_id = 'ami-6e50750d'
+node_ami_id = 'ami-975376f4'
+central_logging_ami_id = 'ami-825376e1'
 
 default_zone = 'a'
 
