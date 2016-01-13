@@ -34,6 +34,22 @@ class UnknownValue(EnvironmentSpecError):
     def __str__(self):
         return 'The following parameter was expected but not supplied: "{0}"'.format(self.message)
 
+class UnknownParams(EnvironmentSpecError):
+    """
+    For use if the params have extra variables that are not used in this environent file.
+    This can suggest a user error.
+    """
+    def __init__(self, unknown_params=[]):
+        super(UnknownParams, self).__init__('')
+        self.unknown_params = unknown_params
+
+    def __str__(self):
+        plural_str = 'parameter was'
+        if len(self.unknown_params) > 1:
+            plural_str = 'parameters were'
+        unknowns_str = ', '.join(self.unknown_params)
+        return 'The following {0} supplied but not recognised: {1}'.format(plural_str, unknowns_str)
+
 class DictValidator(object):
     # TODO: helpers.validate could potentiall replace this, if it supports
     # arbitrary fields (like under the components section)
@@ -179,16 +195,25 @@ class EnvironmentFile(object):
 
     def _parse_cluster_section(self, cluster, params):
         new_cluster = {}
+        substituted_vars = []
         for machine, fields in cluster.iteritems():
             if (len(fields) != 2 and
                 ('count' in fields and 'type' in fields)):
                 raise ParseError('Invalid values for machine "{0}"'.format(machine))
             new_cluster[machine] = {}
             for field_name, field_val in fields.iteritems():
-                val, substituted = self._process_field_value(field_val, params)
+                val, substituted, substituted_var = self._process_field_value(field_val, params)
+                if substituted:
+                    substituted_vars.append(substituted_var)
                 new_cluster[machine][field_name] = val
                 if field_name == 'count' and substituted:
                     new_cluster[machine]['scalable'] = True
+
+
+        # Check if params has any fields not substituted (possible user error)
+        if set(substituted_vars) != set(params.keys()):
+            unknowns = list(set(params.keys()) - set(substituted_vars))
+            raise UnknownParams(unknowns)
 
         return new_cluster
 
@@ -201,6 +226,7 @@ class EnvironmentFile(object):
         """
         tokens = []
         substituted = True
+        substituted_var = ''
         # If the field is a string value
         if isinstance(field, str):
             if '-' in field:
@@ -210,6 +236,7 @@ class EnvironmentFile(object):
                 left = tokens[0].strip()
                 if left.startswith('$'):
                     var = left[1:]
+                    substituted_var = var
                 else:
                     raise ParseError('Unrecognised string in "{0}"'.format(field))
                 # $var does not match any supplied in params, this is a special error
@@ -231,6 +258,7 @@ class EnvironmentFile(object):
                 stripped = field.strip()
                 if stripped.startswith('$'):
                     var = stripped[1:]
+                    substituted_var = var
                 else:
                     raise ParseError('Unrecognised value: "{0}"'.format(field))
                 if not var in params:
@@ -244,4 +272,4 @@ class EnvironmentFile(object):
         else:
             raise ParseError('Unknown field value type: "{0}"'.format(field))
 
-        return value, substituted
+        return value, substituted, substituted_var

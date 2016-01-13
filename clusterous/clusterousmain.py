@@ -165,6 +165,9 @@ class Clusterous(object):
         except environmentfile.UnknownValue as e:
             # If unknown value found, probably an error in the profile (i.e. user params)
             raise ProfileError(str(e))
+        except environmentfile.UnknownParams as e:
+            # If the profile file includes param not recognised
+            raise ProfileError(str(e))
         except environmentfile.EnvironmentSpecError as e:
             # Otherwise it's a problem in the environment file itself
             raise EnvironmentFileError(str(e), filename=profile['environment_file'])
