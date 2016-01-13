@@ -161,7 +161,7 @@ shared_volume_size: 60
 parameters:
     master_instance_type: t2.micro
     worker_instance_type: t2.micro
-    instance_count: 3
+    worker_count: 3
 ```
 
 The `environment_file` field allows you to run your environment on cluster creation. Simply specify a relative (or absolute) path to the YAML environment file, and Clusterous will automatically run the environment after the cluster starts up. This avoids the need for running the `run` command separately.
