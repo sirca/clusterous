@@ -351,7 +351,7 @@ class Clusterous(object):
         """
         Sets a working cluster
         """
-        cl = self.make_cluster_object(cluster_name)
+        cl = self.make_cluster_object(cluster_name, cluster_must_be_running=False)
         success = cl.workon()
         if success:
             message = 'Switched to {0}'.format(cluster_name)

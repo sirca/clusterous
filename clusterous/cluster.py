@@ -1514,7 +1514,7 @@ class AWSCluster(Cluster):
         nat_ip = None
         cluster_name = None
         for instance in instances:
-            if defaults.controller_name_format.format(self.cluster_name) in instance.tags['Name']:
+            if defaults.nat_name_format.format(self.cluster_name) in instance.tags['Name']:
                 nat_ip = instance.ip_address
                 cluster_name = self.cluster_name
 
@@ -1523,9 +1523,9 @@ class AWSCluster(Cluster):
 
         self._create_config_dirs()
         # Write nat_ip
-        self._set_cluster_info({'nat_ip': nat_ip, 'cluster_name': cluster_name})
+        self._set_cluster_info({'nat_ip': nat_ip, 'cluster_name': cluster_name, 'running': True})
         ip_file = os.path.expanduser(defaults.current_nat_ip_file)
-        self._write_to_hosts_file(ip_file, [nat_ip], 'controller', overwrite=True)
+        self._write_to_hosts_file(ip_file, ['{0}:{1}'.format(nat_ip, defaults.nat_ssh_port_forwarding)], 'controller', overwrite=True)
 
         # Sync from controller
         self._copy_environment_from_controller()
