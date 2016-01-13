@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
----
-dependencies:
-  - { role: roles/common }
+# Install NFS client on nodes
+# NFS
+- name: nfs package
+  apt: name=nfs-common state=present update_cache=yes
+

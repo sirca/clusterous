@@ -1,15 +1,15 @@
 # General
-cluster_name: clustername
+cluster_name: bdkd-cluster
 region: ap-southeast-2
-keypair: keypairname
-vpc_id: vpc-1235
-vpc_subnet_id: subnet-21345
+keypair: bdkd-sirca
+vpc_id: vpc-123
+vpc_subnet_id: subnet-123
 security_group_name: "{{ cluster_name }}-sg"
 billing_tag: "mytag"
 
 # Baking
-ami_version: "20150910"
-base_image: "ami-a38be799"
+ami_version: "20160108"
+base_image: "ami-69631053"
 instance_name_controller: "{{ cluster_name }}-controller"
 instance_name_node: "{{ cluster_name }}-node"
 instance_name_elk: "{{ cluster_name }}-elk"

@@ -12,38 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# COMMON
+# Install NFS on controller and prepare Docker volume
 ---
-# Firewall off
-- name: stop firewall
-  service: name=firewalld state=stopped enabled=no
 # NFS
 - name: nfs package
-  yum: name=nfs-utils,e4fsprogs state=present
-- name: nfs enable
+  apt: name={{ item }} state=present update_cache=yes
+  with_items:
+    - nfs-kernel-server
+    - rpcbind
+- name: enable nfs
   service: name={{ item }} enabled=yes
   with_items:
     - rpcbind
-    - nfs-server
+    - nfs-kernel-server
 - name: nfs started
   service: name={{ item }} state=started
   with_items:
     - rpcbind
-    - nfs-server
-    - nfs-lock
-    - nfs-idmap
-- name: check if /dev/xvdb exists
-  stat: path=/dev/xvdb
-  register: result
-  ignore_errors: True
-- name: format volume
-  shell: mkfs -t ext4 /dev/xvdb
-  when: result.stat.exists == True
-  ignore_errors: True
-- file: path=/mnt/docker state=directory mode=0755
-  when: result.stat.exists == True
-  ignore_errors: True
-- name: mount volume /mnt/docker
-  mount: name=/mnt/docker src=/dev/xvdb fstype=ext4 state=mounted
-  when: result.stat.exists == True
-  ignore_errors: True
+    - nfs-kernel-server

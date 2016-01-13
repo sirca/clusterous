@@ -13,8 +13,8 @@
 # limitations under the License.
 
 ---
-- hosts: tag_Name_bdkd_cluster_controller
-  user: root
+- hosts: tag_Name_bdkd-cluster-controller
+  user: ubuntu
   sudo: yes
   vars_files:
     - vars/global_vars.yml

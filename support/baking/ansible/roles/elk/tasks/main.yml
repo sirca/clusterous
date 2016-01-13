@@ -12,71 +12,69 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# ELK
+# ELK (partly based on https://www.digitalocean.com/community/tutorials/how-to-install-elasticsearch-logstash-and-kibana-elk-stack-on-ubuntu-14-04)
 ---
-# Elasticsearch
-- name: check if elasticsearch is present
-  stat: path=/usr/share/elasticsearch/bin/elasticsearch
-  register: result
-  ignore_errors: True
-- name: elasticsearch repo1
-  shell: rpm --import http://packages.elasticsearch.org/GPG-KEY-elasticsearch
-  when: result.stat.exists == false
-- name: elasticsearch repo2
-  template: src=elasticsearch.repo.j2 dest=/etc/yum.repos.d/elasticsearch.repo mode=0755
-  when: result.stat.exists == false
-- name: elasticsearch install
-  yum: name=elasticsearch-1.4.4 state=present
-  when: result.stat.exists == false
+# Elasticsearch (including java)
+- name: add official java PPA
+  apt_repository: repo='ppa:webupd8team/java' state=present
+- name: accept oracle license
+  debconf: name='oracle-java8-installer' question='shared/accepted-oracle-license-v1-1' value='true' vtype='select'
+- name: install java 8
+  apt: name=oracle-java8-installer state=present update_cache=yes
+- name: get elasticsearch key
+  shell: apt-key adv --fetch-keys http://packages.elastic.co/GPG-KEY-elasticsearch
+- name: add elasticsearch repo  
+  apt_repository: repo="deb http://packages.elastic.co/elasticsearch/2.x/debian stable main" state=present
+- name: install elasticsearch
+  apt: name=elasticsearch=2.1.1 state=present update_cache=yes
 - name: elasticsearch config
-  shell: "echo 'network.host: localhost' >> /etc/elasticsearch/elasticsearch.yml"
-  when: result.stat.exists == false
+  lineinfile: dest=/etc/elasticsearch/elasticsearch.yml line="network.host{{':'}} localhost"
 
 # KIBANA
 - name: check if kibana is present
   stat: path=/opt/kibana/bin/kibana
   register: result
   ignore_errors: True
+- name: add kibana group
+  group: name=kibana gid=999
+- name: add kibana user
+  user: name=kibana uid=999 group=kibana
 - name: kibana install
   shell: "cd /opt; \
-    wget https://download.elasticsearch.org/kibana/kibana/kibana-4.0.1-linux-x64.tar.gz; \
-    tar xvf kibana-4.0.1-linux-x64.tar.gz; \
-    mv kibana-4.0.1-linux-x64 /opt/kibana; \
+    wget https://download.elastic.co/kibana/kibana/kibana-4.3.0-linux-x64.tar.gz; \
+    tar xvf kibana-4.3.0-linux-x64.tar.gz; \
+    mv kibana-4.3.0-linux-x64 /opt/kibana; \
     rm -fr kibana-4.0.1-linux-x64.tar.gz;"
   when: result.stat.exists == false
+- name: set owner
+  file: path=/opt/kibana owner=kibana recurse=yes state=directory
+  when: result.stat.exists == false  
 - name: kibana config
   template: src=kibana.yml.j2 dest=/opt/kibana/config/kibana.yml mode=0755
   when: result.stat.exists == false
-- name: kibana init
+- name: kibana init script
   template: src=kibana.init.j2 dest=/etc/init.d/kibana mode=0755
   when: result.stat.exists == false
+- name: kibana defaults script
+  template: src=kibana.default.j2 dest=/etc/default/kibana mode=0755
+  when: result.stat.exists == false
+- name: register kibana service
+  shell: update-rc.d kibana defaults 96 9
+  when: result.stat.exists == false  
 
-# NGINX
-- name: check if nginx is present
-  stat: path=/usr/sbin/nginx
-  register: result
-  ignore_errors: True
-- name: nginx repo
-  yum: name=epel-release state=present
-  when: result.stat.exists == false
-- name: nginx install
-  yum: name=nginx,httpd-tools state=present
-  when: result.stat.exists == false
+# nginx
+- name: install nginx
+  apt: name={{ item }} state=present
+  with_items:
+    - nginx
+    - apache2-utils
 - name: nginx config
   template: src=kibana.conf.j2 dest=/etc/nginx/conf.d/kibana.conf mode=0755
-  when: result.stat.exists == false
 
-# LOGSTASH
-- name: check if logstash is present
-  stat: path=/etc/init.d/logstash
-  register: result
-  ignore_errors: True
-- name: logstash repo
-  template: src=logstash.repo.j2 dest=/etc/yum.repos.d/logstash.repo mode=0755
-  when: result.stat.exists == false
-- name: logstash install
-  yum: name=logstash state=present
-  when: result.stat.exists == false
+# Logstash
+- name: add Logstash repo  
+  apt_repository: repo="deb http://packages.elasticsearch.org/logstash/2.1/debian stable main" state=present
+- name: install logstash
+  apt: name=logstash=1:2.1.1-1 state=present update_cache=yes
 - name: logstash config
   template: src=central.conf.j2 dest=/etc/logstash/conf.d/central.conf mode=0755
-  when: result.stat.exists == false

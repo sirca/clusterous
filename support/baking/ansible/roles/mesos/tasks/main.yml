@@ -12,23 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# MESOS
+# Install Mesos. The Mesos package also installs Zookeper (and Java)
 ---
-- name: check if mesos is present
-  stat: path=/usr/bin/mesos
-  register: result
-- name: install the mesosphere yum repo
-  yum: name=http://repos.mesosphere.io/el/7/noarch/RPMS/mesosphere-el-repo-7-1.noarch.rpm state=present
-  when: result.stat.exists == false
-- name: install the mesos package
-  yum: pkg=mesos-0.22.1 state=present
-  when: result.stat.exists == false
-- name: init mesos-master off
+- name: add mesosphere repo's key
+  apt_key: keyserver=hkp://keyserver.ubuntu.com:80 id=E56151BF
+- name: add mesosphere repo
+  lineinfile: dest=/etc/apt/sources.list.d/mesosphere.list line="deb http://repos.mesosphere.com/ubuntu trusty main" state=present create=yes
+- name: install mesos
+  apt: name=mesos=0.22.1-1.0.ubuntu1404 state=present update_cache=yes
+- name: ensure zookeeper is off
+  service: name=zookeeper state=stopped enabled=no
+- name: ensure mesos-master is off
   service: name=mesos-master state=stopped enabled=no
-  when: result.stat.exists == false
-- name: init mesos-slave off
+- name: ensure mesos-slave is off
   service: name=mesos-slave state=stopped enabled=no
-  when: result.stat.exists == false
 - name: mesos master config
   template: src=mesos-master.j2 dest=/etc/default/mesos-master mode=0755
-  when: result.stat.exists == false

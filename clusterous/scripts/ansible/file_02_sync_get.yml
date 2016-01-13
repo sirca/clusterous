@@ -15,7 +15,7 @@
 ---
 - name: sync folder
   hosts: all
-  user: root
+  user: ubuntu
   sudo: yes
   gather_facts: no
   tasks:

@@ -13,11 +13,10 @@
 # limitations under the License.
 
 ---
-- hosts: tag_Name_bdkd_cluster_elk
+- hosts: tag_Name_bdkd-cluster-elk
   user: root
   sudo: yes
   vars_files:
     - vars/global_vars.yml
   roles:
-    - roles/java
     - roles/elk
