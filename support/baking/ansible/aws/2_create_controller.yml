@@ -40,10 +40,6 @@
         count_tag:
           Name: "{{ instance_name_controller }}"
           group: controller
-        volumes:
-          - device_name: /dev/sdb
-            volume_size: 40
-            delete_on_termination: true
       register: ec2
 
     - name: Wait for ssh to come up

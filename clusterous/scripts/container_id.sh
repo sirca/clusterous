@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-for i in $(docker ps|grep -v CONTAINER| awk '{print $1}'); do docker inspect $i |if grep MARATHON_APP_ID=/$1 >null;then echo $i;fi; done
+for i in $(sudo docker ps|grep -v CONTAINER| awk '{print $1}'); do sudo docker inspect $i |if grep MARATHON_APP_ID=/$1 >null;then echo $i;fi; done

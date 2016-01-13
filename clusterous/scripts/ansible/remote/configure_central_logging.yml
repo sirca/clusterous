@@ -14,7 +14,7 @@
 
 - name: configure central logging
   hosts: all
-  user: root
+  user: ubuntu
   sudo: True
   tasks:
     # Wait for ssh before connection
@@ -31,37 +31,17 @@
       lineinfile: dest=/etc/hosts line="127.0.0.1 central-logging"
 
     # Elasticsearch
-    - name: check if elasticsearch is running
-      shell: curl -I http://central-logging:9200/
-      register: result
-      ignore_errors: True
-    - name: elasticsearch start
-      shell: "nohup /usr/share/elasticsearch/bin/elasticsearch &"
-      when: result|failed
+    - name: start elasticsearch
+      service: name=elasticsearch state=started enabled=yes
 
     # Kibana
-    - name: check if kibana is running
-      shell: curl -I http://central-logging:5601/
-      register: result
-      ignore_errors: True
-    - name: kibana start
-      shell: service kibana start
-      when: result|failed
+    - name: start kibana
+      service: name=kibana state=started enabled=yes
 
     # nginx
-    - name: check if nginx is running
-      shell: curl -I http://central-logging:8081/
-      register: result
-      ignore_errors: True
-    - name: nginx start
+    - name: start nginx
       service: name=nginx state=started enabled=yes
-      when: result|failed
 
     # logstash
-    - name: check if logstash is running
-      shell: netstat -aln |grep 5514|grep LISTEN
-      register: result
-      ignore_errors: True
-    - name: logstash start
-      shell: "nohup /etc/init.d/logstash start&"
-      when: result.stdout.find('5514') == -1
+    - name: stash logstash
+      service: name=logstash state=started enabled=yes

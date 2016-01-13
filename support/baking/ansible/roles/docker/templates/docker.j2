@@ -1,10 +1,9 @@
-# /etc/sysconfig/docker
+# Contents of /etc/default/docker
 
 # Modify these options if you want to change the way the docker daemon runs
-#OPTIONS='--selinux-enabled'
-OPTIONS='-g /mnt/docker/docker'
+DOCKER_OPTS='--insecure-registry registry:5000 '
 
-DOCKER_CERT_PATH=/etc/docker
+export DOCKER_CERT_PATH=/etc/docker
 
 # If you want to add your own registry to be used for docker search and docker
 # pull use the ADD_REGISTRY option to list a set of registries, each prepended
@@ -22,7 +21,7 @@ DOCKER_CERT_PATH=/etc/docker
 # distributed, you can tell docker to not look for full authorization by
 # adding the registry to the INSECURE_REGISTRY line and uncommenting it.
 # INSECURE_REGISTRY='--insecure-registry'
-INSECURE_REGISTRY='--insecure-registry registry:5000'
+# INSECURE_REGISTRY='--insecure-registry registry:5000'
 
 # On an SELinux system, if you remove the --selinux-enabled option, you
 # also need to turn on the docker_transition_unconfined boolean.

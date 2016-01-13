@@ -23,4 +23,4 @@
 - name: mesos slave timeout
   lineinfile: dest=/etc/mesos-slave/executor_registration_timeout line="5mins" create=yes
 - name: make sure mesos-slave is stopped
-  service: name=mesos-slave state=stopped enabled=no
+  service: name=mesos-slave state=stopped enabled=yes

@@ -12,24 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Ansible and supporting packages
 ---
-- name: install the 'Development tools' package group
-  yum: name="@Development tools" state=present
-- name: install required packages
-  yum: name={{ item }} state=present
-  with_items:
-    - epel-release.noarch
-    - python-pip
-    - python-devel
-- name: install setuptools
-  pip: name=setuptools extra_args='--upgrade'
-- name: install ansible
-  pip: name=ansible
-- name: install boto and awscli
+- name: install supporting python lib
+  apt: name=software-properties-common state=present
+- name: add Ansible PPA to get latest version
+  apt_repository: repo="ppa:ansible/ansible" update_cache=yes
+- name: install Ansible
+  apt: name=ansible state=present
+- name: install python-pip
+  apt: name=python-pip state=present
+- name: install python packages
   pip: name={{ item }} state=present
   with_items:
     - boto
     - awscli
     - marathon
-- name: install docker-py
-  pip: name=docker-py version=1.1.0 state=present
+    - docker-py

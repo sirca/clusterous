@@ -14,7 +14,7 @@
 
 - name: run remote
   hosts: all
-  user: root
+  user: ubuntu
   tasks:
     - name: copy key file
       copy: src={{ key_file_src }} dest={{ remote_dir }}/{{ key_file_name }} mode=0600

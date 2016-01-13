@@ -14,7 +14,7 @@
 
 ---
 - hosts: tag_Name_cluster_testcluster_controller
-  user: root
+  user: ubuntu
   sudo: yes
   vars_files:
     - vars/global_vars.yml

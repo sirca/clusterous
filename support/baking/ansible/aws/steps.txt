@@ -1,3 +1,9 @@
+# Set AWS keys in vars
+export AWS_ACCESS_KEY_ID="AKIA1234"
+export AWS_SECRET_ACCESS_KEY="ABCD1234"
+
+# Set keypair name, VPC, subnet, etc in global_vars.yml
+
 # Security group
 ansible-playbook -i hosts 1_create_sg.yml
 
@@ -5,6 +11,9 @@ ansible-playbook -i hosts 1_create_sg.yml
 ansible-playbook -vvvv -i ec2.py 2_create_controller.yml
 ansible-playbook -vvvv -i ec2.py 2_create_node.yml
 ansible-playbook -vvvv -i ec2.py 2_create_elk.yml
+
+# Refresh Ansible dynamic inventory cache
+./ec2.py --refresh-cache
 
 # Packages
 ansible-playbook -vvvv -i ec2.py 3_install_controller.yml
