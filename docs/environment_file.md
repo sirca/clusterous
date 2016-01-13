@@ -13,6 +13,12 @@ Once you have made your application run inside a Docker container, you need to p
 
 An environment file is a special YAML file that provides Clusterous instructions to build the Docker images for your application, copy files to the cluster, run containers correctly, and create an SSH tunnel if necessary.
 
+## Running the Docker application in Clusterous
+There are two things to keep in mind when making your application run correctly in a Clusterous cluster.
+
+- Docker containers in Clusterous can only expose ports in the range 1024-65535 (inclusive). This means that if different parts of your application need to communicate with each other (e.g. the workers talking to the master), or be open to your machine (e.g. if your application has a web interface), the exposed ports must be in the above range. In practice, this is only of concern if any part of your application uses a well-known port (<1024). If so, you must be able to customise your application to only use ports between 1024-65525.
+- All Clusterous clusters have a dedicated "shared volume", which is an NFS volume accessible to all nodes. This volume is mounted in /home/data, and is typically used for launch scripts, common configuration files and so on, as well as for your application's input/output data.
+
 ## Quick example
 
 This heavily annotated example demonstrates what an environment file looks like. It runs a simple 2-part Python application that displays a web page.
@@ -78,13 +84,13 @@ Again, it is important to note that paths you specify inside the environment fil
 The `ports` field supports a few different syntax options for exposing the container's ports on the host. Multiple ports can be specified in the form:
 
 ```YAML
-  ports: 31000,31001,31002
+  ports: 2000,2001,2002
 ```
 
 The above example will map the three container ports to the same port on the host. If you want to specify a different port number for the container and the host, simply separate them with a colon, in the form host_port:container_port:
 
 ```YAML
-  ports: 31000:8000,31001:8001,31002:8002
+  ports: 2000:8000,2001:8001,2002:8002
 ```
 
 ### CPU, Memory and Count
