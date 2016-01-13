@@ -6,4 +6,4 @@ cluster_name: laseripp
 parameters:
     master_instance_type: t2.small
     worker_instance_type: c3.large
-    instance_count: 4
+    worker_count: 3

@@ -89,10 +89,10 @@ cluster_name: mycluster
 parameters:
     master_instance_type: t2.micro
     worker_instance_type: t2.micro
-    instance_count: 3
+    worker_count: 2
 ```
 
-Replace `mycluster` with any appropriate name for your cluster, ideally something unique to prevent a conflict with other Clusterous users on your AWS account. You can of course specify any instance types or number of instances. Note that the number of instances includes the master (i.e. if you specify `instance_count` of 3, there will be 2 worker instances and 1 master instance).
+Replace `mycluster` with any appropriate name for your cluster, ideally something unique to prevent a conflict with other Clusterous users on your AWS account. You can of course specify any instance types or number of workers. Note that by default you can only specify the number of worker nodes, as it doesn't make sense to have more than 1 "master" node in a master/worker architecture.
 
 To create a cluster, type:
 
@@ -161,7 +161,7 @@ shared_volume_size: 60
 parameters:
     master_instance_type: t2.micro
     worker_instance_type: t2.micro
-    instance_count: 3
+    worker_count: 3
 ```
 
 The `environment_file` field allows you to run your environment on cluster creation. Simply specify a relative (or absolute) path to the YAML environment file, and Clusterous will automatically run the environment after the cluster starts up. This avoids the need for running the `run` command separately.
