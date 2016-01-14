@@ -58,7 +58,7 @@ environment:  # This is the main section where you describe the environment
     # The component to connect to and the ports. In the format:
     # local_port:component_name:source_port
     service: 8888:master:8888
-    # An optional message to display to the user once the port is exposed.
+    # An optional custom message to display to the user once the port is exposed.
     # The "{url}" field is replaced by an HTTP url to the tunnel
     message: "To access the master, use this URL: {url}"
 ```
@@ -107,7 +107,7 @@ A key feature of Clusterous is that you don't directly specify how many instance
 A consequence of this is that when specifying the `cpu` field or `count` field for a component, there are certain combinations that are not permitted. For example, when running two different component on the same machine (like a UI and a queue), `cpu` for those components must be set to "auto", indicating that the CPU will be evenly divided among components. On the other hand, for a typical "worker" component, `count` will be "auto", and an explicit `cpu` must be specified.
 
 ### Tunnel message
-When specifying the ports for the SSH tunnel between the local machine and a component service using the `expose_tunnel` field, you can optionally specify a `message` field to display a message to the user when the environment is run and the tunnel has been created.
+When specifying the ports for the SSH tunnel between the local machine and a component service using the `expose_tunnel` field, you can optionally specify a `message` field to display a custom message to the user when the environment is run and the tunnel has been created.
 
 The message can include the special `{url}` and `{port}` strings, which Clusterous substitutes with a correctly generated URL or port. In the above example, after the environment has been run, a message of the following type will be displayed:
 

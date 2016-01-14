@@ -34,4 +34,4 @@ environment:  # This is the main section where you describe the environment
     # local_port:component_name:source_port
     service: 8888:master:8888
     # An optional message to display to the user once the port is exposed
-    message: "To access the master, use this URL: "
+    message: "To access the master, use this URL: {url}"
