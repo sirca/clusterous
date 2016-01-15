@@ -43,7 +43,7 @@ environment:  # This is the main section where you describe the environment
       cpu: auto             # Evenly share CPU with any other components running on this machine
       image: registry:5000/basic-python   # Name of the Docker image to run
       cmd: "/bin/bash /home/data/launch_scripts/launch_master.sh"   # The command to be run in the container
-      ports: "31000"        # Expose container port 31000 as 31000 on the host
+      ports: "8888"        # Expose container port 8888 as 8888 on the host
     engine:   # Component named "engine". These are the "worker" processes
       machine: worker       # Run on machine(s) named "worker"
       depends: master       # Run only after "master" component has been run
@@ -57,9 +57,10 @@ environment:  # This is the main section where you describe the environment
   expose_tunnel:
     # The component to connect to and the ports. In the format:
     # local_port:component_name:source_port
-    service: 8888:master:31000
-    # An optional message to display to the user once the port is exposed
-    message: "To access the master, use this URL:"
+    service: 8888:master:8888
+    # An optional custom message to display to the user once the port is exposed.
+    # The "{url}" field is replaced by an HTTP url to the tunnel
+    message: "To access the master, use this URL: {url}"
 ```
 ### Components
 
@@ -104,6 +105,21 @@ There is currently no way to specify memory: memory is assigned to each componen
 A key feature of Clusterous is that you don't directly specify how many instances of a component you want running. A component either has one running instance (which may run on the same machine as one or more components), or multiple instances, the exact number of which is automatically determined. In a typical application, this would mean that components such as a UI, master and queueing system would have a single instance each, whereas workers would have as many instances as possible given the cluster size.
 
 A consequence of this is that when specifying the `cpu` field or `count` field for a component, there are certain combinations that are not permitted. For example, when running two different component on the same machine (like a UI and a queue), `cpu` for those components must be set to "auto", indicating that the CPU will be evenly divided among components. On the other hand, for a typical "worker" component, `count` will be "auto", and an explicit `cpu` must be specified.
+
+### Tunnel message
+When specifying the ports for the SSH tunnel between the local machine and a component service using the `expose_tunnel` field, you can optionally specify a `message` field to display a custom message to the user when the environment is run and the tunnel has been created.
+
+The message can include the special `{url}` and `{port}` strings, which Clusterous substitutes with a correctly generated URL or port. In the above example, after the environment has been run, a message of the following type will be displayed:
+
+```
+To access the master, use this URL: http://localhost:8888
+```
+
+If instead of exposing a web application, your tunnel exposes an HTTP queueing system, you may only want to print the port it is available on. For example a message in this form will display the local port you specified in the `service` field:
+
+```YAML
+  message: "The queueing system is available on localhost on port {port}"
+```
 
 ## Launching
 

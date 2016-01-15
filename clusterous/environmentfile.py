@@ -135,7 +135,7 @@ class EnvironmentFile(object):
         parsed = {}
         tunnel_schema = {
                     'service': SchemaEntry(True, '', str, None),
-                    'message': SchemaEntry(True, '', str, None)
+                    'message': SchemaEntry(False, '', str, None)
         }
         env_schema = {
                     'copy': SchemaEntry(False, [], list, None),

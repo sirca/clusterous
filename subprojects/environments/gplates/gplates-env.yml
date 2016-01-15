@@ -16,4 +16,4 @@ environment:
       ports: "31888:8888"
   expose_tunnel:
     service: 31888:notebook:31888
-    message: "To access IPythno Notebook, use this URL: "
+    message: "To access IPythno Notebook, use this URL: {url}"
