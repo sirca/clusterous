@@ -214,8 +214,29 @@ parameters:
   io_worker_count: 6
 ```
 
-### Custom machine images
+## Custom machine images
 Clusterous also allows you to specify a custom machine image (AMI on Amazon), which may be necessary for certain applications. In most cases, you should be able to run the different components of your application in a Docker container. The default Clusterous machine images take care of that, as they run the Docker daemon, and mesos-slave, ensuring that each node is integrated with the rest of the cluster, and is pre-configured and ready to run your containers.
 
-However, some applications for various reasons do not work well inside a Docker container, meaning they cannot run on the cluster in the regular way.  
+However, some applications for various reasons do not work well inside a Docker container, meaning they cannot run on the cluster in the regular way. For these applications, you prepare an appropriate machine image and then specify the image name in the environment file. Machine images are specified per group of nodes. For example:
 
+```YAML
+cluster:
+  master:
+    type: $master_instance_type
+    count: 1
+  worker:
+    type: $worker_instance_type
+    count: $worker_count
+    machine_image:
+      aws:
+        ap-southeast-2: ami-555555
+        us-west-1: ami-000000
+      config: myconfig.yml
+```
+
+The above cluster spec defines a typical master/worker cluster, but the workers use a custom AWS AMI. Under the `machine_image` element is the name of the cloud provider (only `aws` at the moment), under which is the list of images per region. The cluster will only be created if an AMI is given for the region specified in the configuration file.
+
+Apart from the machine image names, you can optionally specify an Ansible playbook to be run on each node of that group after it is booted up. The path playbook is relative to the location of the environment file. The playbook can be used for typical configuration tasks, such as starting daemons, mounting the shared volume, etc.
+
+### Machine image requirements
+In order for an node launched with a custom machine image to integrate correctly with the rest of the cluster, there are some specific requirements to be fulfilled. In particular, the node must have the mesos-slave daemon installed and running. These requirements can be seen in full detail in Clusterous' in-built Ansible script that is used to configure the default nodes when they are created. This script can be found in the Clusterous source under `clusterous/scripts/ansible/remote/configure_nodes.yml`.
