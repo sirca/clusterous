@@ -157,5 +157,65 @@ Upon confirmation, Clusterous will kill the running container processes and dest
 To stop the cluster itself, use the `destroy` command.
 
 
-## Next steps
+## IPython example
 A more sophisticated example is available under `subprojects/environments/ipython-lite`. This example runs a configured IPython Parallel environment, and includes three different intercommunicating components and a number of configuration files.
+
+## Custom clusters
+By default, the cluster launched by Clusterous has a standard master/worker architecture, consisting of 1 master node and `n` worker nodes. While this suits a wide range of applications, there are many cases where a more complex or sophisticated layout is necessary. Clusterous allows defining custom cluster architectures via the environment file.
+
+### Examples
+To define a cluster layout, create a top-level `cluster` element in the environment file, and populate it with groups of nodes. To illustrate, this example defines a layout identical to the default master/worker layout:
+
+```YAML
+cluster:
+  master:
+    type: $master_instance_type
+    count: 1
+  worker:
+    type: $worker_instance_type
+    count: $worker_count
+```
+
+As can be seen, under the `cluster` element are two elements defining the names of the two types of nodes: `master` and `worker`. Under each, there are two mandatory fields: `type` and `count`, corresponding to the instance type and the number of instances. Under `master`, `count` is set to `1`, meaning that there is always exactly 1 master node. All the other values are represented by a dollar sign followed by an identifier. These are variables, meaning that each is replaced by an actual value.
+
+Where are these variables assigned values? If you look closely, you'll note that the names are identical to those defined in the parameters file used for cluster creation. In theory, you could put fixed values for `type` and `count`, but using variables allows those choices to be made during cluster creation. This feature is especially useful when distributing your environment files for other users to use; they do not need to understand the details of the environment file, and can simply supply the required value in the `parameters` section of the parameters file.
+
+Note that variables are defined dynamically. In other words, no seperate declaration is needed: simply use the variable, and Clusterous will substitute the value provided in the parameter file.
+
+The use of variables is not restricted to the `cluster` section of the environment file. For instance, in the above environment example, you could require users to supply a "cpus_per_engine" value by setting the `cpu` value for the `engine` component to `$cpus_per_engine` instead of 0.5.
+
+The following example shows are more complex layout, for a hypothetical application that uses separate groups of specialised CPU-bound workers and IO-bound workers:
+
+```YAML
+cluster:
+  master:
+    type: $master_instance_type
+    count: 1
+  io_master:
+    type: $io_master_instance_type
+    count: 1
+  cpu_worker:
+    type: $cpu_worker_instance_type
+    count: $cpu_worker_count
+  io_worker:
+    type: $io_worker_instance_type
+    count: $io_worker_count
+```
+
+Here we have defined four different types of nodes consisting of two separate "masters" and two groups of workers. Of course, the `environment` section would have to ensure that application components are correctly deployed to each node types. This example uses six different variables, all of which have to be supplied in the parameters file. The `parameters` section of the parameters file might look like this:
+
+```YAML
+parameters:
+  master_instance_type: t2.medium
+  io_master_instance_type: m4.large
+  cpu_worker_instance_type: c4.large
+  cpu_worker_count: 12
+  io_worker_instance_type: i2.xlarge
+  io_worker_count: 6
+```
+
+### Custom machine images
+Clusterous also allows you to specify a custom machine image (AMI on Amazon), which may be necessary for certain applications. In most cases, you should be able to run the different components of your application in a Docker container. The default Clusterous machine images take care of that, as they run the Docker daemon, and mesos-slave, ensuring that each node is integrated with the rest of the cluster, and is pre-configured and ready to run your containers.
+
+However, some applications for various reasons do not work well inside a Docker container, meaning they cannot run on the cluster in the regular way.  
+
