@@ -152,7 +152,6 @@ class EnvironmentFile(object):
 
         is_valid, message, validated = helpers.validate(data, top_schema)
 
-
         if not is_valid:
             raise ParseError(message)
 
