@@ -106,10 +106,10 @@ A key feature of Clusterous is that you don't directly specify how many instance
 
 A consequence of this is that when specifying the `cpu` field or `count` field for a component, there are certain combinations that are not permitted. For example, when running two different component on the same machine (like a UI and a queue), `cpu` for those components must be set to "auto", indicating that the CPU will be evenly divided among components. On the other hand, for a typical "worker" component, `count` will be "auto", and an explicit `cpu` must be specified.
 
-### Tunnel message
-When specifying the ports for the SSH tunnel between the local machine and a component service using the `expose_tunnel` field, you can optionally specify a `message` field to display a custom message to the user when the environment is run and the tunnel has been created.
+### Expose Tunnel
+The `expose_tunnel` element is used for creating an SSH tunnel between your local machine and a running component on the cluster in order to expose a service such as a web UI. The `service` field lets you specify the ports and the components in the format `local_port:component_name:source_port`, where `local_port` refers to the port to be created on your local machine.
 
-The message can include the special `{url}` and `{port}` strings, which Clusterous substitutes with a correctly generated URL or port. In the above example, after the environment has been run, a message of the following type will be displayed:
+You can optionally specify a `message` field to display a custom message to the user when the environment is run and the tunnel has been created. The message can include the special `{url}` and `{port}` strings, which Clusterous substitutes with a correctly generated URL or port. In the above example, after the environment has been run, a message of the following type will be displayed:
 
 ```
 To access the master, use this URL: http://localhost:8888
@@ -120,6 +120,17 @@ If instead of exposing a web application, your tunnel exposes an HTTP queueing s
 ```YAML
   message: "The queueing system is available on localhost on port {port}"
 ```
+
+It is also possible to expose multiple tunnels under `expose_tunnel` by using a YAML list of dictionaries, for example:
+
+```YAML
+  expose_tunnel:
+    - service: 8080:notebook:8080
+      message: "Notebook is available at {url}"
+    - service: 9090:console:9090
+      message: "Console is available at {url}"
+```
+
 
 ## Launching
 
