@@ -597,41 +597,53 @@ class Environment(object):
 
 
     def _expose_tunnel(self, tunnel_info, cluster_info, component_resources):
-        parts = tunnel_info['service'].split(':')
 
-        # Validate port value
-        if ( len(parts) != 3 or
-             not parts[0].isdigit() or
-             not parts[2].isdigit()):
-            raise self.LaunchError('Invalid syntax: "{0}" Tunnel service must be in '
-                                    'the format "localport:component:remoteport"'.format(
-                                    tunnel_info['service']))
+        tunnel_info_list = []
+        message_list = []
+        # Determine if it is a dictionary (single tunnel) or a list of dictionaries (1+ tunnels)
+        if type(tunnel_info) == dict:
+            tunnel_info_list.append(tunnel_info)
+        elif type(tunnel_info) == list:
+            tunnel_info_list = tunnel_info
 
-        local_port, component_name, remote_port = parts
+        for info in tunnel_info_list:
+            parts = info['service'].split(':')
 
-        hostname = self._get_component_hostname(component_name, cluster_info, component_resources)
+            # Validate port value
+            if ( len(parts) != 3 or
+                 not parts[0].isdigit() or
+                 not parts[2].isdigit()):
+                raise self.LaunchError('Invalid syntax: "{0}" Tunnel service must be in '
+                                        'the format "localport:component:remoteport"'.format(
+                                        info['service']))
 
-        # Make tunnel from controller to node. Note that this uses the same port for both
-        # the node and for the controller for simplicity of implementation
-        self._cluster.make_tunnel_on_controller(remote_port, hostname, remote_port)
+            local_port, component_name, remote_port = parts
 
-        # Make tunnel from localhost to controller
-        success = self._cluster.create_permanent_tunnel_to_controller(remote_port, local_port)
+            hostname = self._get_component_hostname(component_name, cluster_info, component_resources)
 
-        if not success:
-            raise self.LaunchError('Could not create tunnel')
+            # Make tunnel from controller to node. Note that this uses the same port for both
+            # the node and for the controller for simplicity of implementation
+            self._cluster.make_tunnel_on_controller(remote_port, hostname, remote_port)
 
-        # Make message
-        message = ''
-        if tunnel_info.get('message', ''):
-            message = tunnel_info['message']
-            if '{url}' in message:
-                url = 'http://localhost:{0}'.format(local_port)
-                message = message.replace('{url}', url)
-            if '{port}' in message:
-                message = message.replace('{port}', local_port)
-        else:
-            # Default message
-            message = 'Tunnel created on port {}'.format(local_port)
+            # Make tunnel from localhost to controller
+            success = self._cluster.create_permanent_tunnel_to_controller(remote_port, local_port)
 
-        return message
+            if not success:
+                raise self.LaunchError('Could not create tunnel')
+
+            # Make message
+            message = ''
+            if info.get('message', ''):
+                message = info['message']
+                if '{url}' in message:
+                    url = 'http://localhost:{0}'.format(local_port)
+                    message = message.replace('{url}', url)
+                if '{port}' in message:
+                    message = message.replace('{port}', local_port)
+            else:
+                # Default message
+                message = 'Tunnel created on port {}'.format(local_port)
+
+            message_list.append(message)
+
+        return '\n'.join(message_list)

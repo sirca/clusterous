@@ -141,7 +141,8 @@ class EnvironmentFile(object):
                     'copy': SchemaEntry(False, [], list, None),
                     'image': SchemaEntry(False, [], list, None),
                     'components': SchemaEntry(True, {}, dict, None),
-                    'expose_tunnel': SchemaEntry(False, {}, dict, tunnel_schema)
+                    # TODO: enhance validation such that expose_tunnel can be validated here
+                    'expose_tunnel': SchemaEntry(False, {}, None, None)
         }
         top_schema = {
                     'name': SchemaEntry(True, '', str, None),
@@ -151,11 +152,27 @@ class EnvironmentFile(object):
 
         is_valid, message, validated = helpers.validate(data, top_schema)
 
+
         if not is_valid:
             raise ParseError(message)
 
         if not defaults.taggable_name_re.match(validated['name']):
             raise ParseError('Invalid characters in name')
+
+        # Validate expose_tunnel separately (because it can be either a dictionary or a list)
+        if 'environment' in top_schema and 'expose_tunnel' in top_schema['environment']:
+            expose_tunnel = top_schema['environment']['expose_tunnel']
+            if type(expose_tunnel) == dict:
+                tunnel_valid, tunnel_msg, tunnel_validated = helpers.validate(expose_tunnel, tunnel_schema)
+            elif type(expose_tunnel) == list:
+                for e in expose_tunnel:
+                    tunnel_valid, tunnel_msg, tunnel_validated = helpers.validate(expose_tunnel, tunnel_schema)
+                    if not tunnel_valid:
+                        break
+            else:
+                raise ParseError('expose_tunnel must be either a list or dictionary')
+            if not tunnel_valid:
+                raise ParseError(tunnel_msg)
 
         if 'components' in validated.get('environment', {}):
             validated['environment']['components'] = self._parse_components_section(validated['environment']['components'])
