@@ -522,6 +522,12 @@ class Environment(object):
             docker = {  'image': c['image'], 'port_mappings': port_mappings,
                         'force_pull_image': True, 'network': c['docker_network'].upper(), 'privileged': True,
                         'parameters': parameters}
+
+            # Network
+            if c.get('network') and c['network'].lower() == 'host':
+                del docker['port_mappings']
+                docker['network'] = 'HOST'
+
             container = MarathonContainer(docker=docker, volumes=volume_mapping)
 
             if c['machine']:
