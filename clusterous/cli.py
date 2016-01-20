@@ -130,6 +130,14 @@ class CLIParser(object):
                                 description='Connects to a docker container and gets an interactive shell')
         connect.add_argument('component_name', action='store', help='Name of the component (see status command)')
 
+        # ssh controller
+        ssh_controller = subparser.add_parser('ssh-controller', help='Get an interactive shell to the controller',
+                                description='Connects to the controller and gets an interactive shell')
+
+        # ssh node where a component is running
+        ssh_node = subparser.add_parser('ssh-node', help='Get an interactive shell to the node where a docker container is running',
+                                description='Connects to a node where a docker container is running and gets an interactive shell')
+        ssh_node.add_argument('component_name', action='store', help='Name of the component (see status command)')
 
         # Sync: put
         sync_put = subparser.add_parser('put', help='Copy a folder from local to the cluster')
@@ -328,6 +336,22 @@ class CLIParser(object):
             return 1
         return 0
 
+    def _ssh_controller(self, args):
+        app = self._init_clusterous_object(args)
+        success, message = app.ssh_controller()
+        if not success:
+            print message
+            return 1
+        return 0
+
+    def _ssh_node(self, args):
+        app = self._init_clusterous_object(args)
+        success, message = app.ssh_node(component_name = args.component_name)
+        if not success:
+            print message
+            return 1
+        return 0
+
     def _central_logging(self, args):
         app = self._init_clusterous_object(args)
         success, message = app.central_logging()
@@ -474,6 +498,10 @@ class CLIParser(object):
                 status = self._cluster_status(args)
             elif args.subcmd == 'connect':
                 status = self._connect_to_container(args)
+            elif args.subcmd == 'ssh-controller':
+                status = self._ssh_controller(args)
+            elif args.subcmd == 'ssh-node':
+                status = self._ssh_node(args)
             elif args.subcmd == 'logging':
                 status = self._central_logging(args)
             elif args.subcmd == 'quit':

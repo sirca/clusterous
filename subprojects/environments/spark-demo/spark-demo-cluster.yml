@@ -1,0 +1,10 @@
+cluster_name: lfsparkcluster
+#central_logging_level: 2
+environment_file: spark-demo-env.yml
+#shared_volume_size: 40 #GB
+controller_instance_type: c3.large
+parameters:
+    docker_instance_type: c3.large
+    docker_instance_count: 1
+    spark_instance_type: c3.large
+    spark_instance_count: 1

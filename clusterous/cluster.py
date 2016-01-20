@@ -920,6 +920,7 @@ class AWSCluster(Cluster):
             for num_nodes, instance_type, node_tag in nodes_info:
                 node_block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
                 node_root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
+                node_root_vol.size = defaults.node_root_volume_size
                 node_block_devices['/dev/sda1'] = node_root_vol
     
                 res = conn.run_instances(defaults.node_ami_id, 
@@ -1675,6 +1676,63 @@ class AWSCluster(Cluster):
 
         # Remove keys
         with self._ssh_to_controller() as ssh:
+            cmd='rm -fr {0}'.format(key_file_remote)
+            success, stdout = _retry(cmd)
+            if not success:
+                message = 'Failed to remove keys from controller'
+                self._logger.debug(message)
+                return (False, message)
+
+        return (True, 'Ok')
+
+    def ssh_controller(self):
+        '''
+        Connects to controller and gets an interactive shell
+        '''
+        key_file_local = os.path.expanduser(self._config['key_file'])
+        cmd='ssh -i {0} -p {1} -oStrictHostKeyChecking=no -A -t {2}@{3} bash'.format(key_file_local, 
+             defaults.nat_ssh_port_forwarding, defaults.cluster_username, self._get_nat_ip())
+        os.system(cmd)
+
+        return (True, 'Ok')
+
+    def ssh_node(self, component_name):
+        '''
+        Connects to a node where a component is runningand gets an interactive shell
+        '''
+        key_file_local = os.path.expanduser(self._config['key_file'])
+        key_file_remote = '{0}/{1}/{2}'.format(defaults.cluster_user_home_dir,
+                                        defaults.remote_host_scripts_dir, defaults.remote_host_key_file)
+        container_id_script_local = defaults.get_script(defaults.container_id_script_file)
+        container_id_script_remote = '{0}/{1}/{2}'.format(defaults.cluster_user_home_dir, defaults.remote_host_scripts_dir,defaults.container_id_script_file)
+        container_id_script_node = '/tmp/{0}'.format(defaults.container_id_script_file)
+        node = '{0}.marathon.mesos'.format(component_name)
+
+        # SSH controller
+        with self._ssh_to_controller() as ssh:
+            sftp = ssh.open_sftp()
+            sftp.put(key_file_local, key_file_remote)
+            sftp.chmod(key_file_remote, stat.S_IRUSR | stat.S_IWUSR)
+            sftp.close()
+
+        cmd='ssh -i {0} -p {1} -oStrictHostKeyChecking=no -A -t {2}@{3} \
+             ssh -i {4} -oStrictHostKeyChecking=no -A -t {5}'.format(key_file_local, defaults.nat_ssh_port_forwarding,
+                         defaults.cluster_username, self._get_nat_ip(), key_file_remote, node)
+        os.system(cmd)
+
+        # Remove keys
+        with self._ssh_to_controller() as ssh:
+            def _retry(cmd):
+                retry = 0
+                while retry < 3:
+                    stdin, stdout, stderr = ssh.exec_command(cmd)
+                    if not stderr.readlines():
+                        break
+                    retry += 1
+                    self._logger.debug('Retry: {0}'.format(retry))
+                    time.sleep(3)
+                return (retry < 3 ), stdout
+
             cmd='rm -fr {0}'.format(key_file_remote)
             success, stdout = _retry(cmd)
             if not success:
