@@ -187,9 +187,9 @@ class EnvironmentFile(object):
                             'machine': (True,),
                             'cpu': (True,),
                             'image': (True,),
-                            'cmd': (False,''),
+                            'cmd': (False, None),
                             'attach_volume': (False, True),
-                            'docker_network': (False, 'BRIDGE')
+                            'docker_network': (False, 'BRIDGE'),
                             'ports': (False, ''),
                             'count': (False, 1),
                             'depends': (False, '')
@@ -209,7 +209,7 @@ class EnvironmentFile(object):
             if validated_fields['docker_network'].upper() not in ('BRIDGE', 'HOST'):
                 raise ParseError('In "{0}", "docker_network" must be either "bridge" or "host"'.format(component))
             if validated_fields['docker_network'].upper() == 'HOST' and validated_fields['ports']:
-                raise ParseError('In "{0}", "ports" must not be specified if "docker_network" is {1}'.format(component, validated_fields['docker_network']))
+                raise ParseError('In "{0}", "ports" must not be specified if "docker_network" is "{1}"'.format(component, validated_fields['docker_network']))
             new_comps[component] = validated_fields
 
         return new_comps

@@ -511,13 +511,11 @@ class Environment(object):
             if c['machine']:
                 constraints = [MarathonConstraint(field='name', operator='CLUSTER', value=c['machine'])]
 
-            container_dict = {  'name': name,
-                                'container': container,
-                                'dependencies': dependencies,
-                                'constraints': constraints}
-            if c['cmd']:
-                container_dict['cmd'] = c['cmd']
-            app_containers.append(container_dict)
+            app_containers.append({ 'name': name,
+                                    'container': container,
+                                    'cmd': c['cmd'],
+                                    'dependencies': dependencies,
+                                    'constraints': constraints})
 
         # Launch containers
 
