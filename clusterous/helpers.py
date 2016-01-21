@@ -93,15 +93,16 @@ def validate(d, schema, strict=True):
         elif key in copy:
             if type(copy[key]) == type(None):
                 return False, 'A valid value must be provided for field "{0}"'.format(key), {}
-            if not rules.type == type(copy[key]):
-                return False, 'For field "{0}", expected type "{1}", got "{2}"'.format(key, rules.type.__name__, type(copy[key]).__name__), {}
-            if rules.type == dict and rules.schema:
-                # Recursively validate this nested dictionary
-                success, message, validated = validate(copy[key], rules.schema, strict)
-                if not success:
-                    return False, 'In {0}: {1}'.format(key, message), {}
-                else:
-                    copy[key] = validated
+            if rules.type:
+                if not rules.type == type(copy[key]):
+                    return False, 'For field "{0}", expected type "{1}", got "{2}"'.format(key, rules.type.__name__, type(copy[key]).__name__), {}
+                if rules.type == dict and rules.schema:
+                    # Recursively validate this nested dictionary
+                    success, message, validated = validate(copy[key], rules.schema, strict)
+                    if not success:
+                        return False, 'In {0}: {1}'.format(key, message), {}
+                    else:
+                        copy[key] = validated
 
 
     if strict:
