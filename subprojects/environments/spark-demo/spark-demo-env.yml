@@ -35,4 +35,3 @@ environment:
       message: "HTTP service: {url}"
     - service: 31888:notebook:31888
       message: "IPython notebook: {url} (It may take some time to be available)"
-      
