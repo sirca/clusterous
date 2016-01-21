@@ -7,4 +7,4 @@ parameters:
     docker_instance_type: c3.large
     docker_instance_count: 1
     spark_instance_type: c3.large
-    spark_instance_count: 1
+    spark_instance_count: 2
