@@ -504,18 +504,20 @@ class Environment(object):
                 parameters.append({ "key": "add-host", "value": 'central-logging:{0}'.format(central_logging_ip) })
 
             docker = {  'image': c['image'], 'port_mappings': port_mappings,
-                        'force_pull_image': True, 'network': 'BRIDGE', 'privileged': True,
+                        'force_pull_image': True, 'network': c['docker_network'].upper(), 'privileged': True,
                         'parameters': parameters}
             container = MarathonContainer(docker=docker, volumes=volume_mapping)
 
             if c['machine']:
                 constraints = [MarathonConstraint(field='name', operator='CLUSTER', value=c['machine'])]
 
-            app_containers.append({ 'name': name,
-                                    'container': container,
-                                    'cmd': c['cmd'],
-                                    'dependencies': dependencies,
-                                    'constraints': constraints})
+            container_dict = {  'name': name,
+                                'container': container,
+                                'dependencies': dependencies,
+                                'constraints': constraints}
+            if c['cmd']:
+                container_dict['cmd'] = c['cmd']
+            app_containers.append(container_dict)
 
         # Launch containers
 
