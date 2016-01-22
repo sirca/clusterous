@@ -28,7 +28,7 @@ environment:
       cpu: auto
       image: "registry:5000/bdkd:ipython_mesos_v2"
       cmd: "/bin/bash /home/data/files/launch_ipython.sh"
-      network: "host"
+      docker_network: host
 
   expose_tunnel:
     - service: 8881:http:8881
