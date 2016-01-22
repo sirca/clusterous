@@ -504,7 +504,7 @@ class Environment(object):
                 parameters.append({ "key": "add-host", "value": 'central-logging:{0}'.format(central_logging_ip) })
 
             docker = {  'image': c['image'], 'port_mappings': port_mappings,
-                        'force_pull_image': True, 'network': 'BRIDGE', 'privileged': True,
+                        'force_pull_image': True, 'network': c['docker_network'].upper(), 'privileged': True,
                         'parameters': parameters}
             container = MarathonContainer(docker=docker, volumes=volume_mapping)
 

@@ -42,7 +42,7 @@ environment:  # This is the main section where you describe the environment
       machine: master       # Run on the machine named "master"
       cpu: auto             # Evenly share CPU with any other components running on this machine
       image: registry:5000/basic-python   # Name of the Docker image to run
-      cmd: "/bin/bash /home/data/launch_scripts/launch_master.sh"   # The command to be run in the container
+      cmd: "/bin/bash /home/data/launch_scripts/launch_master.sh"   # Optional start command to be run in the container
       ports: "8888"        # Expose container port 8888 as 8888 on the host
     engine:   # Component named "engine". These are the "worker" processes
       machine: worker       # Run on machine(s) named "worker"
@@ -81,6 +81,23 @@ basic-python/
 ```
 Again, it is important to note that paths you specify inside the environment file are relative to the location of the environment file itself. Therefore, the above environment file implies that folders are laid out in this way.
 
+### Image and cmd
+The `image` field under the components is the same as what you would provide to Docker to run a standalone container. If the image specified is on the Docker Hub, it will automatically be pulled and run. If the image is your own and has been built by the top level `image` field, it would have been placed in the private docker registry of your account. Access the image with the `registry:5000/` prefixed to its name, as per the above example.
+
+The optional `cmd` field runs a command on the container on launch. In the above example, the appropriate launch shell script is run, which in turn starts the servers. Some containers do not need an explicit command if they already have a background service running. In such cases, the `cmd` field can be omitted.
+
+### CPU, Memory and Count
+The `cpu` field is mandatory and is either set to "auto" or an explicit number (decimals are allowed; 0.5 means half a CPU). Note that there are some limitations what you specify as described in the section Component Resources.
+
+The `count` field is optional, defaulting to 1 instance. If specified, the only value currently accepted is "auto", which means Clusterous will create as many instances as possible on the given machine type, ensuring maximum utilisation.
+
+There is currently no way to specify memory: memory is assigned to each component (or instance) proportionally based, on the CPU.
+
+### Count vs CPU: The limitations
+A key feature of Clusterous is that you don't directly specify how many instances of a component you want running. A component either has one running instance (which may run on the same machine as one or more components), or multiple instances, the exact number of which is automatically determined. In a typical application, this would mean that components such as a UI, master and queueing system would have a single instance each, whereas workers would have as many instances as possible given the cluster size.
+
+A consequence of this is that when specifying the `cpu` field or `count` field for a component, there are certain combinations that are not permitted. For example, when running two different component on the same machine (like a UI and a queue), `cpu` for those components must be set to "auto", indicating that the CPU will be evenly divided among components. On the other hand, for a typical "worker" component, `count` will be "auto", and an explicit `cpu` must be specified.
+
 ### Mapping Ports
 The `ports` field supports a few different syntax options for exposing the container's ports on the host. Multiple ports can be specified in the form:
 
@@ -94,17 +111,21 @@ The above example will map the three container ports to the same port on the hos
   ports: 2000:8000,2001:8001,2002:8002
 ```
 
-### CPU, Memory and Count
-The `cpu` field is mandatory and is either set to "auto" or an explicit number (decimals are allowed; 0.5 means half a CPU). Note that there are some limitations what you specify as described in the section Component Resources.
+### Network mode
+By default, components' Docker containers run with the Docker "bridge" network that is suitable for running many similar containers on one node. However, for some containers, it may be necessary to use Docker's "host" network mode, which runs the container on the same network as the underlying node.
 
-The `count` field is optional, defaulting to 1 instance. If specified, the only value currently accepted is "auto", which means Clusterous will create as many instances as possible on the given machine type, ensuring maximum utilisation.
+Most of the time the default "bridge" network is appropriate, but if your application has particular networking requirements, you can set a component Docker container to run in "host" mode. This can be achieved by the `docker_network` field under a component, which accepts one of two values: `bridge` (default) and `host`. When running in "host" mode, port mappings are not applicable (since the container use's the node's network, any ports opened inside the container are effectively opened on the node itself).
 
-There is currently no way to specify memory: memory is assigned to each component (or instance) proportionally based, on the CPU.
+An example of a component running in `host` mode:
 
-### Count vs CPU: The limitations
-A key feature of Clusterous is that you don't directly specify how many instances of a component you want running. A component either has one running instance (which may run on the same machine as one or more components), or multiple instances, the exact number of which is automatically determined. In a typical application, this would mean that components such as a UI, master and queueing system would have a single instance each, whereas workers would have as many instances as possible given the cluster size.
-
-A consequence of this is that when specifying the `cpu` field or `count` field for a component, there are certain combinations that are not permitted. For example, when running two different component on the same machine (like a UI and a queue), `cpu` for those components must be set to "auto", indicating that the CPU will be evenly divided among components. On the other hand, for a typical "worker" component, `count` will be "auto", and an explicit `cpu` must be specified.
+```YAML
+    master:
+      machine: master
+      cpu: auto
+      image: registry:5000/basic-python
+      cmd: "/bin/bash /home/data/launch_scripts/launch_master.sh"\
+      docker_network: host
+```
 
 ### Expose Tunnel
 The `expose_tunnel` element is used for creating an SSH tunnel between your local machine and a running component on the cluster in order to expose a service such as a web UI. The `service` field lets you specify the ports and the components in the format `local_port:component_name:source_port`, where `local_port` refers to the port to be created on your local machine.
@@ -154,8 +175,6 @@ To access the master, use this URL: http://localhost:8888
 ```
 
 Visit that URL in a browser and you will see a web page with a directory listing, confirming that the environment has been launched.
-
-## Stopping the environment
 
 To kill the launched environment, use the `quit` command:
 
