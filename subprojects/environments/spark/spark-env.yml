@@ -1,8 +1,8 @@
 name: ipython-spark
 cluster:
-  docker:
-    type: $docker_instance_type
-    count: $docker_instance_count
+  master:
+    type: $master_instance_type
+    count: 1
   spark:
     type: $spark_instance_type
     count: $spark_instance_count
@@ -17,14 +17,14 @@ environment:
       image_name: "bdkd:ipython_mesos_v2"
   components:
     http:
-      machine: docker
+      machine: master
       cpu: auto
       image: "registry:5000/bdkd:python_http_v2"
       cmd: "/bin/bash /home/data/files/launch_http.sh"
       ports: "8881:8881"
       
     notebook:
-      machine: docker
+      machine: master
       cpu: auto
       image: "registry:5000/bdkd:ipython_mesos_v2"
       cmd: "/bin/bash /home/data/files/launch_ipython.sh"
