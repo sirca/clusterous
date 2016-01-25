@@ -31,7 +31,5 @@ environment:
       docker_network: host
 
   expose_tunnel:
-    - service: 8881:http:8881
-      message: "HTTP service: {url}"
     - service: 31888:notebook:31888
       message: "IPython notebook: {url} (It may take some time to be available)"
