@@ -1,5 +1,4 @@
 cluster_name: sparkcluster
-central_logging_level: 2
 environment_file: spark-env.yml
 controller_instance_type: c3.large
 parameters:
