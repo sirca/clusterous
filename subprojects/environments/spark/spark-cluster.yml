@@ -1,0 +1,7 @@
+cluster_name: sparkcluster
+environment_file: spark-env.yml
+controller_instance_type: c3.large
+parameters:
+    master_instance_type: c3.large
+    spark_instance_type: c3.large
+    spark_instance_count: 2
