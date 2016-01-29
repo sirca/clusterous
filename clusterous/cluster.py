@@ -127,6 +127,7 @@ class Cluster(object):
     """
     def __init__(self, config, cluster_name=None, cluster_name_required=True, cluster_must_be_running=True):
         self._config = config
+        self._machine_images = self._load_machine_images()
         self._running = False
         self._logger = logging.getLogger(__name__)
         self._nat_ip = ''
@@ -147,6 +148,9 @@ class Cluster(object):
             raise ClusterException('Cluster "{0}" is not in fully running state'.format(self._get_working_cluster_name()))
 
 
+    def _load_machine_images(self):
+        f = open(get_script('machine_images.yml'), 'r')
+        return yaml.load(f)
 
     def _get_cluster_info(self):
         cluster_info_file = os.path.expanduser(defaults.cluster_info_file)
@@ -286,9 +290,6 @@ class AWSCluster(Cluster):
                 'registry_s3_path': defaults.registry_s3_path,
                 'remote_scripts_dir': defaults.get_remote_dir(),
                 'remote_host_scripts_dir': defaults.remote_host_scripts_dir,
-                'central_logging_instance_name': defaults.central_logging_name_format.format(self.cluster_name),
-                'central_logging_ami_id': defaults.central_logging_ami_id,
-                'central_logging_instance_type': defaults.central_logging_instance_type,
                 }
 
     def _ansible_env_credentials(self):
@@ -797,6 +798,18 @@ class AWSCluster(Cluster):
         self._shared_volume_size = defaults.shared_volume_size if not shared_volume_size else shared_volume_size
         self._controller_instance_type = defaults.controller_instance_type if not controller_instance_type else controller_instance_type
 
+        c = self._config
+
+        # Get AMI info
+        if c['region'] not in self._machine_images['aws']:
+            raise ClusterException('AWS region "{0}" is not supported'.format(c['region']))
+        else:
+            available_ami_types = self._machine_images['aws'][c['region']].keys()
+            if sorted(['nat', 'controller', 'node', 'logging']) != sorted(available_ami_types):
+                raise ClusterException('Cannot launch cluster in region "{0}" due to problem with AMIs'.format(c['region']))
+
+        ami_ids = self._machine_images['aws'][c['region']]
+
         # Create dirs
         self._create_config_dirs()
 
@@ -805,7 +818,6 @@ class AWSCluster(Cluster):
         with open(cluster_spec_file_name, 'w') as f:
             f.write(yaml.dump(cluster_spec))
 
-        c = self._config
 
         # Start of big try/catch block
         try:
@@ -870,7 +882,7 @@ class AWSCluster(Cluster):
                                                                                     groups=[public_security_group.id, ],
                                                                                     associate_public_ip_address=True)
             nat_network_interfaces = boto.ec2.networkinterface.NetworkInterfaceCollection(nat_interface)
-            nat_res = conn.run_instances(defaults.nat_ami_id, 
+            nat_res = conn.run_instances(ami_ids['nat'], 
                                          min_count=1,
                                          key_name=c['key_pair'], 
                                          instance_type=defaults.nat_instance_type,
@@ -901,7 +913,7 @@ class AWSCluster(Cluster):
     
             block_devices['/dev/sda1'] = root_vol
     
-            controller_res = conn.run_instances(defaults.controller_ami_id, 
+            controller_res = conn.run_instances(ami_ids['controller'], 
                                                 min_count=1,
                                                 key_name=c['key_pair'], 
                                                 instance_type=self._controller_instance_type,
@@ -922,7 +934,7 @@ class AWSCluster(Cluster):
                 node_root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
                 node_block_devices['/dev/sda1'] = node_root_vol
     
-                res = conn.run_instances(defaults.node_ami_id, 
+                res = conn.run_instances(ami_ids['node'], 
                                          min_count=num_nodes, 
                                          max_count=num_nodes,
                                          key_name=c['key_pair'], 
@@ -939,7 +951,7 @@ class AWSCluster(Cluster):
             if logging_level > 0:
                 self._logger.info('Starting central logging instance')
     
-                logging_res = conn.run_instances(defaults.central_logging_ami_id, 
+                logging_res = conn.run_instances(ami_ids['logging'], 
                                                  min_count=1,
                                                  key_name=c['key_pair'], 
                                                  instance_type=defaults.central_logging_instance_type,
@@ -1114,7 +1126,7 @@ class AWSCluster(Cluster):
         vpc = self._get_vpc(vpc_conn)
         private_subnet = self._create_subnet(vpc_conn, vpc, 'private-subnet')
         private_security_group = self._create_private_sg(vpc_conn, vpc, "private-sg")
-        res = conn.run_instances(defaults.node_ami_id, 
+        res = conn.run_instances(ami_ids['node'], 
                                  min_count=num_nodes, 
                                  max_count=num_nodes,
                                  key_name=c['key_pair'], 

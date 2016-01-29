@@ -1,0 +1,27 @@
+aws:
+  ap-southeast-2:
+    nat: ami-e7ee9edd
+    controller: ami-c81f3bab #ami-6e50750d
+    node: ami-a8183ccb #ami-975376f4
+    logging: ami-af183ccc #ami-825376e1
+  us-west-1:
+    nat: ami-7da94839
+    controller: ami-ed81f68d
+    node: ami-1582f575
+    logging: ami-2283f442
+  us-west-2:
+    nat: ami-69ae8259
+  us-east-1:
+    nat: ami-303b1458
+  eu-west-1:
+    nat: ami-6975eb1e
+  eu-central-1:
+    nat: ami-46073a5b
+  ap-northeast-1:
+    nat: ami-03cf3903
+  ap-northeast-2:
+    nat: none found??
+  ap-southeast-1:
+    nat: ami-b49dace6
+  sa-east-1:
+    nat: ami-fbfa41e6

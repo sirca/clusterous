@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
----
+
+# Launch controller instance from base AMI
 - hosts: localhost
   connection: local
   gather_facts: no
@@ -42,6 +43,59 @@
           group: controller
       register: ec2
 
+    - name: Add instance to host group
+      add_host: hostname={{ item.public_ip }} groupname=launched
+      with_items: ec2.instances
+
     - name: Wait for ssh to come up
       wait_for: host={{ item.public_dns_name }} port=22 delay=60 timeout=320 state=started
       with_items: ec2.instances
+
+# Install and configure instance
+- hosts: launched
+  user: ubuntu
+  become: yes
+  vars_files:
+    - vars/global_vars.yml
+  roles:
+    - roles/mesos_master
+    - roles/mesos_marathon
+    - roles/mesos_chronos
+    - roles/mesos_dns
+    - roles/docker
+    - roles/ansible
+
+# Stop here if do_not_bake is set
+- hosts: localhost
+  tasks:
+    - name: fail
+      fail: msg="Not baking as do_not_bake is true. Terminate instance manually"
+      when: do_not_bake
+
+# Bake AMI
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  vars_files:
+    - vars/global_vars.yml  
+  tasks:
+    - include: tasks_bake_instance.yml ami_name="{{ ami_controller }}"
+
+# Stop here if terminate_instance is false
+- hosts: localhost
+  tasks:
+    - name: fail
+      fail: msg="Not terminating instance as terminate_instance is false. You need to terminate it manually"
+      when: not terminate_instance
+
+- hosts: localhost
+  connection: local
+  vars_files:
+    - vars/global_vars.yml  
+  tasks:
+    - name: Terminate instance
+      ec2:
+        state: 'absent'
+        instance_ids: "{{ ec2.instance_ids }}"
+        region: "{{ region }}"
+

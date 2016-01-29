@@ -1,6 +1,7 @@
 # Set AWS keys in vars
 export AWS_ACCESS_KEY_ID="AKIA1234"
 export AWS_SECRET_ACCESS_KEY="ABCD1234"
+export ANSIBLE_HOST_KEY_CHECKING=False
 
 # Set keypair name, VPC, subnet, etc in global_vars.yml
 

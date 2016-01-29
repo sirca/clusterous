@@ -16,7 +16,7 @@
 - name: sync folder
   hosts: all
   user: ubuntu
-  sudo: yes
+  become: yes
   gather_facts: no
   tasks:
     - name: create remote directory if it doesn't exist
@@ -24,4 +24,4 @@
 
     - name: sync folder
       synchronize: src={{ src_path }} dest={{ dst_path }} mode=push
-      sudo: no
+      become: no
