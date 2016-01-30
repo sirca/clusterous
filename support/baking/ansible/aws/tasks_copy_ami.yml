@@ -38,7 +38,9 @@
       Name: "{{ ami_name }}"
       clusterous_ami_version: "{{ ami_version }}"
     wait: yes
+    wait_timeout: 1800
   register: copied_amis
+  ignore_errors: yes
   with_items: "{{ other_regions }}"
 
 - name: make other region amis public
@@ -50,18 +52,21 @@
       group_names: ['all']
     wait: yes
   when: production_tag
+  ignore_errors: yes
   with_items: "{{ copied_amis.results }}"
 
 # output original ami id 
 - lineinfile:
     dest: "{{ output_file }}"
     create: yes
+    insertafter: EOF
     state: present
     line: "#{{ ami_name }}\n{{ region }}:\n  - {{ ami_find.results[0].ami_id }}"
 
 - name: add copied ami ids to output file
   lineinfile:
     dest: "{{ output_file }}"
+    insertafter: EOF
     line: "{{ item.item }}:\n  - {{ item.image_id }}"
   with_items: "{{ copied_amis.results }}"
 
