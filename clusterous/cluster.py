@@ -1151,6 +1151,7 @@ class AWSCluster(Cluster):
         self._set_cluster_info({'running': True})
 
         # TODO: this is useful for debugging, but remove at a later stage
+        self.create_permanent_tunnel_to_controller(4000, 4000, prefix='chronos')
         self.create_permanent_tunnel_to_controller(8080, 8080, prefix='marathon')
         self.create_permanent_tunnel_to_controller(5050, 5050, prefix='mesos')
 

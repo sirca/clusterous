@@ -38,7 +38,7 @@ taggable_name_max_length = 64       # Arbitrary but ample, keeping in mind AWS k
 
 nat_name_format = '{0}-nat'
 nat_name_tag_value = 'nat'
-nat_instance_type = 'c3.large'
+nat_instance_type = 't2.small'
 controller_name_format = '{0}-controller'
 controller_name_tag_value = 'controller'
 controller_instance_type = 't2.small'
