@@ -4,6 +4,10 @@ These scripts are used for building the AMIs used by Clusterous. There are three
 
 To bake each AMI, the scripts launch an instance with the base OS, install and configure the software, and then create an AMI. All this is achieved primarily via Ansible playbooks.
 
+## Requirements
+
+The Ansible baking scripts require Ansible 2.0 or higher to run. The latest version of the Boto library is also recommended. These are also automatically installed be the Clusterous installer.
+
 ## Steps
 
 First, create a variables file containing information needed by the Ansible scripts. The file `baking_vars.template` is a template for this; just create a copy (say `baking_vars.yml`) and fill in the values. The comments in the template file provide a guide to the values for the fields.
