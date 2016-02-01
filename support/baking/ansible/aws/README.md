@@ -21,7 +21,7 @@ Substitute the appropriate values for the AWS keys.
 Next, run the baking scripts. Assuming that you have put all the baking variables in `baking_vars.yml`, run:
 
 ```
-$ ansible-playbook -v -i hosts 1_create_sg.yml
+$ ansible-playbook -v -i hosts --extra-vars '@baking_vars.yml' 1_create_sg.yml
 $ ansible-playbook -v -i hosts --extra-vars '@baking_vars.yml' 2_make_controller_ami.yml
 $ ansible-playbook -v -i hosts --extra-vars '@baking_vars.yml' 2_make_node_ami.yml
 $ ansible-playbook -v -i hosts --extra-vars '@baking_vars.yml' 2_make_logging_ami.yml
