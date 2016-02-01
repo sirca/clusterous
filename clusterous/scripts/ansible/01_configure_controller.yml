@@ -28,7 +28,7 @@
 - name: configure controller
   hosts: controller
   user: ubuntu
-  sudo: True
+  become: True
   vars:
     central_logging_level: '{{ central_logging_level }}'
     byo_volume: '{{ byo_volume }}'

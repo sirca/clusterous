@@ -16,7 +16,7 @@
 - name: build docker image
   hosts: all
   user: ubuntu
-  sudo: yes
+  become: yes
   tasks:
     - name: copy dockerfile to controller
       synchronize: src={{ dockerfile_path }}/{{ dockerfile_folder }} dest=/home/data/docker_images

@@ -52,11 +52,6 @@ central_logging_name_format = '{0}-central-logging'
 central_logging_name_tag_value = 'central-logging'
 central_logging_instance_type = 't2.small'
 
-nat_ami_id = 'ami-e7ee9edd'
-controller_ami_id = 'ami-6e50750d'
-node_ami_id = 'ami-975376f4'
-central_logging_ami_id = 'ami-825376e1'
-
 default_zone = 'a'
 
 controller_root_volume_size = 50    # GB

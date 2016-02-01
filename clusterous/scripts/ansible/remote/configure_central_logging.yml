@@ -15,7 +15,7 @@
 - name: configure central logging
   hosts: all
   user: ubuntu
-  sudo: True
+  become: True
   tasks:
     # Wait for ssh before connection
     - local_action:

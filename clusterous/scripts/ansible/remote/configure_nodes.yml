@@ -25,7 +25,7 @@
 - name: configure all nodes
   hosts: all
   user: ubuntu
-  sudo: True
+  become: True
   tasks:
     - name: register aws assigned hostname 
       shell: hostname
