@@ -24,6 +24,8 @@ from dateutil import relativedelta
 
 import clusterousmain
 import cluster
+import terminalio
+import setupwizard
 from clusterous import __version__, __prog_name__
 from helpers import NoWorkingClusterException
 
@@ -67,13 +69,6 @@ class CLIParser(object):
         for l in libs:
             logging.getLogger(l).setLevel(logging.WARNING)
 
-    @staticmethod
-    def boldify(s):
-        """
-        Adds shell formatting characters to s to make it bold when printed
-        """
-        return '\033[1m' + str(s) + '\033[0m'
-
 
     def _create_args(self, parser):
         parser.add_argument('--verbose', '-v', dest='verbose', action='store_true',
@@ -82,6 +77,10 @@ class CLIParser(object):
 
     def _create_subparsers(self, parser):
         subparser = parser.add_subparsers(description='The following subcommands are available', dest='subcmd')
+
+        # Setup wizard
+        setup = subparser.add_parser('setup', help='Set up Clusterous',
+                                            description='Set up and configure Clusterous')
 
         # Create new cluster
         create = subparser.add_parser('create', help='Create a new cluster',
@@ -226,6 +225,10 @@ class CLIParser(object):
         app.destroy_cluster(args.leave_shared_volume, args.force_delete_shared_volume)
         return 0
 
+    def _launch_setup(self, args):
+        setup = setupwizard.AWSSetup()
+        setup.start()
+
     def _create_cluster(self, args):
         app = self._init_clusterous_object(args)
         success = False
@@ -345,7 +348,7 @@ class CLIParser(object):
         central_logging_frag = 'nat and controller' if not info['central_logging'] else 'nat, controller and central logging'
         instance_plural = '' if info['instance_count'] == 1 else 's'
         print '{0} has {1} instance{2} running, including {3}'.format(
-                                            self.boldify(info['cluster_name']),
+                                            terminalio.boldify(info['cluster_name']),
                                             info['instance_count'],
                                             instance_plural,
                                             central_logging_frag)
@@ -357,11 +360,11 @@ class CLIParser(object):
         if rd.minutes: uptime_str += '{0} minutes'.format(rd.minutes)
         print 'Uptime:\t\t{0}'.format(uptime_str)
 
-        print '\n', self.boldify('Controller')
+        print '\n', terminalio.boldify('Controller')
         print 'IP: {0}  Port: {1}'.format(info['nat']['ip'], defaults.nat_ssh_port_forwarding)
 
         # Prepare node information table
-        nodes_headers = map(self.boldify, ['Node Name', 'Instance Type', 'Count', 'Running Components'])
+        nodes_headers = map(terminalio.boldify, ['Node Name', 'Instance Type', 'Count', 'Running Components'])
         nodes_table = []
 
         # Add controller and logging instances to table
@@ -391,7 +394,7 @@ class CLIParser(object):
 
         # Print shared volume info
         if info['shared_volume']:
-            print '\n', self.boldify('Shared Volume')
+            print '\n', terminalio.boldify('Shared Volume')
             vinfo = info['shared_volume']
             print '{0} ({1}) used of {2}'.format(vinfo['used'], vinfo['used_percent'], vinfo['total'])
             print '{0} available'.format(vinfo['free'])
@@ -416,7 +419,7 @@ class CLIParser(object):
         success, info = app.ls_volumes()
 
         # Prepare node information table
-        headers = map(self.boldify, ['ID', 'Created', 'Size (GB)', 'Last attached to'])
+        headers = map(terminalio.boldify, ['ID', 'Created', 'Size (GB)', 'Last attached to'])
         table = []
         for i in info:
             table.append([i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name')])
@@ -444,7 +447,9 @@ class CLIParser(object):
 
         status = 0
         try:
-            if args.subcmd == 'create':
+            if args.subcmd == 'setup':
+                status = self._launch_setup(args)
+            elif args.subcmd == 'create':
                 status = self._create_cluster(args)
             elif args.subcmd == 'destroy':
                 self._destroy_cluster(args)
