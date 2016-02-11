@@ -19,8 +19,6 @@ import re
 Module for storing default and static values
 """
 
-DEFAULT_CONFIG_FILE = '~/.clusterous.yml'
-
 local_config_dir = '~/.clusterous'
 local_session_data_dir = local_config_dir + '/' + 'session'
 local_environment_dir = local_config_dir + '/' + 'environment'

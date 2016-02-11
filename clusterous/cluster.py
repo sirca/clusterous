@@ -100,6 +100,16 @@ def read_config(config):
         return None, 'Unknown cluster type "{0}"'.format(cluster_type), None
 
 
+def get_cluster_class(config_type):
+    """
+    Takes in a cluster type string (from the user config) and returns
+    the appropriate class representing that cloud provider
+    """
+    if config_type.upper() == 'AWS':
+        return AWSCluster
+    else:
+        return None
+
 class ClusterException(Exception):
     """
     Unrecoverable error, e.g. when creating a cluster
@@ -201,6 +211,10 @@ class Cluster(object):
     def launch_nodes(self, num_nodes, instance_type):
         pass
 
+    @staticmethod
+    def validate_config(fields):
+        return False, ''
+
     def _ssh_to_controller(self):
         raise NotImplementedError('SSH connections are specific to cloud providers')
 
@@ -208,37 +222,10 @@ class Cluster(object):
 class AWSCluster(Cluster):
 
     @staticmethod
-    def _validate_s3_bucket_name(name):
-        """
-        Validates name of an S3 bucket, ensuring compliance with most of the
-        restrictions described by Amazon:
-        http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
-        In addition, Clusterous doesn't allow dots in S3 bucket names to avoid
-        SSL issues.
-
-        Returns 2-tuple in the form (success, message)
-        """
-        s3_re = re.compile('^[a-z0-9][a-z0-9-]+$')
-
-        if '.' in name:
-            return False, 'Dots in bucket name not supported'
-
-        if not 3 <= len(name) <= 63:
-            return False, 'Must be between 3 and 63 characters long (inclusive)'
-
-        if not s3_re.search(name):
-            return False, 'Contains invalid characters'
-
-        return True, ''
-
-    @staticmethod
     def validate_config(fields):
         mandatory_fields = ['access_key_id', 'secret_access_key', 'key_pair', 'key_file',
                             'clusterous_s3_bucket', 'region']
         optional_fields = ['vpc_id']
-        
-
-        vpc_re = re.compile('^vpc-\w+$')
 
         # Check for unrecognised fields
         unrecog_fields = []
@@ -270,14 +257,6 @@ class AWSCluster(Cluster):
         if oct(stat.S_IMODE(os.stat(key_file).st_mode)) != '0600':
             message = 'Key file {0} must have permissions of 600 (not readable by others)'.format(fields['key_file'])
             return False, message
-
-        s3_valid, s3_msg = AWSCluster._validate_s3_bucket_name(fields['clusterous_s3_bucket'])
-        if not s3_valid:
-            message = 'Error in S3 bucket name "{0}": {1}'.format(fields['clusterous_s3_bucket'], s3_msg)
-            return False, message
-
-        if fields.get('vpc_id') and not vpc_re.search(fields['vpc_id']):
-            return False, 'vpc_id "{0}" is not in valid format'.format(fields['vpc_id'])
 
         return True, ''
 
@@ -438,7 +417,6 @@ class AWSCluster(Cluster):
               '{2}@{3} -L {4}:127.0.0.1:{5}').format(remote_key_path,
               ssh_sock_file, defaults.cluster_username, remote_host, controller_port,
               remote_port)
-
 
         destroy_cmd = 'ssh -S {0} -O exit {1}'.format(ssh_sock_file, remote_host)
 

@@ -20,9 +20,11 @@ import logging
 import textwrap
 
 import tabulate
+import yaml
 from dateutil import relativedelta
 
 import clusterousmain
+import clusterousconfig
 import cluster
 import terminalio
 import setupwizard
@@ -35,7 +37,12 @@ class CLIParser(object):
     """
 
     def __init__(self):
-        pass
+        try:
+            self._config = clusterousconfig.ClusterousConfig()
+        except clusterousconfig.ConfigError as e:
+            print >> sys.stderr, 'Error in configuration file'
+            print >> sys.stderr, e
+            sys.exit(-1)
 
     def _configure_logging(self, level='INFO'):
         logging_dict = {
@@ -182,6 +189,25 @@ class CLIParser(object):
                                           description='Deletes unattached shared volume left from previously destroyed clusters')
         workon.add_argument('volume_id', action='store', help='Volume ID')
 
+        # profile
+        profile = subparser.add_parser('profile', help='Manage Clusterous configuration profiles',
+                                            description='List, switch between, show or remove configuration profiles')
+
+        profile_subparser = profile.add_subparsers(description='The following subcommands are available', dest='profile_cmd')
+        profile_list = profile_subparser.add_parser('list', help='Show list of current profiles',
+                                                            description='Show list of current configuration profiles')
+        profile_use = profile_subparser.add_parser('use', help='Switch to using another profile',
+                                                            description='Switch to using another configuration profile')
+        profile_use.add_argument('profile_name', action='store', help='Profile name')
+
+        profile_show = profile_subparser.add_parser('show', help='Show contents of a profile',
+                                                            description='Show all details of a configuration profile')
+        profile_show.add_argument('profile_name', action='store', help='Profile name (defaults to current)', default=None, nargs='?')
+
+        profile_rm = profile_subparser.add_parser('rm', help='Remove a profile',
+                                                            description='Delete a configuration profile by name')
+        profile_rm.add_argument('profile_name', action='store', help='Profile name')
+
 
 
     def _init_clusterous_object(self, args):
@@ -192,12 +218,16 @@ class CLIParser(object):
         else:
             self._configure_logging('INFO')
 
-        try:
-            app = clusterousmain.Clusterous()
-        except clusterousmain.ConfigError as e:
-            print >> sys.stderr, 'Error in Clusterous configuration file', e.filename
-            print >> sys.stderr, e
+        
+        name, config, config_type = self._config.get_current_profile_info()
+   
+        if not config:    # no config set
+            print >> sys.stderr, 'Clusterous has not yet been configured.'
+            print >> sys.stderr, 'Run "clusterous setup" to configure Clusterous'
             sys.exit(-1)
+
+        
+        app = clusterousmain.Clusterous(config, config_type)
         return app
 
     def _workon(self, args):
@@ -231,6 +261,9 @@ class CLIParser(object):
 
     def _create_cluster(self, args):
         app = self._init_clusterous_object(args)
+        
+        print 'Using profile ' + self._config.get_current_profile_name()
+
         success = False
 
         try:
@@ -437,6 +470,97 @@ class CLIParser(object):
         print message
         return 0 if success else 1
 
+    def _profile(self, args):
+        c = self._config
+
+        if args.profile_cmd == 'list':
+            return self._profile_list(c)
+        elif args.profile_cmd == 'use':
+            return self._profile_use(args.profile_name, c)
+        elif args.profile_cmd == 'show':
+            return self._profile_show(args.profile_name, c)
+        elif args.profile_cmd == 'rm':
+            return self._profile_rm(args.profile_name, c)
+        return 0
+
+    def _profile_list(self, c):
+        profile_list = c.get_profile_list()
+
+        if not profile_list:
+            print 'No profiles configured, use "clusterous setup" to configure Clusterous'
+            return 0
+
+
+        current_profile_str = terminalio.boldify('Current Profile: ')
+        current_profile_name = c.get_current_profile_name()
+        print current_profile_str + current_profile_name
+        print
+
+        table = []
+        for l in profile_list:
+            if l != current_profile_name:
+                table.append([l])
+
+        if table:
+            print tabulate.tabulate(table, headers=[terminalio.boldify('Other Profiles')], tablefmt='plain')
+        else:
+            print 'No other profiles'
+
+        return 0
+
+    def _profile_use(self, profile_name, c):
+        success, message = c.set_current_profile(profile_name)
+
+        if not success:
+            print >> sys.stderr, 'Cannot change profile'
+            print >> sys.stderr, message
+            return -1
+        else:
+            print 'Switched to profile "{0}"'.format(profile_name)
+            return 0
+
+    def _profile_show(self, profile_name, c):            
+        contents = c.get_config_for_profile(profile_name)
+
+        if not contents:
+            if len(c.get_profile_list()) == 0:
+                print >> sys.stderr, 'No profiles available, use "clusterous setup" to configure Clusterous'
+            else:
+                print >> sys.stderr, '"{0}" does not match any existing profiles'.format(profile_name)
+            return -1
+        
+        if contents and not profile_name:
+            print 'Showing details of current profile "{0}"'.format(c.get_current_profile_name())
+
+        print yaml.dump(contents, default_flow_style=False)
+
+        return 0
+
+    def _profile_rm(self, profile_name, c):
+        if not c.is_profile_name_in_use(profile_name):
+            print >> sys.stderr, '"{0}" does not match any existing profiles'.format(profile_name)
+            return -1
+
+        if profile_name == c.get_current_profile_name():
+            print >> sys.stderr, 'Cannot remove "{0}" as it is the currently active profile'.format(profile_name)
+            return -1
+
+        cont = raw_input('Are you sure you want to delete the profile "{0}" (y/n)? '.format(profile_name))
+        if cont.lower() != 'y' and cont.lower() != 'yes':
+            return 1
+
+        success, message = c.delete_profile(profile_name)
+
+        if not success:
+            print >> sys.stderr, message
+            return -1
+        else:
+            print 'Profile deleted'
+
+        return 0
+
+
+
     def main(self, argv=None):
         parser = argparse.ArgumentParser(__prog_name__, description='Tool to create and manage compute clusters')
 
@@ -487,6 +611,8 @@ class CLIParser(object):
                 status = self._ls_volumes(args)
             elif args.subcmd == 'rm-volume':
                 status = self._rm_volume(args)
+            elif args.subcmd == 'profile':
+                status = self._profile(args)
 
         # TODO: this exception should not be caught here
         except NoWorkingClusterException as e:

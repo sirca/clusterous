@@ -14,7 +14,8 @@
 
 import tabulate
 
-from config import AWSConfig
+from clusterousconfig import AWSConfig
+import clusterousconfig
 from terminalio import WizardIO
 import terminalio
 
@@ -40,10 +41,6 @@ def _retry_input(input_func, max_tries=3):
 
 
 class AWSSetup:
-    def __init__(self):
-        # Read in existing config
-        # (For now assume no existing config)
-        pass
 
     def _quit_setup(self):
         WizardIO.new_para()
@@ -53,12 +50,15 @@ class AWSSetup:
 
     def start(self):
         try:
-            WizardIO.out('Welcome to Clusterous')
-            WizardIO.out('This guide will configure Clusterous to allow you to use it with Amazon Web Services', indent=2)
-            WizardIO.out('You only need to run this the first time you use Clusterous', indent=2)
-            # cont = WizardIO.ask('Press [enter] to continue:')
-            # if cont != '':
-            #     return self._quit_setup()
+            aws_config = AWSConfig()
+            WizardIO.out('Welcome to Clusterous setup')
+            if not aws_config.get_current_profile():
+                # No current config
+                WizardIO.out('This guide will configure Clusterous to allow you to use it with Amazon Web Services', indent=2)
+                WizardIO.out('You only need to run this the first time you use Clusterous', indent=2)
+            else:
+                WizardIO.out('This guide will help you create a new configuration profile for using Clusterous with Amazon Web Services', indent=2)
+
             config = {}
             
             WizardIO.new_para()
@@ -72,8 +72,12 @@ class AWSSetup:
 
             WizardIO.new_para()
             WizardIO.out('What AWS region will you use?', indent=2, bold=True)
-            region_list = ', '.join(AWSConfig.get_supported_regions())
-            WizardIO.out('Supported regions are: {0}'.format(region_list), indent=2)
+            WizardIO.out('Supported regions are:', indent=2)
+            region_list = AWSConfig.get_supported_regions()
+            region_header = map(terminalio.boldify, ['Region', 'Region Name'])
+
+            WizardIO.new_para()
+            WizardIO.plain_out(tabulate.tabulate(region_list, headers=region_header, tablefmt='plain'))
             results = self._enter_region(config)
 
             if results['status'] != 'success':
@@ -105,7 +109,26 @@ class AWSSetup:
             WizardIO.out('Typically, a team of Clusterous users can share one bucket so that they can use the same Docker images', indent=2)
             success = self._enter_or_select_bucket(config)
 
-            print config
+            if not success:
+                return self._quit_setup()
+
+            WizardIO.new_para()
+            WizardIO.out('Enter a name for this configuration profile', indent=2, bold=True)
+            WizardIO.out('Give this configuration profile a short but descriptive name', indent=2)
+            WizardIO.out('For example "my-project-sydney"', indent=2)
+            WizardIO.out('This will make it easy to work with multiple configurations for different regions or accounts', indent=2)
+            results = self._enter_profile_name(aws_config)
+
+            if not results['status'] == 'success':
+                return self._quit_setup() 
+
+            aws_config.add_profile(results['value'], config)
+
+            WizardIO.new_para()
+            WizardIO.out('{0} is now the current profile'.format(results['value']))
+            WizardIO.out('Setup is complete. Configuration written to {0}'.format(clusterousconfig.default_config_file))
+            WizardIO.out('You are now ready to start using Clusterous')
+
         except KeyboardInterrupt as e:
             return self._quit_setup()
 
@@ -131,10 +154,11 @@ class AWSSetup:
 
     @_retry_input
     def _enter_region(self, config):
-        region = WizardIO.ask('Region name:')
+        region = WizardIO.ask('Region name (e.g. "ap-southeast-2"):')
 
         retval = {'status': 'fail', 'message': '', 'value': ''}
-        if not region in AWSConfig.get_supported_regions():
+        region_list = AWSConfig.get_supported_regions()
+        if not region in [r[0] for r in region_list]:
             retval['status'] = 'fail'
             retval['message'] = 'Reenter region'
             WizardIO.out('"{}" is not a valid region'.format(region))
@@ -157,7 +181,6 @@ class AWSSetup:
                 WizardIO.out('VPC creation failed: create one manually or contact your administrator', error=True)
             else:
                 id_obtained = True
-                WizardIO.out('VPC created')
         else:   # vpc_list has nonzero elements
 
             done = False
@@ -194,7 +217,6 @@ class AWSSetup:
                         WizardIO.out('VPC creation failed: create one manually or contact your administrator', error=True)
                     else:
                         id_obtained = True
-                        WizardIO.out('VPC created')
                     done = True
                 else:
                     return False    # bad selection
@@ -302,14 +324,14 @@ class AWSSetup:
             WizardIO.out(message, error=True)
             return False
 
-        success, message, full_name = AWSConfig.create_key_pair(c['access_key_id'], c['secret_access_key'],
+        success, message, full_path = AWSConfig.create_key_pair(c['access_key_id'], c['secret_access_key'],
                                                     c['region'], key_pair_name, key_pair_dir)
         if not success:
             WizardIO.out(message, error=True)
             return False
         else:
             c['key_pair'] = key_pair_name
-            c['key_file'] = full_name
+            c['key_file'] = full_path
 
         return True            
 
@@ -426,6 +448,23 @@ class AWSSetup:
         return retval
 
     @_retry_input
+    def _enter_profile_name(self, aws_config):
+        profile_name = WizardIO.ask('Enter a profile name:')
+
+        # Ensure that profile name isn't in use, and is valid
+        valid = not aws_config.is_profile_name_in_use(profile_name)
+        
+        retval = {'status': 'fail', 'message': '', 'value': ''}
+        if not valid:
+            retval['status'] = 'fail'
+            retval['message'] = 'Profile name is not valid. It may already be in use'
+        else:
+            retval['status'] = 'success'
+            retval['value'] = profile_name
+
+        return retval
+
+    @_retry_input
     def _ask_create_or_select(self, resource_str):
         WizardIO.out('Do you want to select an (e)xisting {0} or create a (n)ew one?'.format(resource_str))
         selection = WizardIO.ask("Enter either 'e' or 'n':").lower()
@@ -439,9 +478,4 @@ class AWSSetup:
             retval['value'] = selection
 
         return retval
-
-
-
-
-
 
