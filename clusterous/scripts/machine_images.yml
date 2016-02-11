@@ -35,8 +35,6 @@ aws:
     controller: ami-b9615ad7
     node: ami-cf6358a1
     logging: ami-e8645f86
-  ap-northeast-2:
-    nat: xxx 	# none found, not supported?
   ap-southeast-1:
     nat: ami-b49dace6
     controller: ami-042ee167
