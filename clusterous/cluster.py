@@ -37,7 +37,7 @@ import paramiko
 
 import defaults
 from defaults import get_script
-from helpers import AnsibleHelper, SSHTunnel, NoWorkingClusterException
+from helpers import AnsibleHelper, SSHTunnel
 from netaddr import IPNetwork
 
 # TODO: Move to another module as appropriate, as this is very general purpose
@@ -128,6 +128,12 @@ class ConnectionException(Exception):
     """
     pass
 
+class ClusterInitException(Exception):
+    """
+    When unable to initialise the cluster, e.g. if no working cluster is set
+    """
+    pass
+
 class Cluster(object):
     """
     Represents infrastrucure aspects of the cluster. Includes high level operations
@@ -146,9 +152,7 @@ class Cluster(object):
         if cluster_name_required and not cluster_name:
             name = self._get_working_cluster_name()
             if not name:
-                message = 'No working cluster has been set.'
-                self._logger.error(message)
-                raise NoWorkingClusterException(message)
+                raise ClusterInitException('No working cluster has been set')
             self.cluster_name = name
         elif cluster_name:
             self.cluster_name = cluster_name

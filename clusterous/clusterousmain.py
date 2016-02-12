@@ -41,10 +41,10 @@ class FileError(Exception):
 class ConfigError(FileError):
     pass
 
-class NoConfigError(ConfigError):
+class EnvironmentFileError(FileError):
     pass
 
-class EnvironmentFileError(FileError):
+class NoWorkingClusterError(Exception):
     pass
 
 class ProfileError(Exception):
@@ -123,11 +123,13 @@ class Clusterous(object):
         else:
             success, message = self._cluster_class.validate_config(self._config)
             if not success:
-                raise ClusterError('Error in configuration: ' + message)
+                raise ConfigError('Error in configuration: ' + message)
             try:
                 return self._cluster_class(self._config, cluster_name, cluster_name_required, cluster_must_be_running)
             except cluster.ClusterException as e:
                 raise ClusterError(e)
+            except cluster.ClusterInitException as e:
+                raise NoWorkingClusterError(e)
 
 
     def create_cluster(self, profile_file, launch_env=True):

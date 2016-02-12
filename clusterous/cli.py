@@ -29,19 +29,21 @@ import cluster
 import terminalio
 import setupwizard
 from clusterous import __version__, __prog_name__
-from helpers import NoWorkingClusterException
 
 class CLIParser(object):
     """
     Clusterous Command Line Interface
     """
 
-    def __init__(self):
+    def _read_config(self):
         try:
             self._config = clusterousconfig.ClusterousConfig()
-        except clusterousconfig.ConfigError as e:
+        except (clusterousconfig.ConfigError, clusterousconfig.OldConfigError) as e:
             print >> sys.stderr, 'Error in configuration file'
             print >> sys.stderr, e
+            if type(e) == clusterousconfig.OldConfigError:
+                print >> sys.stderr, 'Make a copy of ~/.clusterous.yml, then delete ~/.clusterous.yml'
+                print >> sys.stderr, 'Then run "clusterous setup" to correctly reconfigure Clusterous'
             sys.exit(-1)
 
     def _configure_logging(self, level='INFO'):
@@ -509,6 +511,7 @@ class CLIParser(object):
         return 0
 
     def _profile_use(self, profile_name, c):
+        # TODO: ideally should warn if there are working clusters present
         success, message = c.set_current_profile(profile_name)
 
         if not success:
@@ -545,7 +548,8 @@ class CLIParser(object):
             print >> sys.stderr, 'Cannot remove "{0}" as it is the currently active profile'.format(profile_name)
             return -1
 
-        cont = raw_input('Are you sure you want to delete the profile "{0}" (y/n)? '.format(profile_name))
+        print 'Are you sure you want to delete the profile "{0}"?'.format(profile_name)
+        cont = raw_input('Any running clusters using this profile will not be accessible (y/n): ')
         if cont.lower() != 'y' and cont.lower() != 'yes':
             return 1
 
@@ -568,6 +572,8 @@ class CLIParser(object):
         self._create_subparsers(parser)
 
         args = parser.parse_args(argv)
+
+        self._read_config()
 
         status = 0
         try:
@@ -615,11 +621,14 @@ class CLIParser(object):
                 status = self._profile(args)
 
         # TODO: this exception should not be caught here
-        except NoWorkingClusterException as e:
-            pass
+        except clusterousmain.NoWorkingClusterError as e:
+            print >> sys.stderr, e
         except clusterousmain.ClusterError as e:
             print >> sys.stderr, e
             print 'Use the "destroy" command to destroy the cluster'
+        except clusterousmain.ConfigError as e:
+            print >> sys.stderr, e
+            print 'The current configuration profile may be corrupt. Rerun "clusterous setup" if necessary'
         except cluster.ClusterNotRunningException as e:
             print >> sys.stderr, e
             print 'Use "destroy" to clean up'

@@ -15,12 +15,16 @@
 import boto3, botocore
 
 import os
+import stat
 import time
 import yaml
 
 default_config_file = '~/.clusterous.yml'
 
 class ConfigError(Exception):
+    pass
+
+class OldConfigError(ConfigError):
     pass
 
 class ClusterousConfig:
@@ -50,7 +54,10 @@ class ClusterousConfig:
                 else:
                     # Validate basic fields
                     if not 'current_profile' in contents or not 'profiles' in contents:
-                        raise ConfigError('Invalid format: ' + filename)
+                        if type(contents) == list and len(contents) > 0 and 'AWS' in contents[0]:
+                            raise OldConfigError('Invalid format, configuration may be in an older format')
+                        else:
+                            raise ConfigError('Invalid format, expected "current_profile" and "profiles" section: ' + filename)
             except IOError as e:
                 raise ConfigError(str(e))
             except yaml.YAMLError as e:
@@ -347,6 +354,12 @@ class AWSConfig(ClusterousConfig):
         if not os.path.isfile(expanded):
             return False, 'Cannot locate key file "{0}"'.format(key_pair_file)
 
+        # Set appropriate permissions
+        if oct(stat.S_IMODE(os.stat(expanded).st_mode)) != '0600':
+            try:
+                os.chmod(expanded, 0600)
+            except OSError as e:
+                return False, 'Unable to change permissions for "{0}", permissions must be 600 (not readable by others)'
         return True, ''
 
     @staticmethod
