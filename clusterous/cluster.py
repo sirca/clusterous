@@ -24,7 +24,6 @@ import glob
 import shutil
 import json
 import stat
-import re
 import errno
 from datetime import datetime
 from collections import namedtuple

@@ -18,6 +18,7 @@ import os
 import stat
 import time
 import yaml
+import re
 
 default_config_file = '~/.clusterous.yml'
 
@@ -382,7 +383,7 @@ class AWSConfig(ClusterousConfig):
         return bucket_list
 
     @staticmethod
-    def _validate_s3_bucket_name(self, name):
+    def _validate_s3_bucket_name(name):
         """
         Validates name of an S3 bucket, ensuring compliance with most of the
         restrictions described by Amazon:
@@ -407,7 +408,7 @@ class AWSConfig(ClusterousConfig):
 
     @staticmethod
     def create_s3_bucket(access_key_id, secret_access_key, region, bucket_name):
-        success, message = self._validate_s3_bucket_name(bucket_name)
+        success, message = AWSConfig._validate_s3_bucket_name(bucket_name)
 
         if not success:
             return False, message
