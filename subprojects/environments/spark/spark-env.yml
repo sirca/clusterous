@@ -9,24 +9,14 @@ cluster:
 environment:
   copy:
     - "files/"
-    - "image/"
   image:
-    - dockerfile: "image/python_http/"
-      image_name: "bdkd:python_http_v2"
-    - dockerfile: "image/ipython_mesos/"
-      image_name: "bdkd:ipython_mesos_v2"
+    - dockerfile: "image/spark_mesos/"
+      image_name: "bdkd:spark_mesos_v11"
   components:
-    http:
-      machine: master
-      cpu: auto
-      image: "registry:5000/bdkd:python_http_v2"
-      cmd: "/bin/bash /home/data/files/launch_http.sh"
-      ports: "8881:8881"
-      
     notebook:
       machine: master
       cpu: auto
-      image: "registry:5000/bdkd:ipython_mesos_v2"
+      image: "registry:5000/bdkd:spark_mesos_v11"
       cmd: "/bin/bash /home/data/files/launch_ipython.sh"
       docker_network: host
 
