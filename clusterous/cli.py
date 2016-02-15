@@ -20,20 +20,31 @@ import logging
 import textwrap
 
 import tabulate
+import yaml
 from dateutil import relativedelta
 
 import clusterousmain
+import clusterousconfig
 import cluster
+import terminalio
+import setupwizard
 from clusterous import __version__, __prog_name__
-from helpers import NoWorkingClusterException
 
 class CLIParser(object):
     """
     Clusterous Command Line Interface
     """
 
-    def __init__(self):
-        pass
+    def _read_config(self):
+        try:
+            self._config = clusterousconfig.ClusterousConfig()
+        except (clusterousconfig.ConfigError, clusterousconfig.OldConfigError) as e:
+            print >> sys.stderr, 'Error in configuration file'
+            print >> sys.stderr, e
+            if type(e) == clusterousconfig.OldConfigError:
+                print >> sys.stderr, 'Make a copy of ~/.clusterous.yml, then delete ~/.clusterous.yml'
+                print >> sys.stderr, 'Then run "clusterous setup" to correctly reconfigure Clusterous'
+            sys.exit(-1)
 
     def _configure_logging(self, level='INFO'):
         logging_dict = {
@@ -67,13 +78,6 @@ class CLIParser(object):
         for l in libs:
             logging.getLogger(l).setLevel(logging.WARNING)
 
-    @staticmethod
-    def boldify(s):
-        """
-        Adds shell formatting characters to s to make it bold when printed
-        """
-        return '\033[1m' + str(s) + '\033[0m'
-
 
     def _create_args(self, parser):
         parser.add_argument('--verbose', '-v', dest='verbose', action='store_true',
@@ -82,6 +86,10 @@ class CLIParser(object):
 
     def _create_subparsers(self, parser):
         subparser = parser.add_subparsers(description='The following subcommands are available', dest='subcmd')
+
+        # Setup wizard
+        setup = subparser.add_parser('setup', help='Set up Clusterous',
+                                            description='Set up and configure Clusterous')
 
         # Create new cluster
         create = subparser.add_parser('create', help='Create a new cluster',
@@ -183,6 +191,25 @@ class CLIParser(object):
                                           description='Deletes unattached shared volume left from previously destroyed clusters')
         workon.add_argument('volume_id', action='store', help='Volume ID')
 
+        # profile
+        profile = subparser.add_parser('profile', help='Manage Clusterous configuration profiles',
+                                            description='List, switch between, show or remove configuration profiles')
+
+        profile_subparser = profile.add_subparsers(description='The following subcommands are available', dest='profile_cmd')
+        profile_list = profile_subparser.add_parser('list', help='Show list of current profiles',
+                                                            description='Show list of current configuration profiles')
+        profile_use = profile_subparser.add_parser('use', help='Switch to using another profile',
+                                                            description='Switch to using another configuration profile')
+        profile_use.add_argument('profile_name', action='store', help='Profile name')
+
+        profile_show = profile_subparser.add_parser('show', help='Show contents of a profile',
+                                                            description='Show all details of a configuration profile')
+        profile_show.add_argument('profile_name', action='store', help='Profile name (defaults to current)', default=None, nargs='?')
+
+        profile_rm = profile_subparser.add_parser('rm', help='Remove a profile',
+                                                            description='Delete a configuration profile by name')
+        profile_rm.add_argument('profile_name', action='store', help='Profile name')
+
 
 
     def _init_clusterous_object(self, args):
@@ -193,12 +220,16 @@ class CLIParser(object):
         else:
             self._configure_logging('INFO')
 
-        try:
-            app = clusterousmain.Clusterous()
-        except clusterousmain.ConfigError as e:
-            print >> sys.stderr, 'Error in Clusterous configuration file', e.filename
-            print >> sys.stderr, e
+        
+        name, config, config_type = self._config.get_current_profile_info()
+   
+        if not config:    # no config set
+            print >> sys.stderr, 'Clusterous has not yet been configured.'
+            print >> sys.stderr, 'Run "clusterous setup" to configure Clusterous'
             sys.exit(-1)
+
+        
+        app = clusterousmain.Clusterous(config, config_type)
         return app
 
     def _workon(self, args):
@@ -226,8 +257,15 @@ class CLIParser(object):
         app.destroy_cluster(args.leave_shared_volume, args.force_delete_shared_volume)
         return 0
 
+    def _launch_setup(self, args):
+        setup = setupwizard.AWSSetup()
+        setup.start()
+
     def _create_cluster(self, args):
         app = self._init_clusterous_object(args)
+        
+        print 'Using profile ' + self._config.get_current_profile_name()
+
         success = False
 
         try:
@@ -345,7 +383,7 @@ class CLIParser(object):
         central_logging_frag = 'nat and controller' if not info['central_logging'] else 'nat, controller and central logging'
         instance_plural = '' if info['instance_count'] == 1 else 's'
         print '{0} has {1} instance{2} running, including {3}'.format(
-                                            self.boldify(info['cluster_name']),
+                                            terminalio.boldify(info['cluster_name']),
                                             info['instance_count'],
                                             instance_plural,
                                             central_logging_frag)
@@ -357,11 +395,11 @@ class CLIParser(object):
         if rd.minutes: uptime_str += '{0} minutes'.format(rd.minutes)
         print 'Uptime:\t\t{0}'.format(uptime_str)
 
-        print '\n', self.boldify('Controller')
+        print '\n', terminalio.boldify('Controller')
         print 'IP: {0}  Port: {1}'.format(info['nat']['ip'], defaults.nat_ssh_port_forwarding)
 
         # Prepare node information table
-        nodes_headers = map(self.boldify, ['Node Name', 'Instance Type', 'Count', 'Running Components'])
+        nodes_headers = map(terminalio.boldify, ['Node Name', 'Instance Type', 'Count', 'Running Components'])
         nodes_table = []
 
         # Add controller and logging instances to table
@@ -391,7 +429,7 @@ class CLIParser(object):
 
         # Print shared volume info
         if info['shared_volume']:
-            print '\n', self.boldify('Shared Volume')
+            print '\n', terminalio.boldify('Shared Volume')
             vinfo = info['shared_volume']
             print '{0} ({1}) used of {2}'.format(vinfo['used'], vinfo['used_percent'], vinfo['total'])
             print '{0} available'.format(vinfo['free'])
@@ -416,7 +454,7 @@ class CLIParser(object):
         success, info = app.ls_volumes()
 
         # Prepare node information table
-        headers = map(self.boldify, ['ID', 'Created', 'Size (GB)', 'Last attached to'])
+        headers = map(terminalio.boldify, ['ID', 'Created', 'Size (GB)', 'Last attached to'])
         table = []
         for i in info:
             table.append([i.get('id'), i.get('created_ts'), i.get('size'),i.get('cluster_name')])
@@ -434,6 +472,99 @@ class CLIParser(object):
         print message
         return 0 if success else 1
 
+    def _profile(self, args):
+        c = self._config
+
+        if args.profile_cmd == 'list':
+            return self._profile_list(c)
+        elif args.profile_cmd == 'use':
+            return self._profile_use(args.profile_name, c)
+        elif args.profile_cmd == 'show':
+            return self._profile_show(args.profile_name, c)
+        elif args.profile_cmd == 'rm':
+            return self._profile_rm(args.profile_name, c)
+        return 0
+
+    def _profile_list(self, c):
+        profile_list = c.get_profile_list()
+
+        if not profile_list:
+            print 'No profiles configured, use "clusterous setup" to configure Clusterous'
+            return 0
+
+
+        current_profile_str = terminalio.boldify('Current Profile: ')
+        current_profile_name = c.get_current_profile_name()
+        print current_profile_str + current_profile_name
+        print
+
+        table = []
+        for l in profile_list:
+            if l != current_profile_name:
+                table.append([l])
+
+        if table:
+            print tabulate.tabulate(table, headers=[terminalio.boldify('Other Profiles')], tablefmt='plain')
+        else:
+            print 'No other profiles'
+
+        return 0
+
+    def _profile_use(self, profile_name, c):
+        # TODO: ideally should warn if there are working clusters present
+        success, message = c.set_current_profile(profile_name)
+
+        if not success:
+            print >> sys.stderr, 'Cannot change profile'
+            print >> sys.stderr, message
+            return -1
+        else:
+            print 'Switched to profile "{0}"'.format(profile_name)
+            return 0
+
+    def _profile_show(self, profile_name, c):            
+        contents = c.get_config_for_profile(profile_name)
+
+        if not contents:
+            if len(c.get_profile_list()) == 0:
+                print >> sys.stderr, 'No profiles available, use "clusterous setup" to configure Clusterous'
+            else:
+                print >> sys.stderr, '"{0}" does not match any existing profiles'.format(profile_name)
+            return -1
+        
+        if contents and not profile_name:
+            print 'Showing details of current profile "{0}"'.format(c.get_current_profile_name())
+
+        print yaml.dump(contents, default_flow_style=False)
+
+        return 0
+
+    def _profile_rm(self, profile_name, c):
+        if not c.is_profile_name_in_use(profile_name):
+            print >> sys.stderr, '"{0}" does not match any existing profiles'.format(profile_name)
+            return -1
+
+        if profile_name == c.get_current_profile_name():
+            print >> sys.stderr, 'Cannot remove "{0}" as it is the currently active profile'.format(profile_name)
+            return -1
+
+        print 'Are you sure you want to delete the profile "{0}"?'.format(profile_name)
+        cont = raw_input('Any running clusters using this profile will not be accessible (y/n): ')
+        if cont.lower() != 'y' and cont.lower() != 'yes':
+            return 1
+
+        success, message = c.delete_profile(profile_name)
+
+        if not success:
+            print >> sys.stderr, message
+            return -1
+        else:
+            print 'Profile deleted'
+
+        return 0
+
+
+
     def main(self, argv=None):
         parser = argparse.ArgumentParser(__prog_name__, description='Tool to create and manage compute clusters')
 
@@ -442,9 +573,13 @@ class CLIParser(object):
 
         args = parser.parse_args(argv)
 
+        self._read_config()
+
         status = 0
         try:
-            if args.subcmd == 'create':
+            if args.subcmd == 'setup':
+                status = self._launch_setup(args)
+            elif args.subcmd == 'create':
                 status = self._create_cluster(args)
             elif args.subcmd == 'destroy':
                 self._destroy_cluster(args)
@@ -482,13 +617,18 @@ class CLIParser(object):
                 status = self._ls_volumes(args)
             elif args.subcmd == 'rm-volume':
                 status = self._rm_volume(args)
+            elif args.subcmd == 'profile':
+                status = self._profile(args)
 
         # TODO: this exception should not be caught here
-        except NoWorkingClusterException as e:
-            pass
+        except clusterousmain.NoWorkingClusterError as e:
+            print >> sys.stderr, e
         except clusterousmain.ClusterError as e:
             print >> sys.stderr, e
             print 'Use the "destroy" command to destroy the cluster'
+        except clusterousmain.ConfigError as e:
+            print >> sys.stderr, e
+            print 'The current configuration profile may be corrupt. Rerun "clusterous setup" if necessary'
         except cluster.ClusterNotRunningException as e:
             print >> sys.stderr, e
             print 'Use "destroy" to clean up'

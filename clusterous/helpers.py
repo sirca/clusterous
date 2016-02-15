@@ -113,9 +113,6 @@ def validate(d, schema, strict=True):
     return True, '', copy
 
 
-class NoWorkingClusterException(Exception):
-    pass
-
 class SSHTunnel(object):
     class TunnelException(Exception):
         pass

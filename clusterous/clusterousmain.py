@@ -26,6 +26,7 @@ import cluster
 import clusterbuilder
 from environmentfile import EnvironmentFile
 import environmentfile
+import clusterousconfig
 
 import environment
 import helpers
@@ -43,6 +44,9 @@ class ConfigError(FileError):
 class EnvironmentFileError(FileError):
     pass
 
+class NoWorkingClusterError(Exception):
+    pass
+
 class ProfileError(Exception):
     pass
 
@@ -54,39 +58,20 @@ class Clusterous(object):
     Clusterous application
     """
 
-    def __init__(self, config_file=defaults.DEFAULT_CONFIG_FILE):
+    def __init__(self, config, config_type):
         self.clusters = []
         self._config = {}
         self._cluster_class = None
 
         self._logger = logging.getLogger(__name__)
 
-        self._read_config(config_file)
+        self._config = config
+        self._cluster_class = cluster.get_cluster_class(config_type)
 
         conf_dir = os.path.expanduser(defaults.local_config_dir)
         if not os.path.exists(conf_dir):
             os.makedirs(conf_dir)
 
-    def _read_config(self, config_file):
-        """
-        Read and validate global configuration
-        """
-        try:
-            stream = open(os.path.expanduser(config_file), 'r')
-            contents = yaml.load(stream)
-            stream.close()
-        except IOError as e:
-            raise ConfigError(str(e), config_file)
-        except yaml.YAMLError as e:
-            raise ConfigError('Invalid YAML format: ' + str(e), config_file)
-
-        cluster_class, message, fields = cluster.read_config(contents)
-
-        if not cluster_class:
-            raise ConfigError(message, config_file)
-
-        self._config = fields
-        self._cluster_class = cluster_class
 
     def _read_profile(self, profile_file):
         """
@@ -136,10 +121,15 @@ class Clusterous(object):
         if not (self._cluster_class and self._config):
             return None
         else:
+            success, message = self._cluster_class.validate_config(self._config)
+            if not success:
+                raise ConfigError('Error in configuration: ' + message)
             try:
                 return self._cluster_class(self._config, cluster_name, cluster_name_required, cluster_must_be_running)
             except cluster.ClusterException as e:
                 raise ClusterError(e)
+            except cluster.ClusterInitException as e:
+                raise NoWorkingClusterError(e)
 
 
     def create_cluster(self, profile_file, launch_env=True):

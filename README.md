@@ -1,7 +1,7 @@
 # Clusterous
 Clusterous is a general purpose tool for cluster computing on AWS. It allows you to create and manage a cluster on AWS and deploy your software in the form of Docker containers.
 
-Clusterous is currently under active development. While it is currently usable, it should be regarded as pre-release software. The latest release is 0.4.1. 
+Clusterous is currently under active development. While it is currently usable, it should be regarded as pre-release software. The latest release is 0.5.0. 
 
 Requires Linux or OS X and Python 2.7.
 
@@ -20,9 +20,9 @@ There are two ways to install Clusterous: either via pip, or by checking out the
 
 To install Clusterous via pip, you need to obtain the .zip package file. A copy is available via the GitHub page under the 'releases' section (download one of the source code zip files). Then run the following on the command line:
 
-    sudo pip install clusterous-v0.4.0.zip
+    sudo pip install clusterous-v0.5.0.zip
     
-Substitute `clusterous-v0.4.0.zip` with the exact file name.
+Substitute `clusterous-v0.5.0.zip` with the exact file name.
 
 ### Note on Python versions
 Clusterous is written in Python 2.7, and currently will not work under Python 3. If you are in an environment with Python 2.x and 3.x installed side-by-side, you have to ensure Clusterous is installed to work with the correct version of Python. Check which version of pip you have:
@@ -56,27 +56,18 @@ And you should see Clusterous' help output.
     
     
 ## Configuring
-Clusterous needs to be configured before it can be used. Create the file `.clusterous.yml` in your home directory. For example, if you use `vi`, you would type:
+Clusterous needs to be configured before it can be used. You need to have an active AWS account before you begin, and an access key id/secret access key pair for Clusterous to access the AWS API. Also, ensure that your account has adequate permissions to launch EC2 instances, etc.
 
-    vi ~/.clusterous.yml
+The recommended way to configure clusterous is to use the `setup` command, which launches an interactive guide to configuring Clusterous.
 
-A template of the contents of the file is as follows:
-```yaml
-- AWS:
-    access_key_id: xxx
-    secret_access_key: xxx
-    key_pair: xxx
-    key_file: xxx.pem
-    vpc_id: vpc-xxx
-    region: xxx
-    clusterous_s3_bucket: xxx
-```
-Ensure that the key file is not readable by other users, or Clusterous will be unable to use it to connect to the virtual machines. A permissions mask of 600 is typical.
+    clusterous setup
 
-Add appropriate values for all fields. The `clusterous_s3_bucket` field takes the name of an S3 bucket that Clusterous uses for storing some data (currently just built Docker images). Just specify a name, and Clusterous will create a new bucket by that name. However, make sure you use a unique name that you can share with others in your organisation. For example `myorg-experiments-clusterous-bucket`, where `myorg` is the name of your organisation.
+The setup wizard will start by asking you to enter your AWS keys (which you can copy/paste). Following that, it will guide your through setting up some AWS resources that Clusterous needs for launching and managing clusters. These include a VPC (Virtual Private Cloud) and a Key Pair (for SSH connections).In each case, Clusterous will give you the option of either picking an existing one or creating a new one. In general, if you expect to share your clusters with collaborators, it is recommended that you use the same resources as them. If you are the first to use Clusterous on your account, or will be working alone, feel free to create your own resources using the setup wizard.
+
+Once you have succesfully run the setup wizard, you are ready to start using Clusterous
 
 # Creating a cluster
-To create a cluster, you need to provide Clusterous some information via a _profile file_. Create a file using a text editor. For example:
+To create a cluster, you need to provide Clusterous some information via a _cluster file_. Create a file using a text editor. For example:
 
 ```
 vi mycluster.yml
@@ -148,9 +139,35 @@ Removing nodes is similarly simple; to remove 5 nodes, type:
     
 Take care when removing nodes from a cluster with a running application.
 
+# Multiple configuration profiles
+
+In some scenarios, it may be necessary to have multiple configurations. For example, you may be using two different AWS regions to obtain a good latency/cost balance. Or you may have two different AWS accounts for different projects. Clusterous supports the concept of "profiles" to manage different sets of configuration.
+
+When you first run the `setup` command, you are prompted to enter a profile name as a last step. To create a new profile, simply run the `setup` command again and follow the prompts. When you create a new profile, Clusterous immediately switches to using it, meaning that if you create a new cluster, it will be creating using the new configuration profile.
+
+The `profile` command allows managing multiple profiles. To see the profiles you have configured, use `list`:
+
+    clusterous profile list
+    
+To switch to using another profile, use the `use` subcommand along with the profile name:
+
+    clusterous profile use my-other-profile
+
+Note that it is recommended that you destroy any running cluster before switching profiles.
+
+You may view the contents of a profile using `switch` or delete a profile using `rm`.
+
 # Advanced options
 
-The profile file used to create a cluster has some advanced options. The following example enables some extra (optional) features:
+## Manual configuration
+
+The configuration created by the Clusterous `setup` command is stored in the file `.clusterous.yml` in your home directory. You may manually inspect or modify this file to troubleshoot any configuration issues.
+
+Additionally, if you want to run Clusterous on another machine without having to rerun the setup wizard, simply copy this file over. However, keep in mind that you need to also copy the Key Pair file (.pem).
+
+## Advanced cluster file options
+
+The cluster file used to create a cluster has some advanced options. The following example enables some extra (optional) features:
 
 ```yaml
 cluster_name: mycluster
@@ -210,7 +227,7 @@ You can easily delete a directory on the shared volume via `rm`:
     clusterous rm main
 
 ## Custom shared volumes
-By default, Clusterous creates a shared volume when creating the cluster. Alternatively, you may set the `shared_volume_id` field in the profile file to the id of an EBS volume you want to use as the shared volume. If this field is specified, Clusterous does not create a shared volume for the cluster; instead, the specified volume is mounted in the same way.
+By default, Clusterous creates a shared volume when creating the cluster. Alternatively, you may set the `shared_volume_id` field in the cluster file to the id of an EBS volume you want to use as the shared volume. If this field is specified, Clusterous does not create a shared volume for the cluster; instead, the specified volume is mounted in the same way.
 
 There are a couple of extra options related to custom shared volumes. When destroying a cluster, you may specify that the shared volume be left undeleted for use in another cluster. This can be useful if you want to avoid copying the data to your system and then copying it again to the shared volume of a new cluster. When issuing the `destroy` command, specify `--leave-shared-volume` to detach the shared volume before the cluster is terminated.
 
