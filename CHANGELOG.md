@@ -50,7 +50,7 @@ Before running the new version, you need to update the configuration using the `
 3. Follow the guided steps, and where necessary, refer to your original config file for information on your keys, VPC, etc.
 4. When prompted, give your created configuration a short name (e.g. 'myproject-sydney' if you use the Sydney AWS region)
  
-You may then use `clusterous profile list` and `clusterous profile show` to verify your new configuration.
+You may then use `clusterous profile ls` and `clusterous profile show` to verify your new configuration.
 
 The new configuration format was necessary to enable the setup wizard and support multiple profiles. With the `setup` and `profile` commands, you should not normally need to edit the ~/.clusterous.yml file.
 

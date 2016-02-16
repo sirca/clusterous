@@ -196,7 +196,7 @@ class CLIParser(object):
                                             description='List, switch between, show or remove configuration profiles')
 
         profile_subparser = profile.add_subparsers(description='The following subcommands are available', dest='profile_cmd')
-        profile_list = profile_subparser.add_parser('list', help='Show list of current profiles',
+        profile_ls = profile_subparser.add_parser('ls', help='Show list of current profiles',
                                                             description='Show list of current configuration profiles')
         profile_use = profile_subparser.add_parser('use', help='Switch to using another profile',
                                                             description='Switch to using another configuration profile')
@@ -475,8 +475,8 @@ class CLIParser(object):
     def _profile(self, args):
         c = self._config
 
-        if args.profile_cmd == 'list':
-            return self._profile_list(c)
+        if args.profile_cmd == 'ls':
+            return self._profile_ls(c)
         elif args.profile_cmd == 'use':
             return self._profile_use(args.profile_name, c)
         elif args.profile_cmd == 'show':
@@ -485,7 +485,7 @@ class CLIParser(object):
             return self._profile_rm(args.profile_name, c)
         return 0
 
-    def _profile_list(self, c):
+    def _profile_ls(self, c):
         profile_list = c.get_profile_list()
 
         if not profile_list:

@@ -265,8 +265,12 @@ class AWSConfig(ClusterousConfig):
                 available = True if state['Vpcs'][0]['State'] == 'available' else False
                 if not available:
                     time.sleep(2)
-            # VPC should now be available
+            # VPC should now be available, tag it
             client.create_tags(Resources=[vpc_id], Tags=tags)
+            # Set EnableDnsHostnames to true (default is false)
+            ec2 = session.resource('ec2')
+            vpc = ec2.Vpc(vpc_id)
+            vpc.modify_attribute(EnableDnsHostnames={'Value': True})
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == 'VpcLimitExceeded':
                 return False, 'VPC quota has been reached, cannot create a new one', ''
@@ -279,6 +283,25 @@ class AWSConfig(ClusterousConfig):
             return True, None, vpc_id
         else:
             return False, 'Unknown error', ''
+
+    @staticmethod
+    def validate_vpc_attribute(access_key_id, secret_access_key, region, vpc_id):
+        session = boto3.session.Session(aws_access_key_id=access_key_id, aws_secret_access_key=secret_access_key,
+                                        region_name=region)
+        ec2 = session.resource('ec2')
+
+        try:
+            vpc = ec2.Vpc(vpc_id)
+            attr = vpc.describe_attribute(Attribute='enableDnsHostnames')
+        except botocore.exceptions.ClientError as e:
+            return False, 'Error validating VPC {0}'.format(vpc_id)
+
+        if attr.get('EnableDnsHostnames', {}).get('Value', False) == False:
+            return False, 'In VPC "{0}", the "EnableDnsHostnames" attribute is set to False'.format(vpc_id)
+        else:
+            return True, ''
+
+
 
     @staticmethod
     def get_all_key_pairs(access_key_id, secret_access_key, region):
