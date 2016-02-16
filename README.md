@@ -145,9 +145,9 @@ In some scenarios, it may be necessary to have multiple configurations. For exam
 
 When you first run the `setup` command, you are prompted to enter a profile name as a last step. To create a new profile, simply run the `setup` command again and follow the prompts. When you create a new profile, Clusterous immediately switches to using it, meaning that if you create a new cluster, it will be creating using the new configuration profile.
 
-The `profile` command allows managing multiple profiles. To see the profiles you have configured, use `list`:
+The `profile` command allows managing multiple profiles. To see the profiles you have configured, use `ls`:
 
-    clusterous profile list
+    clusterous profile ls
     
 To switch to using another profile, use the `use` subcommand along with the profile name:
 

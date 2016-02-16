@@ -246,11 +246,18 @@ class AWSSetup:
         vpc_id = WizardIO.ask('Enter ID of existing VPC (in the form vpc-xxxx):')
 
         retval = {'status': 'success', 'message': '', 'value': ''}
+
+        success, message = AWSConfig.validate_vpc_attribute(c['access_key_id'], c['secret_access_key'],
+                                                            c['region'],vpc_id)
         if not vpc_id:
             retval['status'] = 'cancel'
         elif vpc_id not in [ v[0] for v in vpc_list ]:
             retval['status'] = 'fail'
             retval['message'] = 'Selected VPC does not match any on list'
+        elif not success:
+            WizardIO.out(message, error=True)
+            WizardIO.out('Manually select change the "EnableDnsHostnames" attribute or choose another VPC', error=True)
+            retval['status'] = 'cancel'     # to allow creating or choosing another VPC
         else:
             c['vpc_id'] = vpc_id
 
