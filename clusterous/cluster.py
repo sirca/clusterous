@@ -877,9 +877,6 @@ class AWSCluster(Cluster):
             
             # Wait for NAT to launch
             nat_not_used = self._wait_and_tag_instance_reservations(nat_tags_and_res)
-            if not retry_ssh(nat_instance.ip_address, 22, 5, 45):
-                raise ClusterException('Unable to connect to NAT instance')
-            
             nat_instance.modify_attribute('sourceDestCheck',False)  # Disable sourceDestCheck on NAT instance
             
             # Connect private subnet to the nat instance
@@ -946,10 +943,10 @@ class AWSCluster(Cluster):
     
             # Wait for controller to launch
             controller = self._wait_and_tag_instance_reservations(controller_tags_and_res)
-            if not retry_ssh(nat_instance.ip_address, defaults.nat_ssh_port_forwarding, 5, 45):
-                raise ClusterException('Error: Unable to SSH Controller instance.')
-    
+
             # Setup ssh port forwarding on NAT instance
+            if not retry_ssh(nat_instance.ip_address, 22, 5):
+                raise ClusterException('Unable to connect to NAT instance')
             self._nat_ssh_port_forwarding(nat_instance.ip_address, controller_instance.private_ip_address)
     
             # Add controller IP to cluster info file
