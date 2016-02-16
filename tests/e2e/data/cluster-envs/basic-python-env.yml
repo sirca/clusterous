@@ -21,4 +21,4 @@ environment:
       cmd: "/bin/bash /home/data/launch_scripts/launch_engine.sh"
   expose_tunnel:
     service: 8888:master:31000
-    message: "To access the master, use this URL: "
+    message: "To access the master, use this URL: {url}"

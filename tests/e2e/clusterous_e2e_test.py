@@ -37,6 +37,7 @@ MSG_NOT_WORKING_CLUSTER = 'No working cluster has been set'
 
 with open(os.path.expanduser(CLUSTEROUS_CONFIG_FILE), 'r') as stream:
     CLUSTEROUS_CONFIG = yaml.load(stream)
+    AWS_CONFIG = CLUSTEROUS_CONFIG.get('profiles',{}).get(CLUSTEROUS_CONFIG.get('current_profile',{})).get('config',{})
 
 class TestClusterousE2ETest:
     def _cli_run(self, cmd):
@@ -62,8 +63,7 @@ class TestClusterousE2ETest:
         return rc == 0 and 'destroy' in stderr
 
     def _get_aws_connection(self):
-        c = CLUSTEROUS_CONFIG[0]['AWS']
-        conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],aws_secret_access_key=c['secret_access_key'])
+        conn = boto.ec2.connect_to_region(AWS_CONFIG['region'], aws_access_key_id=AWS_CONFIG['access_key_id'],aws_secret_access_key=AWS_CONFIG['secret_access_key'])
         return conn
 
     def _get_cluster_info(self):
@@ -135,7 +135,7 @@ class TestClusterousE2ETest:
         with SSHTunnelForwarder((self._get_cluster_info().get('nat_ip'),
                                  defaults.nat_ssh_port_forwarding), 
                                 ssh_username=defaults.cluster_username, 
-                                ssh_private_key=os.path.expanduser(CLUSTEROUS_CONFIG[0]['AWS']['key_file']), 
+                                ssh_private_key=os.path.expanduser(AWS_CONFIG['key_file']), 
                                 remote_bind_address=('127.0.0.1', defaults.marathon_port)) as tunnel:
             marathon_url = 'http://localhost:{0}'.format(tunnel.local_bind_port)
             client = marathon.MarathonClient(servers=marathon_url, timeout=600)
