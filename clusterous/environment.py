@@ -121,6 +121,7 @@ class Environment(object):
 
         if not app_list:
             self._logger.info('No application to destroy')
+            tunnel.close()
             return True
 
         component_count = len(app_list)
@@ -146,9 +147,11 @@ class Environment(object):
         # If timed out without destroying
         if not all_destroyed:
             self._logger.warn('Could not delete all applications')
+            tunnel.close()
             return False
 
         self._logger.info('{0} running applications successfully destroyed'.format(component_count))
+        tunnel.close()
         return True
 
     def scale_app(self, node_name, num_nodes_changed, wait_time=0):
@@ -175,6 +178,7 @@ class Environment(object):
         if len(node_info[node_name]) > 1:
             # Currently this should never happen, as scalable nodes can only
             # have one component
+            marathon_tunnel.close()
             return False, 'Scaling not possible because multiple components are running'
 
         running_instances = node_info[node_name][0]['instance_count']
@@ -201,6 +205,7 @@ class Environment(object):
             action_str = 'Added'
         self._logger.info(info_format.format(action_str, abs(num_instances_changed), app_name))
 
+        marathon_tunnel.close()
         return True, 'Success'
 
 
@@ -425,9 +430,11 @@ class Environment(object):
         Queries Marathon and gets names of each running component and number of instances
         of each
         """
+        tunnel_created = False
         if not marathon_tunnel:
             tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
             tunnel.connect()
+            tunnel_created = True
         else:
             tunnel = marathon_tunnel
 
@@ -439,6 +446,10 @@ class Environment(object):
             if app_name not in app_counts:
                 app_counts[app_name] = 0
             app_counts[app_name] += client.get_app(app_name).instances
+
+        if tunnel_created:
+            # If a tunnel was created here, close it before returning
+            tunnel.close()
         return app_counts
 
     def _launch_components(self, spec, component_resources, tunnel):
