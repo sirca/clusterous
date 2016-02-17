@@ -387,9 +387,11 @@ class Environment(object):
         Queries Marathon and gets names of each running component by worker, and number
         of instances of each
         """
+        tunnel_created = False
         if not marathon_tunnel:
             tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
             tunnel.connect()
+            tunnel_created = True
         else:
             tunnel = marathon_tunnel
 
@@ -411,6 +413,9 @@ class Environment(object):
                     node_info[con.value].append({'app_id': app.id,
                                                 'instance_count': app.instances
                                                 })
+        if tunnel_created:
+            # If a tunnel was created here, close it before returning
+            tunnel.close()
 
         return node_info
 
