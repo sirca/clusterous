@@ -780,6 +780,7 @@ class AWSCluster(Cluster):
         self._controller_instance_type = defaults.controller_instance_type if not controller_instance_type else controller_instance_type
 
         c = self._config
+        ami_ids = self._machine_images['aws'][c['region']]
 
         # Get AMI info
         if c['region'] not in self._machine_images['aws']:
@@ -788,8 +789,6 @@ class AWSCluster(Cluster):
             available_ami_types = self._machine_images['aws'][c['region']].keys()
             if sorted(['nat', 'controller', 'node', 'logging']) != sorted(available_ami_types):
                 raise ClusterException('Cannot launch cluster in region "{0}" due to problem with AMIs'.format(c['region']))
-
-        ami_ids = self._machine_images['aws'][c['region']]
 
         # Create dirs
         self._create_config_dirs()
@@ -1090,6 +1089,7 @@ class AWSCluster(Cluster):
         self._logger.info('Creating {0} "{1}" nodes'.format(num_nodes, node_name))
 
         c = self._config
+        ami_ids = self._machine_images['aws'][c['region']]
         nodes_info = [(num_nodes, instance_type, node_name)]
         nat_ip = self._get_nat_ip()
         logging_vars = self._get_logging_vars()

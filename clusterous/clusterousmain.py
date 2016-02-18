@@ -139,7 +139,6 @@ class Clusterous(object):
         profile = self._read_profile(profile_file)
         env_file = None
         cluster_spec = None
-
         try:
             if profile['environment_file']:
                 env_file = EnvironmentFile(profile['environment_file'], profile['parameters'], profile_file)

@@ -74,7 +74,7 @@ class CLIParser(object):
 
         # Disable logging for various libraries
         # TODO: is it possible to do this in a simpler way?
-        libs = ['boto', 'paramiko', 'requests', 'marathon']
+        libs = ['boto', 'paramiko', 'requests', 'marathon', 'urllib3']
         for l in libs:
             logging.getLogger(l).setLevel(logging.WARNING)
 
