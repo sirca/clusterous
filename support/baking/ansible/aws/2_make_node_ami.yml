@@ -60,6 +60,7 @@
   roles:
     - roles/mesos_slave
     - roles/docker
+    - roles/ansible
 
 # Stop here if do_not_bake is set
 - hosts: localhost
