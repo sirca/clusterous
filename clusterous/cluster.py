@@ -57,23 +57,6 @@ def retry_till_true(func, sleep_interval, timeout_secs=300):
 
     return success
 
-def retry_ssh(host, port, sleep_interval, timeout_secs=300):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    success = False
-    start_time = time.time()
-    while not success:
-        try:
-            s.connect((host, port))
-            success = True
-        except socket.error as e:
-            if e.errno != errno.ECONNREFUSED:
-                success = True
-            elif time.time() >= start_time + timeout_secs:
-                break
-            time.sleep(sleep_interval)
-    s.close()
-    return success
-
 def read_config(config):
     """
     Reads in config (from config file), validates,
@@ -375,6 +358,34 @@ class AWSCluster(Cluster):
 
         return ssh
 
+    def _get_ssh(self, ip, username, key_filename, retries=20, delay=5):
+        """
+        Given ip, username and key file, try to establish an SSH connection and
+        return SSH object if successful. Returns None if unable to connect.
+        retries is max number of retries before failing and
+        delay is number of seconds between retries
+        """
+        retry = 0
+        success = False
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        while not success and retry < retries:
+            try:
+                ssh.connect(hostname = ip,
+                            username = username,
+                            key_filename = os.path.expanduser(key_filename))
+                success = True
+            except paramiko.ssh_exception.NoValidConnectionsError as e:
+                self._logger.debug('Unable to establish ssh connection, trying again')
+                retry += 1
+                time.sleep(delay)
+
+        if not success:
+            return None
+
+        return ssh
+
+
     def get_central_logging_ip(self):
         instances = self._get_instances(self.cluster_name)
         ip = None
@@ -498,7 +509,7 @@ class AWSCluster(Cluster):
 
         return all_deleted
 
-    def _wait_and_tag_instance_reservations(self, tag_and_inst_list, sleep_interval=5):
+    def _wait_and_tag_instance_reservations(self, tag_and_inst_list, sleep_interval=3):
         launched = {}
         launched_ids = {}
         inst_list = []
@@ -599,31 +610,34 @@ class AWSCluster(Cluster):
 
         return spec
 
-    def _nat_ssh_port_forwarding(self, nat_public_ip, controller_private_ip):
+
+    def _set_nat_ssh_port_forwarding(self, nat_public_ip, controller_private_ip):
         self._logger.debug('Forwarding port {0} on NAT ({1}) to Controller ({2}) port 22'.format(
             defaults.nat_ssh_port_forwarding, nat_public_ip, controller_private_ip))
-        if not retry_ssh(nat_public_ip, 22, 5, 60):
-            raise ClusterException('Unable to connect to NAT instance')
 
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(hostname = nat_public_ip,
-                    username = 'ec2-user',
-                    key_filename = os.path.expanduser(self._config['key_file']))
+        ssh = self._get_ssh(nat_public_ip, 'ec2-user', self._config['key_file'])
+        if not ssh:
+            self._logger.debug('NAT SSH connection timed out, unable to setup port forwarding')
+            raise ClusterException('Unable to establish SSH connection to NAT instance')
+
+
         cmd = 'sudo iptables -t nat -A PREROUTING -p tcp --dport {0} -j DNAT --to-destination {1}:22'.format(
              defaults.nat_ssh_port_forwarding, controller_private_ip)
-        # Using 'invoke_shell' because it is 'sudo' cmd
-        channel = ssh.invoke_shell()
-        channel.send('{0}\n'.format(cmd))
-        time.sleep(3)
-        output = channel.recv(99999)
-        ssh.close()
-        
-        if '000 -j DNAT' not in output:
-            message = 'Error: Setting SSH port forwarding on NAT instance.'
-            return (False, message)
 
-        return (True, '')
+        # Exec command remotely
+        stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
+
+        output = '\n'.join(stdout.readlines())
+        errors = '\n'.join(stderr.readlines())
+
+        if errors:
+            self._logger.error('NAT port forwarding error: {0}'.format(errors))
+            self._logger.error('NAT port forwarding ouput text: {0}'.format(output))
+            raise ClusterException('Error setting up port forwarding on NAT')
+
+        ssh.close()
+
+        return True
 
     def _clusterous_tag(self, resource_name = None):
         clusterous_tag = {defaults.instance_tag_key: self.cluster_name}
@@ -942,11 +956,6 @@ class AWSCluster(Cluster):
     
             # Wait for controller to launch
             controller = self._wait_and_tag_instance_reservations(controller_tags_and_res)
-
-            # Setup ssh port forwarding on NAT instance
-            if not retry_ssh(nat_instance.ip_address, 22, 5):
-                raise ClusterException('Unable to connect to NAT instance')
-            self._nat_ssh_port_forwarding(nat_instance.ip_address, controller_instance.private_ip_address)
     
             # Add controller IP to cluster info file
             self._set_cluster_info({'nat_ip': nat_instance.ip_address, 'cluster_name': cluster_name})
@@ -991,11 +1000,22 @@ class AWSCluster(Cluster):
             if node_tags_and_res:
                 nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
 
-            # Any errors that occur up until this point cannot be recovered from by destroy
-        except (Exception, KeyboardInterrupt) as e:
-            raise ClusterException('An error occured during cluster creation: {0}. Any created AWS EC2 instances will have to be terminated manually'.format(e))
+            # Any errors that occur up until this point cannot cleanly be recovered from by destroy
+        except KeyboardInterrupt as e:
+            raise ClusterException('Cluster launch was interrupted. Any created AWS resources may have to be terminated manually'.format(e))
+        except Exception as e:
+            self._logger.error('An error occurred during cluster creation. Any created AWS EC2 instances may have to be terminated manually')
+            raise e
 
         try:
+            #
+            # If an error occurs from this point on, the destroy command should cleanly destroy the cluster
+            #
+
+            # Setup ssh port forwarding on NAT instance
+            self._logger.info('Configuring NAT')
+            self._set_nat_ssh_port_forwarding(nat_instance.ip_address, controller_instance.private_ip_address)
+
             # Extra variables used by ansible scripts
             extra_vars = {'central_logging_level': logging_level,
                           'central_logging_ip': '',
@@ -1035,13 +1055,13 @@ class AWSCluster(Cluster):
                 self._configure_nodes(nodes_info, nodes, nat_instance.ip_address, extra_vars)
 
         except (boto.exception.BotoClientError, boto.exception.BotoServerError) as e:
-            self._logger.critical('An error occured accessing AWS and the cluster could not be launched. Use "destroy" to destroy the cluster')
+            self._logger.critical('An error occurred accessing AWS and the cluster could not be launched. Use "destroy" to destroy the cluster')
         except KeyboardInterrupt as e:
             raise ClusterException('Cluster creation was interrupted. Use "destroy" to destroy cluster')
         except socket.error as e:
             raise ClusterException('A connection error was encountered during cluster creation. User "destroy" to destroy cluster')
         except Exception as e:
-            raise ClusterException('An error occured during cluster creation: {0}. Use "destroy" to destroy cluster'.format(e))
+            raise ClusterException('An error occurred during cluster creation: {0} {1}. Use "destroy" to destroy cluster'.format(type(e), e))
 
 
         # Set "running" flag in cluster info file
