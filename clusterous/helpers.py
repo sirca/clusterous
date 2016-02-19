@@ -21,7 +21,8 @@ import logging
 import collections
 
 from sshtunnel import SSHTunnelForwarder
-from defaults import get_script
+import sshtunnel
+from defaults import get_script, nat_ssh_port_forwarding
 
 
 class AnsibleHelper(object):
@@ -63,6 +64,9 @@ class AnsibleHelper(object):
             logger.info(output)
             logger.error(error)
             raise AnsibleHelper.AnsibleError(playbook_file, process.returncode, output, error)
+        else:
+            logger.debug(output)
+            logger.debug(error)
 
         return process.returncode
 
@@ -89,15 +93,16 @@ def validate(d, schema, strict=True):
         elif key in copy:
             if type(copy[key]) == type(None):
                 return False, 'A valid value must be provided for field "{0}"'.format(key), {}
-            if not rules.type == type(copy[key]):
-                return False, 'For field "{0}", expected type "{1}", got "{2}"'.format(key, rules.type.__name__, type(copy[key]).__name__), {}
-            if rules.type == dict and rules.schema:
-                # Recursively validate this nested dictionary
-                success, message, validated = validate(copy[key], rules.schema, strict)
-                if not success:
-                    return False, 'In {0}: {1}'.format(key, message), {}
-                else:
-                    copy[key] = validated
+            if rules.type:
+                if not rules.type == type(copy[key]):
+                    return False, 'For field "{0}", expected type "{1}", got "{2}"'.format(key, rules.type.__name__, type(copy[key]).__name__), {}
+                if rules.type == dict and rules.schema:
+                    # Recursively validate this nested dictionary
+                    success, message, validated = validate(copy[key], rules.schema, strict)
+                    if not success:
+                        return False, 'In {0}: {1}'.format(key, message), {}
+                    else:
+                        copy[key] = validated
 
 
     if strict:
@@ -108,11 +113,11 @@ def validate(d, schema, strict=True):
     return True, '', copy
 
 
-class NoWorkingClusterException(Exception):
-    pass
-
 class SSHTunnel(object):
-    def __init__(self, host, username, key_file, remote_port, host_port=22):
+    class TunnelException(Exception):
+        pass
+
+    def __init__(self, host, username, key_file, remote_port, host_port=nat_ssh_port_forwarding):
         """
         Returns tuple consisting of local port and sshtunnel SSHTunnelForwarder object.
         Caller must call stop() on object when finished
@@ -120,9 +125,13 @@ class SSHTunnel(object):
         logger = logging.getLogger('sshtunnel')
         logger.setLevel(logging.ERROR)
 
-        self._server = SSHTunnelForwarder((host, host_port),
-                ssh_username=username, ssh_private_key=key_file,
-                remote_bind_address=('127.0.0.1', remote_port), logger=logger)
+        try:
+            self._server = SSHTunnelForwarder((host, host_port),
+                    ssh_username=username, ssh_private_key=key_file,
+                    remote_bind_address=('127.0.0.1', remote_port), logger=logger)
+        except sshtunnel.BaseSSHTunnelForwarderError as e:
+            raise self.TunnelException(e)
+
 
     def connect(self):
         self._server.start()

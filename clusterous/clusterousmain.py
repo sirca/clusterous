@@ -26,6 +26,7 @@ import cluster
 import clusterbuilder
 from environmentfile import EnvironmentFile
 import environmentfile
+import clusterousconfig
 
 import environment
 import helpers
@@ -43,7 +44,13 @@ class ConfigError(FileError):
 class EnvironmentFileError(FileError):
     pass
 
+class NoWorkingClusterError(Exception):
+    pass
+
 class ProfileError(Exception):
+    pass
+
+class ClusterError(Exception):
     pass
 
 class Clusterous(object):
@@ -51,39 +58,20 @@ class Clusterous(object):
     Clusterous application
     """
 
-    def __init__(self, config_file=defaults.DEFAULT_CONFIG_FILE):
+    def __init__(self, config, config_type):
         self.clusters = []
         self._config = {}
         self._cluster_class = None
 
         self._logger = logging.getLogger(__name__)
 
-        self._read_config(config_file)
+        self._config = config
+        self._cluster_class = cluster.get_cluster_class(config_type)
 
         conf_dir = os.path.expanduser(defaults.local_config_dir)
         if not os.path.exists(conf_dir):
             os.makedirs(conf_dir)
 
-    def _read_config(self, config_file):
-        """
-        Read and validate global configuration
-        """
-        try:
-            stream = open(os.path.expanduser(config_file), 'r')
-            contents = yaml.load(stream)
-            stream.close()
-        except IOError as e:
-            raise ConfigError(str(e), config_file)
-        except yaml.YAMLError as e:
-            raise ConfigError('Invalid YAML format: ' + str(e), config_file)
-
-        cluster_class, message, fields = cluster.read_config(contents)
-
-        if not cluster_class:
-            raise ConfigError(message, config_file)
-
-        self._config = fields
-        self._cluster_class = cluster_class
 
     def _read_profile(self, profile_file):
         """
@@ -129,11 +117,19 @@ class Clusterous(object):
 
         return validated
 
-    def make_cluster_object(self, cluster_name=None, cluster_name_required=True):
+    def make_cluster_object(self, cluster_name=None, cluster_name_required=True, cluster_must_be_running=True):
         if not (self._cluster_class and self._config):
             return None
         else:
-            return self._cluster_class(self._config, cluster_name, cluster_name_required)
+            success, message = self._cluster_class.validate_config(self._config)
+            if not success:
+                raise ConfigError('Error in configuration: ' + message)
+            try:
+                return self._cluster_class(self._config, cluster_name, cluster_name_required, cluster_must_be_running)
+            except cluster.ClusterException as e:
+                raise ClusterError(e)
+            except cluster.ClusterInitException as e:
+                raise NoWorkingClusterError(e)
 
 
     def create_cluster(self, profile_file, launch_env=True):
@@ -143,7 +139,6 @@ class Clusterous(object):
         profile = self._read_profile(profile_file)
         env_file = None
         cluster_spec = None
-
         try:
             if profile['environment_file']:
                 env_file = EnvironmentFile(profile['environment_file'], profile['parameters'], profile_file)
@@ -159,15 +154,20 @@ class Clusterous(object):
         except environmentfile.UnknownValue as e:
             # If unknown value found, probably an error in the profile (i.e. user params)
             raise ProfileError(str(e))
+        except environmentfile.UnknownParams as e:
+            # If the profile file includes param not recognised
+            raise ProfileError(str(e))
         except environmentfile.EnvironmentSpecError as e:
             # Otherwise it's a problem in the environment file itself
             raise EnvironmentFileError(str(e), filename=profile['environment_file'])
+        except cluster.ClusterException as e:
+            raise ClusterError(e)
 
 
         self._logger.debug('Actual cluster spec: {0}'.format(cluster_spec))
 
         # Init Cluster object
-        cl = self.make_cluster_object(cluster_name_required=False)
+        cl = self.make_cluster_object(cluster_name_required=False, cluster_must_be_running=False)
 
         builder = clusterbuilder.ClusterBuilder(cl)
         self._logger.info('Creating cluster...')
@@ -343,7 +343,7 @@ class Clusterous(object):
         """
         Sets a working cluster
         """
-        cl = self.make_cluster_object(cluster_name)
+        cl = self.make_cluster_object(cluster_name, cluster_must_be_running=False)
         success = cl.workon()
         if success:
             message = 'Switched to {0}'.format(cluster_name)
@@ -352,7 +352,7 @@ class Clusterous(object):
         return success, message
 
     def destroy_cluster(self, leave_shared_volume, force_delete_shared_volume):
-        cl = self.make_cluster_object()
+        cl = self.make_cluster_object(cluster_must_be_running=False)
         self._logger.info('Destroying cluster {0}'.format(cl.cluster_name))
         cl.terminate_cluster(leave_shared_volume, force_delete_shared_volume)
 

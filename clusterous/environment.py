@@ -121,6 +121,7 @@ class Environment(object):
 
         if not app_list:
             self._logger.info('No application to destroy')
+            tunnel.close()
             return True
 
         component_count = len(app_list)
@@ -146,9 +147,11 @@ class Environment(object):
         # If timed out without destroying
         if not all_destroyed:
             self._logger.warn('Could not delete all applications')
+            tunnel.close()
             return False
 
         self._logger.info('{0} running applications successfully destroyed'.format(component_count))
+        tunnel.close()
         return True
 
     def scale_app(self, node_name, num_nodes_changed, wait_time=0):
@@ -175,6 +178,7 @@ class Environment(object):
         if len(node_info[node_name]) > 1:
             # Currently this should never happen, as scalable nodes can only
             # have one component
+            marathon_tunnel.close()
             return False, 'Scaling not possible because multiple components are running'
 
         running_instances = node_info[node_name][0]['instance_count']
@@ -201,6 +205,7 @@ class Environment(object):
             action_str = 'Added'
         self._logger.info(info_format.format(action_str, abs(num_instances_changed), app_name))
 
+        marathon_tunnel.close()
         return True, 'Success'
 
 
@@ -387,9 +392,11 @@ class Environment(object):
         Queries Marathon and gets names of each running component by worker, and number
         of instances of each
         """
+        tunnel_created = False
         if not marathon_tunnel:
             tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
             tunnel.connect()
+            tunnel_created = True
         else:
             tunnel = marathon_tunnel
 
@@ -411,6 +418,9 @@ class Environment(object):
                     node_info[con.value].append({'app_id': app.id,
                                                 'instance_count': app.instances
                                                 })
+        if tunnel_created:
+            # If a tunnel was created here, close it before returning
+            tunnel.close()
 
         return node_info
 
@@ -420,9 +430,11 @@ class Environment(object):
         Queries Marathon and gets names of each running component and number of instances
         of each
         """
+        tunnel_created = False
         if not marathon_tunnel:
             tunnel = self._cluster.make_controller_tunnel(defaults.marathon_port)
             tunnel.connect()
+            tunnel_created = True
         else:
             tunnel = marathon_tunnel
 
@@ -434,6 +446,10 @@ class Environment(object):
             if app_name not in app_counts:
                 app_counts[app_name] = 0
             app_counts[app_name] += client.get_app(app_name).instances
+
+        if tunnel_created:
+            # If a tunnel was created here, close it before returning
+            tunnel.close()
         return app_counts
 
     def _launch_components(self, spec, component_resources, tunnel):
@@ -504,7 +520,7 @@ class Environment(object):
                 parameters.append({ "key": "add-host", "value": 'central-logging:{0}'.format(central_logging_ip) })
 
             docker = {  'image': c['image'], 'port_mappings': port_mappings,
-                        'force_pull_image': True, 'network': 'BRIDGE', 'privileged': True,
+                        'force_pull_image': True, 'network': c['docker_network'].upper(), 'privileged': True,
                         'parameters': parameters}
             container = MarathonContainer(docker=docker, volumes=volume_mapping)
 
@@ -597,34 +613,53 @@ class Environment(object):
 
 
     def _expose_tunnel(self, tunnel_info, cluster_info, component_resources):
-        parts = tunnel_info['service'].split(':')
 
-        # Validate port value
-        if ( len(parts) != 3 or
-             not parts[0].isdigit() or
-             not parts[2].isdigit()):
-            raise self.LaunchError('Invalid syntax: "{0}" Tunnel service must be in '
-                                    'the format "localport:component:remoteport"'.format(
-                                    tunnel_info['service']))
+        tunnel_info_list = []
+        message_list = []
+        # Determine if it is a dictionary (single tunnel) or a list of dictionaries (1+ tunnels)
+        if type(tunnel_info) == dict:
+            tunnel_info_list.append(tunnel_info)
+        elif type(tunnel_info) == list:
+            tunnel_info_list = tunnel_info
 
-        local_port, component_name, remote_port = parts
+        for info in tunnel_info_list:
+            parts = info['service'].split(':')
 
-        hostname = self._get_component_hostname(component_name, cluster_info, component_resources)
+            # Validate port value
+            if ( len(parts) != 3 or
+                 not parts[0].isdigit() or
+                 not parts[2].isdigit()):
+                raise self.LaunchError('Invalid syntax: "{0}" Tunnel service must be in '
+                                        'the format "localport:component:remoteport"'.format(
+                                        info['service']))
 
-        # Make tunnel from controller to node. Note that this uses the same port for both
-        # the node and for the controller for simplicity of implementation
-        self._cluster.make_tunnel_on_controller(remote_port, hostname, remote_port)
+            local_port, component_name, remote_port = parts
 
-        # Make tunnel from localhost to controller
-        success = self._cluster.create_permanent_tunnel_to_controller(remote_port, local_port)
+            hostname = self._get_component_hostname(component_name, cluster_info, component_resources)
 
-        if not success:
-            raise self.LaunchError('Could not create tunnel')
+            # Make tunnel from controller to node. Note that this uses the same port for both
+            # the node and for the controller for simplicity of implementation
+            self._cluster.make_tunnel_on_controller(remote_port, hostname, remote_port)
 
-        # Make message
-        message = ''
-        if 'message' in tunnel_info:
-            url = 'http://localhost:{0}'.format(local_port)
-            message = '{0}{1}'.format(tunnel_info['message'], url)
+            # Make tunnel from localhost to controller
+            success = self._cluster.create_permanent_tunnel_to_controller(remote_port, local_port)
 
-        return message
+            if not success:
+                raise self.LaunchError('Could not create tunnel')
+
+            # Make message
+            message = ''
+            if info.get('message', ''):
+                message = info['message']
+                if '{url}' in message:
+                    url = 'http://localhost:{0}'.format(local_port)
+                    message = message.replace('{url}', url)
+                if '{port}' in message:
+                    message = message.replace('{port}', local_port)
+            else:
+                # Default message
+                message = 'Tunnel created on port {}'.format(local_port)
+
+            message_list.append(message)
+
+        return '\n'.join(message_list)

@@ -12,13 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Marathon
+# Chronos
 ---
-- name: check if chronos is present
-  stat: path=/usr/bin/chronos
-  register: result
 - name: installing chronos
-  yum: pkg=chronos-2.3.4 state=present
-  when: result.stat.exists == false
+  apt: name=chronos=2.3.4-0.1.20150813102925.ubuntu1404 state=present
 - name: start chronos
   service: name=chronos state=started enabled=yes

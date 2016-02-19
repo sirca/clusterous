@@ -1,0 +1,25 @@
+name: ipython-spark
+cluster:
+  master:
+    type: $master_instance_type
+    count: 1
+  spark:
+    type: $spark_instance_type
+    count: $spark_instance_count
+environment:
+  copy:
+    - "files/"
+  image:
+    - dockerfile: "image/spark_mesos/"
+      image_name: "bdkd:spark_mesos_v11"
+  components:
+    notebook:
+      machine: master
+      cpu: auto
+      image: "registry:5000/bdkd:spark_mesos_v11"
+      cmd: "/bin/bash /home/data/files/launch_ipython.sh"
+      docker_network: host
+
+  expose_tunnel:
+    - service: 31888:notebook:31888
+      message: "IPython notebook: {url} (It may take some time to be available)"

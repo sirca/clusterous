@@ -1,5 +1,70 @@
 # Clusterous changelog 
 
+## Version 0.5.0
+
+This version has a number of improvements and bug fixes. A notable feature is the setup wizard, which interactively guides you through configuring Clusterous. Additionally, there is a working Spark example environment and support for running in other AWS regions.
+
+Note that there are some minor breaks in compatibility. The "Upgrading" section below will talk about the changes required to your environment files, etc.
+
+### Changes
+
+* New setup wizard to make it easier for first time users to get up and running. This is accessed via the `setup` command
+* Support for managing multiple configurations - e.g. for different AWS regions or accounts
+* Support for all AWS regions (except Seoul for now)
+* Spark support and an example Spark environment
+* Support for ports mappings from 1024 to 65535 in environment files
+* Changes to environment file format: expose_tunnel is more flexible, support for Docker "host" networking
+* Cluster now has a dedicated NAT, and all instances run an officially supported Ubuntu release - meaning better security and scaling
+* Generally improved error handling
+* Some small bugfixes
+ 
+[README.md](https://github.com/sirca/bdkd_cluster/blob/master/README.md) and the [environment file documentation](https://github.com/sirca/clusterous/blob/master/docs/environment_file.md) have complete information on all new functionality.
+
+## Upgrading
+
+### Preparing
+First, shut down any running clusters that were created with an earlier version using the `destroy` command. The new version of Clusterous will not work with clusters created by an earlier version.
+
+```shell
+$ clusterous destroy
+```
+Then uninstall the existing version of Clusterous:
+
+```shell
+$ pip freeze | grep clusterous
+$ pip uninstall clusterous
+```
+
+### Install
+Install the new version of Clusterous as per the instructions in [README.md](https://github.com/sirca/bdkd_cluster/blob/master/README.md).
+
+Note that if you installed from source by checking out the code and using setup.py, the uninstallation procedure will be different.
+
+**Important**: Before proceeding to use Clusterous, read the following sections on the changes you may need to make.
+
+### Reconfigure Clusterous
+Before running the new version, you need to update the configuration using the `setup` command. In earlier versions of Clusterous, it was necessary to manually create the ~/.clusterous.yml file. The new version of Clusterous will not work with the old, manually created configuration files. Instead, you need to recreate the configuration:
+
+1. Create a backup copy of your ~/.clusterous.yml file and delete ~/.clusterous.yml
+2. Run `clusterous setup`
+3. Follow the guided steps, and where necessary, refer to your original config file for information on your keys, VPC, etc.
+4. When prompted, give your created configuration a short name (e.g. 'myproject-sydney' if you use the Sydney AWS region)
+ 
+You may then use `clusterous profile ls` and `clusterous profile show` to verify your new configuration.
+
+The new configuration format was necessary to enable the setup wizard and support multiple profiles. With the `setup` and `profile` commands, you should not normally need to edit the ~/.clusterous.yml file.
+
+### Change in terminology
+In previous versions of Clusterous, the file in which you put cluster parameters (such as the number and types of instances) was refered to as the "profile" file. This file is now refered to as the "cluster" file, which better reflects its role in creating a new cluster. You still use the cluster file in the same way, with the `create` command.
+
+The term "profile" now means something else. Clusterous now supports creating and managing multiple AWS configurations, each of which is refered to as a "profile". You may have a different profile for different AWS regions, or for different accounts. These can be managed by the new `profile` command. Use the `setup` command to create a new configuration profile.
+
+### Change cluster file
+Update your cluster file and replace `instance_count` with `worker_count`. In cluster files that use the default cluster, the `instance_count` field is gone and instead there is the `worker_count` field, with a slightly different meaning. The `instance_count` referred to the total number of instances, including the master. The less ambigious `worker_count` field only refers to the number of workers (there is always only 1 master). Change `instance_count` to `worker_count` in all your cluster files (née profile files) and reduce the number by 1.
+
+### Update environment file
+In your environment file(s), change the `expose_tunnel` section to display the URL correctly. In earlier versions of Clusterous, a URL would always be printed after the `expose_tunnel` message was displayed. Now, in order to have the URL displayed, you need to put the special `{url}` directive in the message. Clusterous also supports `{port}` to display only the port of the tunnel. Refer to the [environment file documentation](https://github.com/sirca/clusterous/blob/master/docs/environment_file.md) for full details.
+
 
 ## Version 0.4.1
 

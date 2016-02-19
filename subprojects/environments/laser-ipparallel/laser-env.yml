@@ -1,0 +1,35 @@
+name: laser-ipparallel
+environment:
+  copy:
+    - "files/"
+  components:
+    controller:
+      machine: master
+      cpu: auto
+      image: bdkd/datastore:v0.0.1
+      cmd: "/bin/bash /home/data/files/launch_scripts/01_ipcontroller.sh"
+      ports: 31000,31001,31002,31003,31004,31005,31006,31007,31008,31009,31010,31011
+
+    engine:
+      machine: worker
+      depends: controller
+      cpu: 1
+      count: auto
+      image: bdkd/datastore:v0.0.1
+      cmd: "/bin/bash /home/data/files/launch_scripts/02_ipengine.sh"
+
+    notebook:
+      machine: master
+      depends: controller
+      cpu: auto
+      image: bdkd/datastore:v0.0.1
+      cmd: "/bin/bash /home/data/files/launch_scripts/03_ipnotebook.sh"
+      ports: "31080:8888"
+
+  expose_tunnel:
+    service: 8888:notebook:31080
+    message: |
+          The IPython engines may take up to 30 seconds to become available.
+          The connection file is located at:
+          /home/data/ipython/profile/security/ipcontroller-client.json
+          To access IPython notebook, use this URL: {url}

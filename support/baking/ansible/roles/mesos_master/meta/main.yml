@@ -14,5 +14,5 @@
 
 ---
 dependencies:
+  - { role: roles/nfs_server }
   - { role: roles/mesos }
-  - { role: roles/zookeeper }

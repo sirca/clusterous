@@ -19,8 +19,6 @@ import re
 Module for storing default and static values
 """
 
-DEFAULT_CONFIG_FILE = '~/.clusterous.yml'
-
 local_config_dir = '~/.clusterous'
 local_session_data_dir = local_config_dir + '/' + 'session'
 local_environment_dir = local_config_dir + '/' + 'environment'
@@ -29,16 +27,18 @@ cached_environment_file = 'environment.yml'
 cached_cluster_file_path = local_environment_dir + '/' + cached_cluster_file
 cached_environment_file_path = local_environment_dir + '/' + cached_environment_file
 
-remote_environment_dir = '/root/environment'
+remote_environment_dir = '/home/ubuntu/environment'
 
-current_controller_ip_file = local_config_dir + '/' + 'current_controller'
+current_nat_ip_file = local_config_dir + '/' + 'current_controller'
 cluster_info_file = local_config_dir + '/' + 'cluster_info.yml'
 
 
 taggable_name_re = re.compile('^[\w-]+$')       # For user supplied strings such as cluster name
 taggable_name_max_length = 64       # Arbitrary but ample, keeping in mind AWS keys can be max 127 chars
 
-security_group_name_format = '{0}-sg'
+nat_name_format = '{0}-nat'
+nat_name_tag_value = 'nat'
+nat_instance_type = 't2.micro'
 controller_name_format = '{0}-controller'
 controller_name_tag_value = 'controller'
 controller_instance_type = 't2.small'
@@ -49,11 +49,13 @@ registry_s3_path = '/docker-registry'
 central_logging_name_format = '{0}-central-logging'
 central_logging_name_tag_value = 'central-logging'
 central_logging_instance_type = 't2.small'
-central_logging_ami_id = 'ami-45eaad7f'
-controller_ami_id = 'ami-fd4708c7'
-node_ami_id = 'ami-47eaad7d'
 
-controller_root_volume_size = 10    # GB
+default_zone = 'a'
+
+controller_root_volume_size = 50    # GB
+
+cluster_username = 'ubuntu'
+cluster_user_home_dir = '/home/ubuntu'
 
 shared_volume_path = '/home/data/'
 shared_volume_size = 20     # GB
@@ -70,6 +72,7 @@ container_id_script_file = 'container_id.sh'
 mesos_port = 5050
 marathon_port = 8080
 central_logging_port = 8081
+nat_ssh_port_forwarding = 22000
 
 # How many seconds to wait for all Marathon applications to reach "started" state
 # Currently 30 minutes

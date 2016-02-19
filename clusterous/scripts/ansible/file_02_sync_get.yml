@@ -15,10 +15,10 @@
 ---
 - name: sync folder
   hosts: all
-  user: root
-  sudo: yes
+  user: ubuntu
+  become: yes
   gather_facts: no
   tasks:
     - name: sync folder
       synchronize: src={{ src_path }} dest={{ dst_path }} mode=pull
-      sudo: no
+      become: no

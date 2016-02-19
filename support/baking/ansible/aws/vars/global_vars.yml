@@ -1,18 +1,14 @@
 # General
-cluster_name: clustername
 region: ap-southeast-2
-keypair: keypairname
-vpc_id: vpc-1235
-vpc_subnet_id: subnet-21345
+ansible_ssh_user: ubuntu
 security_group_name: "{{ cluster_name }}-sg"
 billing_tag: "mytag"
 
 # Baking
-ami_version: "20150910"
-base_image: "ami-a38be799"
+base_image: "ami-69631053"
 instance_name_controller: "{{ cluster_name }}-controller"
 instance_name_node: "{{ cluster_name }}-node"
-instance_name_elk: "{{ cluster_name }}-elk"
+instance_name_logging: "{{ cluster_name }}-logging"
 ami_controller: "ami-{{ cluster_name }}-controller-{{ ami_version }}"
 ami_node: "ami-{{ cluster_name }}-node-{{ ami_version }}"
-ami_elk: "ami-{{ cluster_name }}-elk-{{ ami_version }}"
+ami_logging: "ami-{{ cluster_name }}-logging-{{ ami_version }}"

@@ -18,7 +18,9 @@
   template: src=mesos-slave.j2 dest=/etc/default/mesos-slave mode=0755
 - name: mesos slave using docker
   lineinfile: dest=/etc/mesos-slave/containerizers line="docker,mesos" create=yes
+- name: set accepted port range
+  lineinfile: dest=/etc/mesos-slave/resources line="ports:[1024-65535]" create=yes
 - name: mesos slave timeout
   lineinfile: dest=/etc/mesos-slave/executor_registration_timeout line="5mins" create=yes
 - name: make sure mesos-slave is stopped
-  service: name=mesos-slave state=stopped enabled=no
+  service: name=mesos-slave state=stopped enabled=yes

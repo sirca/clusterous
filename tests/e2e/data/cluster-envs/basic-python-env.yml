@@ -1,0 +1,24 @@
+name: basic-python 
+environment:
+  copy:
+    - "launch_scripts/"
+  image:
+    - dockerfile: "image/"
+      image_name: "basic-python"
+  components:
+    master:
+      machine: master
+      cpu: auto
+      image: registry:5000/basic-python
+      cmd: "/bin/bash /home/data/launch_scripts/launch_master.sh"
+      ports: "31000"
+    engine:
+      machine: worker
+      depends: master
+      cpu: 0.5
+      count: auto
+      image: registry:5000/basic-python
+      cmd: "/bin/bash /home/data/launch_scripts/launch_engine.sh"
+  expose_tunnel:
+    service: 8888:master:31000
+    message: "To access the master, use this URL: {url}"

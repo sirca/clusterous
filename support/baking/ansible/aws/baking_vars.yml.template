@@ -1,0 +1,13 @@
+cluster_name: mycluster
+vpc_id: vpc-1234		# the scripts require a preexisting VPC
+vpc_subnet_id: subnet-1234	# the VPC must have an associated subnet
+keypair: my-keypair
+ansible_ssh_private_key_file: ~/my-keypair.pem
+ami_version: "20160129"		# version is by convention current date in YYYYMMDD
+production_tag: true	# either true or false
+terminate_instance: true	# whether or not to terminate the baking instance after baking
+do_not_bake: false			# only prepare the instance, do not bake
+output_file: ~/genenerated_amis.yml		# file to which list of AMIs is written
+other_regions:		# the initial image is baked in the primary region (in global_vars.yml). These are the regions to which the AMIs are to be copied
+  - us-west-1
+  - us-east-1

@@ -18,7 +18,7 @@ environment:  # This is the main section where you describe the environment
       cpu: auto             # Evenly share CPU with any other components running on this machine
       image: registry:5000/basic-python   # Name of the Docker image to run
       cmd: "/bin/bash /home/data/launch_scripts/launch_master.sh"   # The command to be run in the container
-      ports: "31000"        # Expose container port 31000 as 31000 on the host
+      ports: "8888"        # Expose container port 31000 as 31000 on the host
     engine:   # Component named "engine". These are the "worker" processes
       machine: worker       # Run on machine(s) named "worker"
       depends: master       # Run only after "master" component has been run
@@ -32,6 +32,6 @@ environment:  # This is the main section where you describe the environment
   expose_tunnel:
     # The component to connect to and the ports. In the format:
     # local_port:component_name:source_port
-    service: 8888:master:31000
+    service: 8888:master:8888
     # An optional message to display to the user once the port is exposed
-    message: "To access the master, use this URL: "
+    message: "To access the master, use this URL: {url}"

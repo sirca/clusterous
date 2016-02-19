@@ -19,7 +19,7 @@
     - local_action:
         module: wait_for
         host: "{{ inventory_hostname }}"
-        port: 22
+        port: "{{ nat_ssh_port_forwarding }}"
         delay: 20
         timeout: 300
         state: started
@@ -27,14 +27,21 @@
 
 - name: configure controller
   hosts: controller
-  user: root
-  sudo: True
+  user: ubuntu
+  become: True
   vars:
     central_logging_level: '{{ central_logging_level }}'
     byo_volume: '{{ byo_volume }}'
   tasks:
-    - name: add entry to hosts file
+    - name: register aws assigned hostname 
+      shell: hostname
+      register: default_hostname
+
+    - name: add controller/registry entry to hosts file
       lineinfile: dest=/etc/hosts line="127.0.0.1 controller registry"
+
+    - name: add hostname entry to hosts file
+      lineinfile: dest=/etc/hosts line="{{ ansible_eth0.ipv4.address }} {{ default_hostname.stdout }}"
 
     - name: check if registry is running
       shell: curl -I http://registry:5000/
@@ -53,19 +60,20 @@
       poll: 3
       when: result|failed
 
-    # Mount volume
+    # Format and mount shared volume
     - name: format ebs
       shell: mkfs -t ext4 /dev/xvdf
       when: byo_volume == 0
     - file: path=/home/data state=directory mode=0755
     - name: mount volume /home/data
       mount: name=/home/data src=/dev/xvdf fstype=ext4 state=mounted
+    - file: path=/home/data state=directory mode=0755 owner=ubuntu group=ubuntu  
 
-    # NFS share
+    # Make shared volume available via NFS
     - name: nfs share
       lineinfile: dest=/etc/exports line="/home/data            *(rw,sync,no_root_squash,no_all_squash)"
     - name: restart nfs
-      shell: systemctl restart nfs-server
+      service: name=nfs-kernel-server state=restarted
 
     # DNS
     - name: get default DNS resolver ip
@@ -73,24 +81,26 @@
       register: default_dns_ip
     - name: Add default DNS resolver to mesos-dns
       shell: sed -i -- 's/\["8.8.8.8"\]/\["{{ default_dns_ip.stdout }}"\,"8.8.8.8"\]/g' /opt/mesos-dns/config.json
-    - name: check if mesos-dns is running
-      shell: ps aux | grep mesos-dns
-      register: result
-      ignore_errors: True
-    - name: start mesos-dns
-      shell: service mesos-dns start
-      when: result.stdout.find('config.json') == -1
-
-    # Use its own DNS resolver
-    - name: mesos-dns
+    - name: set dns resolver to controller's own IP
       lineinfile: dest=/etc/resolv.conf regexp='^nameserver' line="nameserver {{ ansible_eth0.ipv4.address }}" mode=0755
+    - name: restart mesos-dns
+      service: name=mesos-dns state=restarted
+
 
     # Copy remote ansible scripts
     - name: copy remote ansible scripts
     # Create Clusterous directory on controller
-      file: path=/root/{{ remote_host_scripts_dir }} state=directory mode=0755
-    - copy: src={{ remote_scripts_dir }}/ dest=/root/{{ remote_host_scripts_dir }}
-    - copy: src={{ remote_scripts_dir }}/ansible.cfg dest=/root/.ansible.cfg
+      file: path=/home/ubuntu/{{ remote_host_scripts_dir }} state=directory mode=0777
+    - copy: src={{ remote_scripts_dir }}/ dest=/home/ubuntu/{{ remote_host_scripts_dir }}
+    - copy: src={{ remote_scripts_dir }}/ansible.cfg dest=/home/ubuntu/.ansible.cfg
+
+    # Ensure Zookeeper, Mesos master, and Marathon are (re)started
+    - name: zookeeper is restarted
+      service: name=zookeeper state=restarted
+    - name: mesos master is restarted
+      service: name=mesos-master state=restarted
+    - name: marathon is restarted
+      service: name=marathon state=restarted
 
     # Central logging
     - lineinfile: dest=/etc/hosts line="{{ central_logging_ip }} central-logging"
@@ -104,5 +114,5 @@
       shell: echo '*.* @central-logging:5514' >> /etc/rsyslog.conf
       when: central_logging_level > 1 and result.stdout.find('5514') == -1
     - name: Restart rsyslog
-      shell: service rsyslog restart
+      service: name=rsyslog state=restarted
       when: central_logging_level > 1

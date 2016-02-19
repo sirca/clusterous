@@ -1,0 +1,49 @@
+# The default AMIs for each region. Update when new AMIs are created.
+aws:
+  ap-southeast-2:
+    nat: ami-e7ee9edd
+    controller: ami-c81f3bab
+    node: ami-a8183ccb
+    logging: ami-af183ccc
+  us-west-1:
+    nat: ami-7da94839
+    controller: ami-f5e79095
+    node: ami-5ae6913a
+    logging: ami-e7e69187
+  us-west-2:
+    nat: ami-69ae8259
+    controller: ami-a46a8dc4
+    node: ami-47779027
+    logging: ami-e5779085
+  us-east-1:
+    nat: ami-303b1458
+    controller: ami-bea885d4
+    node: ami-9fa68bf5
+    logging: ami-5abd9030
+  eu-west-1:
+    nat: ami-6975eb1e
+    controller: ami-7f59ee0c
+    node: ami-2b40f758
+    logging: ami-5141f622
+  eu-central-1:
+    nat: ami-46073a5b
+    controller: ami-69233b05
+    node: ami-2d263e41
+    logging: ami-7c253d10
+  ap-northeast-1:
+    nat: ami-03cf3903
+    controller: ami-b9615ad7
+    node: ami-cf6358a1
+    logging: ami-e8645f86
+  ap-northeast-2:
+    nat: xxx  # none found, not supported?
+  ap-southeast-1:
+    nat: ami-b49dace6
+    controller: ami-042ee167
+    node: ami-2a2de249
+    logging: ami-352ee156
+  sa-east-1:
+    nat: ami-fbfa41e6
+    controller: ami-0b6ded67
+    node: ami-bb69e9d7
+    logging: ami-9968e8f5

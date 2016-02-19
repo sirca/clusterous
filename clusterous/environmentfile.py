@@ -34,6 +34,22 @@ class UnknownValue(EnvironmentSpecError):
     def __str__(self):
         return 'The following parameter was expected but not supplied: "{0}"'.format(self.message)
 
+class UnknownParams(EnvironmentSpecError):
+    """
+    For use if the params have extra variables that are not used in this environent file.
+    This can suggest a user error.
+    """
+    def __init__(self, unknown_params=[]):
+        super(UnknownParams, self).__init__('')
+        self.unknown_params = unknown_params
+
+    def __str__(self):
+        plural_str = 'parameter was'
+        if len(self.unknown_params) > 1:
+            plural_str = 'parameters were'
+        unknowns_str = ', '.join(self.unknown_params)
+        return 'The following {0} supplied but not recognised: {1}'.format(plural_str, unknowns_str)
+
 class DictValidator(object):
     # TODO: helpers.validate could potentiall replace this, if it supports
     # arbitrary fields (like under the components section)
@@ -119,13 +135,14 @@ class EnvironmentFile(object):
         parsed = {}
         tunnel_schema = {
                     'service': SchemaEntry(True, '', str, None),
-                    'message': SchemaEntry(True, '', str, None)
+                    'message': SchemaEntry(False, '', str, None)
         }
         env_schema = {
                     'copy': SchemaEntry(False, [], list, None),
                     'image': SchemaEntry(False, [], list, None),
                     'components': SchemaEntry(True, {}, dict, None),
-                    'expose_tunnel': SchemaEntry(False, {}, dict, tunnel_schema)
+                    # TODO: enhance validation such that expose_tunnel can be validated here
+                    'expose_tunnel': SchemaEntry(False, {}, None, None)
         }
         top_schema = {
                     'name': SchemaEntry(True, '', str, None),
@@ -141,6 +158,21 @@ class EnvironmentFile(object):
         if not defaults.taggable_name_re.match(validated['name']):
             raise ParseError('Invalid characters in name')
 
+        # Validate expose_tunnel separately (because it can be either a dictionary or a list)
+        if 'environment' in top_schema and 'expose_tunnel' in top_schema['environment']:
+            expose_tunnel = top_schema['environment']['expose_tunnel']
+            if type(expose_tunnel) == dict:
+                tunnel_valid, tunnel_msg, tunnel_validated = helpers.validate(expose_tunnel, tunnel_schema)
+            elif type(expose_tunnel) == list:
+                for e in expose_tunnel:
+                    tunnel_valid, tunnel_msg, tunnel_validated = helpers.validate(expose_tunnel, tunnel_schema)
+                    if not tunnel_valid:
+                        break
+            else:
+                raise ParseError('expose_tunnel must be either a list or dictionary')
+            if not tunnel_valid:
+                raise ParseError(tunnel_msg)
+
         if 'components' in validated.get('environment', {}):
             validated['environment']['components'] = self._parse_components_section(validated['environment']['components'])
 
@@ -155,8 +187,9 @@ class EnvironmentFile(object):
                             'machine': (True,),
                             'cpu': (True,),
                             'image': (True,),
-                            'cmd': (True,),
+                            'cmd': (False, None),
                             'attach_volume': (False, True),
+                            'docker_network': (False, 'BRIDGE'),
                             'ports': (False, ''),
                             'count': (False, 1),
                             'depends': (False, '')
@@ -173,22 +206,35 @@ class EnvironmentFile(object):
                 raise ParseError('In "{0}", "cpu" must be positive'.format(component))
             if validated_fields['attach_volume'] not in (True, False):
                 raise ParseError('In "{0}", "attach_volume" must be a boolean yes/no value'.format(component))
+            if validated_fields['docker_network'].upper() not in ('BRIDGE', 'HOST'):
+                raise ParseError('In "{0}", "docker_network" must be either "bridge" or "host"'.format(component))
+            if validated_fields['docker_network'].upper() == 'HOST' and validated_fields['ports']:
+                raise ParseError('In "{0}", "ports" must not be specified if "docker_network" is "{1}"'.format(component, validated_fields['docker_network']))
             new_comps[component] = validated_fields
 
         return new_comps
 
     def _parse_cluster_section(self, cluster, params):
         new_cluster = {}
+        substituted_vars = []
         for machine, fields in cluster.iteritems():
             if (len(fields) != 2 and
                 ('count' in fields and 'type' in fields)):
                 raise ParseError('Invalid values for machine "{0}"'.format(machine))
             new_cluster[machine] = {}
             for field_name, field_val in fields.iteritems():
-                val, substituted = self._process_field_value(field_val, params)
+                val, substituted, substituted_var = self._process_field_value(field_val, params)
+                if substituted:
+                    substituted_vars.append(substituted_var)
                 new_cluster[machine][field_name] = val
                 if field_name == 'count' and substituted:
                     new_cluster[machine]['scalable'] = True
+
+
+        # Check if params has any fields not substituted (possible user error)
+        if set(substituted_vars) != set(params.keys()):
+            unknowns = list(set(params.keys()) - set(substituted_vars))
+            raise UnknownParams(unknowns)
 
         return new_cluster
 
@@ -201,6 +247,7 @@ class EnvironmentFile(object):
         """
         tokens = []
         substituted = True
+        substituted_var = ''
         # If the field is a string value
         if isinstance(field, str):
             if '-' in field:
@@ -210,6 +257,7 @@ class EnvironmentFile(object):
                 left = tokens[0].strip()
                 if left.startswith('$'):
                     var = left[1:]
+                    substituted_var = var
                 else:
                     raise ParseError('Unrecognised string in "{0}"'.format(field))
                 # $var does not match any supplied in params, this is a special error
@@ -231,6 +279,7 @@ class EnvironmentFile(object):
                 stripped = field.strip()
                 if stripped.startswith('$'):
                     var = stripped[1:]
+                    substituted_var = var
                 else:
                     raise ParseError('Unrecognised value: "{0}"'.format(field))
                 if not var in params:
@@ -244,4 +293,4 @@ class EnvironmentFile(object):
         else:
             raise ParseError('Unknown field value type: "{0}"'.format(field))
 
-        return value, substituted
+        return value, substituted, substituted_var

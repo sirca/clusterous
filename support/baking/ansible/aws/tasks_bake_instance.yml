@@ -1,0 +1,23 @@
+- name: create ami
+  ec2_ami:
+    instance_id: "{{ ec2.instance_ids[0] }}"
+    region: "{{ region }}"
+    wait: yes
+    name: "{{ ami_name }}"
+    tags:
+      production: " {{ production_tag }}"
+      Name: "{{ ami_name }}"
+      clusterous_ami_version: "{{ ami_version }}"
+  register: instance
+
+- name: make ami public
+  ec2_ami:
+    image_id: "{{ instance.image_id }}"
+    state: present
+    region: "{{ region }}"
+    launch_permissions:
+      group_names: ['all']
+  when: production_tag
+
+- name: display ami id
+  debug: var=instance
