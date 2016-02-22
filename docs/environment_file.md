@@ -244,4 +244,29 @@ parameters:
   io_worker_count: 6
 ```
 
+### Spot Instances
+In Amazon Web Services (AWS), (EC2 Spot instances)[https://aws.amazon.com/ec2/spot/] allow you to bid on spare capacity, allowing you to lower your costs. While not suitable for long-running services running on EC2, Spot instances can be useful for large, on-demand parallel compute tasks. This section assumes familiarity with the basic concepts of Spot instances.
+
+To use Spot instances with Clusterous, specify a custom node group, specifying the `spot_price`. The following is a simple example:
+
+```YAML
+cluster:
+  master:
+    type: $master_instance_type
+    count: 1
+  worker:
+    type: $worker_instance_type
+    count: $worker_count
+    aws:
+      spot_price: $spot_bid_price
+```
+
+Here, the "worker" nodes have the `aws` section, with the `spot_price` field specified. Like any variable, the `$spot_bid_price` value is specified in the cluster parameters file when the cluster is created. The price is a decimal Dollar value (e.g. $0.32 for 32 cents).
+
+When the cluster is created, Clusterous creates a Spot request for `$worker_count` number of Spot instances of type `$worker_instance_type`, with a bid price of `$spot_bid_price`. What happens next is determined by the standard AWS Spot instance rules. If the bid price is above the current market price, the correct number of Spot instances are created, and join the cluster. If the market price is above the bid price, no worker instances are launched until the the market price matches or falls below the bid price. Spot instances run as long as the bid price equals or exceeds the market price; as soon as the market price exceeds the bid price, the instances may be terminated. However, if the market price again falls below the bid price, the instances will be recreated.
+
+Note that it is up to your software and/or parallel compute framework to be able to handle workers coming online and going offline. In general, if your software is able to handle the `add-nodes` and `rm-nodes` command while running, it should be able to run on Spot instances.
+
+Note that in the above example, the `master` instance is of the regular (permanent) type. Typical master/worker type applications wouldn't be able to handle the master going offline, so it not recommended to run such instances as Spot instances.
+
 
