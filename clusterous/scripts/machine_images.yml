@@ -3,8 +3,8 @@ aws:
   ap-southeast-2:
     nat: ami-e7ee9edd
     controller: ami-c81f3bab
-    node: ami-a8183ccb
-    logging: ami-af183ccc
+    node: ami-bd8bacde
+    logging: ami-fb604698
   us-west-1:
     nat: ami-7da94839
     controller: ami-f5e79095

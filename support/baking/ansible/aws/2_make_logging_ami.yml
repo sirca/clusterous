@@ -58,6 +58,7 @@
     - vars/global_vars.yml
   roles:
     - roles/elk
+    - roles/ansible
 
 # Stop here if do_not_bake is set
 - hosts: localhost

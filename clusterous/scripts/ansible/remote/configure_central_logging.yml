@@ -13,19 +13,10 @@
 # limitations under the License.
 
 - name: configure central logging
-  hosts: all
+  hosts: localhost
   user: ubuntu
   become: True
   tasks:
-    # Wait for ssh before connection
-    - local_action:
-        module: wait_for
-        host: "{{ inventory_hostname }}"
-        port: 22
-        delay: 0
-        timeout: 300
-        state: started
-
     # Hostnames
     - name: add entry to hosts file
       lineinfile: dest=/etc/hosts line="127.0.0.1 central-logging"
