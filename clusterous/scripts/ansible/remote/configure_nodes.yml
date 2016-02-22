@@ -12,35 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-- name: get info about local machine and wait for ssh
-  hosts: localhost
-  connection: local
-  gather_facts: yes
-  tasks:
-    - name: wait for ssh
-      wait_for: host={{ item }} port=22 delay=0 timeout=300 state=started
-      with_items: "{{ groups['all'] }}"
-
-
 - name: configure all nodes
-  hosts: all
+  hosts: localhost
   user: ubuntu
   become: True
   tasks:
-    - name: register aws assigned hostname 
+    - name: register aws assigned hostname
       shell: hostname
       register: default_hostname
 
     - name: add controller/registry entry to hosts file
-      lineinfile: dest=/etc/hosts line="{{ hostvars.localhost.ansible_default_ipv4.address }} controller registry"
-    
+      lineinfile: dest=/etc/hosts line="{{ controller_ip }} controller registry"
+
     - name: add hostname entry to hosts file
       lineinfile: dest=/etc/hosts line="{{ ansible_eth0.ipv4.address }} {{ default_hostname.stdout }}"
 
     - name: add mesos-dns to resolv.conf
       lineinfile: >
         dest=/etc/resolv.conf regexp='^nameserver'
-        line="nameserver {{ hostvars.localhost.ansible_default_ipv4.address }}" mode=0755
+        line="nameserver {{ controller_ip }}" mode=0755
 
     - name: set up NFS
       lineinfile: dest=/etc/fstab regexp="^controller:/home/data" line="controller:/home/data  /home/data  ndf defaults  0 0" owner=root group=root mode=0644
@@ -50,7 +40,7 @@
     - mount: name=/home/data src=controller:/home/data fstype=nfs state=mounted
 
     - name: add node name to mesos attributes file
-      lineinfile: dest=/etc/mesos-slave/attributes line="name:{{ group_names[0] }}" create=yes
+      lineinfile: dest=/etc/mesos-slave/attributes line="name:{{ node_group_name }}" create=yes
 
     - name: stop mesos-slave
       service: name=mesos-slave state=stopped

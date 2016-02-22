@@ -17,6 +17,7 @@ import socket
 import tempfile
 import sys
 import os
+import io
 import yaml
 import logging
 import time
@@ -784,6 +785,17 @@ class AWSCluster(Cluster):
     
         return route_table
 
+    def _get_user_data(self, playbook, vars):
+        with io.BytesIO() as fw:
+            fw.write('#!/bin/bash\n')
+            fw.write('cat > /tmp/playbook.yml <<- EOM\n' + open(defaults.get_script('ansible/remote/{0}'.format(playbook)),'r').read() + 'EOM\n')
+            vars_file = self._make_vars_file(vars)
+            fw.write('cat > /tmp/vars.yml <<- EOM\n' + open(vars_file.name, 'r').read() + 'EOM\n')
+            vars_file.close()
+            fw.write(open(defaults.get_script('ansible/remote/boot_script.sh'),'r').read())
+            user_data = fw.getvalue()
+        return user_data
+
     def init_cluster(self, cluster_name, cluster_spec, nodes_info=[], logging_level=0,
                      shared_volume_size=None, controller_instance_type=None, shared_volume_id=None):
         """
@@ -917,38 +929,19 @@ class AWSCluster(Cluster):
                                 defaults.instance_node_type_tag_key: defaults.controller_name_tag_value}
             controller_tags_and_res = [('controller', controller_tags, controller_res.instances)]
     
-            # Loop through node groups and launch all
-            self._logger.info('Starting all nodes')
-            node_tags_and_res = []
-            for num_nodes, instance_type, node_tag in nodes_info:
-                node_block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
-                node_root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
-                node_block_devices['/dev/sda1'] = node_root_vol
-    
-                res = conn.run_instances(ami_ids['node'], 
-                                         min_count=num_nodes, 
-                                         max_count=num_nodes,
-                                         key_name=c['key_pair'], 
-                                         instance_type=instance_type,
-                                         block_device_map=node_block_devices, 
-                                         subnet_id=private_subnet.id, 
-                                         security_group_ids=[private_security_group.id])
-                node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag),
-                            defaults.instance_node_type_tag_key: node_tag}
-                node_tags_and_res.append((node_tag, node_tags, res.instances))
-    
             # Launch logging instance if necessary
             logging_tags_and_res = []
             if logging_level > 0:
                 self._logger.info('Starting central logging instance')
-    
+                user_data = self._get_user_data(playbook = "configure_central_logging.yml", vars = {})
                 logging_res = conn.run_instances(ami_ids['logging'], 
                                                  min_count=1,
                                                  key_name=c['key_pair'], 
                                                  instance_type=defaults.central_logging_instance_type,
                                                  block_device_map=block_devices, 
                                                  subnet_id=private_subnet.id, 
-                                                 security_group_ids=[private_security_group.id])
+                                                 security_group_ids=[private_security_group.id],
+                                                 user_data = user_data)
                 logging_tags = {'Name': defaults.central_logging_name_format.format(cluster_name),
                                 defaults.instance_node_type_tag_key: defaults.central_logging_name_tag_value}
                 logging_tags_and_res = [('central-logging', logging_tags, logging_res.instances)]
@@ -995,6 +988,33 @@ class AWSCluster(Cluster):
                 self._logger.debug('Tagging central logging...')
                 central_logging = self._wait_and_tag_instance_reservations(logging_tags_and_res)
     
+            # Loop through node groups and launch all
+            self._logger.info('Starting all nodes')
+            node_tags_and_res = []
+            for num_nodes, instance_type, node_tag in nodes_info:
+                node_block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
+                node_root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
+                node_block_devices['/dev/sda1'] = node_root_vol
+                ansible_vars = {'controller_ip': controller_instance.private_ip_address, 
+                                'node_group_name': node_tag,
+                                'central_logging_ip': logging_res.instances[0].private_ip_address if logging_level > 0 else '', 
+                                'central_logging_level': logging_level
+                                }
+                user_data = self._get_user_data(playbook = "configure_nodes.yml", vars = ansible_vars)
+                res = conn.run_instances(ami_ids['node'], 
+                                         min_count=num_nodes, 
+                                         max_count=num_nodes,
+                                         key_name=c['key_pair'], 
+                                         instance_type=instance_type,
+                                         block_device_map=node_block_devices, 
+                                         subnet_id=private_subnet.id, 
+                                         security_group_ids=[private_security_group.id],
+                                         user_data=user_data
+                                         )
+                node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag),
+                            defaults.instance_node_type_tag_key: node_tag}
+                node_tags_and_res.append((node_tag, node_tags, res.instances))
+    
             # Tag all nodes
             nodes = {}
             if node_tags_and_res:
@@ -1018,7 +1038,7 @@ class AWSCluster(Cluster):
 
             # Extra variables used by ansible scripts
             extra_vars = {'central_logging_level': logging_level,
-                          'central_logging_ip': '',
+                          'central_logging_ip': logging_res.instances[0].private_ip_address if logging_level > 0 else '',
                           'byo_volume': 1 if shared_volume_id else 0,
                           'nat_ssh_port_forwarding': defaults.nat_ssh_port_forwarding
                           }
@@ -1037,22 +1057,8 @@ class AWSCluster(Cluster):
     
             self._copy_environment_to_controller()
     
-    
-            # Wait for logging instance to launch and configure
-            if central_logging:
-                extra_vars['central_logging_ip'] = central_logging.values()[0].private_ips[0]     # private ip
-                logging_inventory = tempfile.NamedTemporaryFile()
-                self._write_to_hosts_file(logging_inventory.name, [central_logging.values()[0].private_ips[0]], 'central-logging', overwrite=True)
-                logging_inventory.flush()
-                self._run_on_controller('configure_central_logging.yml', logging_inventory.name)
-                logging_inventory.close()
             # Write logging vars to cluster info file
             self._set_cluster_info(extra_vars)
-    
-    
-            # Configure nodes
-            if nodes:
-                self._configure_nodes(nodes_info, nodes, nat_instance.ip_address, extra_vars)
 
         except (boto.exception.BotoClientError, boto.exception.BotoServerError) as e:
             self._logger.critical('An error occurred accessing AWS and the cluster could not be launched. Use "destroy" to destroy the cluster')
@@ -1070,17 +1076,6 @@ class AWSCluster(Cluster):
         # TODO: this is useful for debugging, but remove at a later stage
         self.create_permanent_tunnel_to_controller(8080, 8080, prefix='marathon')
         self.create_permanent_tunnel_to_controller(5050, 5050, prefix='mesos')
-
-
-    def _configure_nodes(self, nodes_info, nodes, nat_ip, extra_vars={}):
-        nodes_inventory = tempfile.NamedTemporaryFile()
-        for num_nodes, instance_type, node_tag in nodes_info:
-            self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag].private_ips, node_tag, overwrite=False)
-        nodes_inventory.flush()
-        self._logger.info('Configuring nodes...')
-        self._run_on_controller('configure_nodes.yml', nodes_inventory.name, extra_vars)
-        nodes_inventory.close()
-        return True
 
     def _set_cluster_info(self, info):
         """
@@ -1103,6 +1098,14 @@ class AWSCluster(Cluster):
 
         return True
 
+    def _get_controller_private_ip(self):
+        instances = self._get_instances(self.cluster_name)
+        ip = None
+        for instance in instances:
+            if defaults.controller_name_format.format(self.cluster_name) in instance.tags['Name']:
+                ip = str(instance.private_ip_address)
+                break
+        return ip
 
     def add_nodes(self, num_nodes, instance_type, node_name):
         success = False
@@ -1124,19 +1127,26 @@ class AWSCluster(Cluster):
         vpc = self._get_vpc(vpc_conn)
         private_subnet = self._create_subnet(vpc_conn, vpc, 'private-subnet')
         private_security_group = self._create_private_sg(vpc_conn, vpc, "private-sg")
+        ansible_vars = {'controller_ip': self._get_controller_private_ip(), 
+                        'node_group_name': node_name,
+                        'central_logging_ip': logging_vars.get('central_logging_ip',''), 
+                        'central_logging_level': logging_vars.get('central_logging_level','')
+                        }
+        user_data = self._get_user_data(playbook = "configure_nodes.yml", vars = ansible_vars)
         res = conn.run_instances(ami_ids['node'], 
                                  min_count=num_nodes, 
                                  max_count=num_nodes,
                                  key_name=c['key_pair'], 
                                  instance_type=instance_type,
                                  subnet_id=private_subnet.id, 
-                                 security_group_ids=[private_security_group.id])
+                                 security_group_ids=[private_security_group.id],
+                                 user_data=user_data)
         node_tags = {'Name': defaults.node_name_format.format(self.cluster_name, node_name),
                     defaults.instance_node_type_tag_key: node_name}
         node_tags_and_res = [(node_name, node_tags, res.instances)]
         nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
         self._logger.info('Waiting for nodes to start...')
-        return self._configure_nodes(nodes_info, nodes, nat_ip, logging_vars)
+        return True
 
     def rm_nodes(self, num_nodes, node_name):
         c = self._config
