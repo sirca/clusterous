@@ -798,15 +798,12 @@ class AWSCluster(Cluster):
 
     def _get_user_data(self, playbook, vars):
         with io.BytesIO() as fw:
-            fw.write("#!/bin/bash\ncat > /tmp/{0} <<- EOM\n".format(playbook))
-            playbook_content = open(defaults.get_script('ansible/remote/{0}'.format(playbook)),'r').read()
-            for k,v in vars.iteritems():
-                playbook_content = playbook_content.replace(k,v)
-            fw.write(playbook_content)
-            fw.write('EOM\n')
-            boot_script = open(defaults.get_script('ansible/remote/boot_script.sh'),'r').read()
-            boot_script = boot_script.replace('{{ playbook }}','/tmp/{0}'.format(playbook))
-            fw.write(boot_script)
+            fw.write('#!/bin/bash\n')
+            fw.write('cat > /tmp/playbook.yml <<- EOM\n' + open(defaults.get_script('ansible/remote/{0}'.format(playbook)),'r').read() + 'EOM\n')
+            vars_file = self._make_vars_file(vars)
+            fw.write('cat > /tmp/vars.yml <<- EOM\n' + open(vars_file.name, 'r').read() + 'EOM\n')
+            vars_file.close()
+            fw.write(open(defaults.get_script('ansible/remote/boot_script.sh'),'r').read())
             user_data = fw.getvalue()
         return user_data
 
@@ -1009,10 +1006,10 @@ class AWSCluster(Cluster):
                 node_block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
                 node_root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
                 node_block_devices['/dev/sda1'] = node_root_vol
-                ansible_vars = {'{{ controller_ip }}': '{0}'.format(controller_instance.private_ip_address), 
-                                '{{ node_group_name }}': node_tag,
-                                '{{ central_logging_ip }}': '{0}'.format(logging_res.instances[0].private_ip_address) if logging_level > 0 else '', 
-                                'central_logging_level': str(logging_level)
+                ansible_vars = {'controller_ip': controller_instance.private_ip_address, 
+                                'node_group_name': node_tag,
+                                'central_logging_ip': logging_res.instances[0].private_ip_address if logging_level > 0 else '', 
+                                'central_logging_level': logging_level
                                 }
                 user_data = self._get_user_data(playbook = "configure_nodes.yml", vars = ansible_vars)
                 res = conn.run_instances(ami_ids['node'], 
@@ -1091,17 +1088,6 @@ class AWSCluster(Cluster):
         self.create_permanent_tunnel_to_controller(8080, 8080, prefix='marathon')
         self.create_permanent_tunnel_to_controller(5050, 5050, prefix='mesos')
 
-
-    def _configure_nodes(self, nodes_info, nodes, nat_ip, extra_vars={}):
-        nodes_inventory = tempfile.NamedTemporaryFile()
-        for num_nodes, instance_type, node_tag in nodes_info:
-            self._write_to_hosts_file(nodes_inventory.name, nodes[node_tag].private_ips, node_tag, overwrite=False)
-        nodes_inventory.flush()
-        self._logger.info('Configuring nodes...')
-        self._run_on_controller('configure_nodes.yml', nodes_inventory.name, extra_vars)
-        nodes_inventory.close()
-        return True
-
     def _set_cluster_info(self, info):
         """
         Writes information to cluster info file. info is a flat dictionary.
@@ -1152,10 +1138,10 @@ class AWSCluster(Cluster):
         vpc = self._get_vpc(vpc_conn)
         private_subnet = self._create_subnet(vpc_conn, vpc, 'private-subnet')
         private_security_group = self._create_private_sg(vpc_conn, vpc, "private-sg")
-        ansible_vars = {'{{ controller_ip }}': '{0}'.format(self._get_controller_private_ip()), 
-                        '{{ node_group_name }}': node_name,
-                        '{{ central_logging_ip }}': str(logging_vars.get('central_logging_ip','')), 
-                        'central_logging_level': str(logging_vars.get('central_logging_level',''))
+        ansible_vars = {'controller_ip': self._get_controller_private_ip(), 
+                        'node_group_name': node_name,
+                        'central_logging_ip': logging_vars.get('central_logging_ip',''), 
+                        'central_logging_level': logging_vars.get('central_logging_level','')
                         }
         user_data = self._get_user_data(playbook = "configure_nodes.yml", vars = ansible_vars)
         res = conn.run_instances(ami_ids['node'], 

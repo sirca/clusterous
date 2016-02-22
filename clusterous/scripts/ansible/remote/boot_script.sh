@@ -2,7 +2,7 @@
 n=0
 while [ $n -le 60 ]
 do
-   ansible-playbook -c local {{ playbook }} >>/tmp/startup.log
+   ansible-playbook -c local /tmp/playbook.yml --extra-vars @/tmp/vars.yml >>/tmp/startup.log
    if [ $? -eq 0 ]
    then
       break
