@@ -88,7 +88,7 @@ class EnvironmentFile(object):
     Reads and parses an environment file
     """
 
-    def __init__(self, env_file, params={}, profile_file_path=None):
+    def __init__(self, env_file, params={}, profile_file_path=None, validate_params=True):
         self._logger = logging.getLogger(__name__)
 
         # Obtain actual path of environment file (which may be relative to profile_file_path)
@@ -104,7 +104,17 @@ class EnvironmentFile(object):
         abspath = os.path.abspath(self._env_filename)
         self.base_path = os.path.dirname(abspath)
 
-        self.spec = self._parse_environment_file(yaml_data, params)
+        self.spec = self._parse_environment_file(yaml_data, params, validate_params)
+
+    @staticmethod
+    def get_default_cluster_environment_file(profile={}):
+        default_file_path = defaults.get_script(defaults.default_cluster_def_filename)
+        if not profile:
+            cluster_spec_env = EnvironmentFile(default_file_path, {}, validate_params=False)
+        else:
+            cluster_spec_env = EnvironmentFile(default_file_path, profile, validate_params=True)
+
+        return cluster_spec_env
 
     def get_full_path(self, rel_path):
         """
@@ -131,7 +141,8 @@ class EnvironmentFile(object):
         stream.close()
         return contents
 
-    def _parse_environment_file(self, data, params):
+
+    def _parse_environment_file(self, data, params, validate_params=True):
         parsed = {}
         tunnel_schema = {
                     'service': SchemaEntry(True, '', str, None),
@@ -173,11 +184,17 @@ class EnvironmentFile(object):
             if not tunnel_valid:
                 raise ParseError(tunnel_msg)
 
-        if 'components' in validated.get('environment', {}):
+        if not validated['cluster']:
+            cluster_env = EnvironmentFile.get_default_cluster_environment_file()
+            validated['cluster'] = cluster_env.spec['cluster']
+
+        if 'components' in validated.get('environment', {}) and validated['environment']['components']:
             validated['environment']['components'] = self._parse_components_section(validated['environment']['components'])
 
+
         if 'cluster' in validated:
-            validated['cluster'] = self._parse_cluster_section(validated['cluster'], params)
+            validated['cluster'] = self._parse_cluster_section(validated['cluster'], params, validate_params=validate_params)
+
 
         return validated
 
@@ -214,25 +231,48 @@ class EnvironmentFile(object):
 
         return new_comps
 
-    def _parse_cluster_section(self, cluster, params):
+    def _parse_cluster_section(self, cluster, params, validate_params=True):
+        group_schema = {
+                        'type': (True,),
+                        'count': (True,),
+                        'aws': (False, {})
+                        }
+
         new_cluster = {}
         substituted_vars = []
+        if not validate_params:
+            return cluster
+
         for machine, fields in cluster.iteritems():
-            if (len(fields) != 2 and
-                ('count' in fields and 'type' in fields)):
-                raise ParseError('Invalid values for machine "{0}"'.format(machine))
+            validator = DictValidator(group_schema)
+            valid_fields = validator.validate(fields)
+
             new_cluster[machine] = {}
-            for field_name, field_val in fields.iteritems():
-                val, substituted, substituted_var = self._process_field_value(field_val, params)
+            val, substituted, substituted_var = self._process_field_value(valid_fields['count'], params)
+            new_cluster[machine]['count'] = val
+            if substituted:
+                substituted_vars.append(substituted_var)
+                new_cluster[machine]['scalable'] = True
+
+            val, substituted, substituted_var = self._process_field_value(valid_fields['type'], params)
+            new_cluster[machine]['type'] = val
+            if substituted:
+                substituted_vars.append(substituted_var)
+
+            # import pdb; pdb.set_trace()
+            if 'spot_price' in valid_fields['aws']:
+                val, substituted, substituted_var = self._process_field_value(valid_fields['aws']['spot_price'], params)
+                new_cluster[machine]['aws'] = {}
+                new_cluster[machine]['aws']['spot_price'] = val
                 if substituted:
                     substituted_vars.append(substituted_var)
-                new_cluster[machine][field_name] = val
-                if field_name == 'count' and substituted:
-                    new_cluster[machine]['scalable'] = True
+
+            if valid_fields['aws'] and valid_fields['aws'].keys() != ['spot_price']:
+                raise ParseError('In "{0}", unknown value "{1}" in "aws"'.format(machine, valid_fields['aws'].keys()))
 
 
         # Check if params has any fields not substituted (possible user error)
-        if set(substituted_vars) != set(params.keys()):
+        if validate_params and set(substituted_vars) != set(params.keys()):
             unknowns = list(set(params.keys()) - set(substituted_vars))
             raise UnknownParams(unknowns)
 
