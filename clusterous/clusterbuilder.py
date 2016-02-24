@@ -37,7 +37,7 @@ class ClusterBuilder(object):
         self._logger.debug('Cluster params={0}'.format(cluster_spec))
         nodes_info = []
         for name, params in cluster_spec.iteritems():
-            nodes_info.append((params['count'], params['type'], name))
+            nodes_info.append((params['count'], params['type'], name, params.get('aws',{}).get('spot_price',0)))
 
         try:
             self._cluster.init_cluster(cluster_name, cluster_spec, nodes_info, logging_system_level,
@@ -91,10 +91,11 @@ class ClusterBuilder(object):
 
         try:
             instance_type = spec[actual_node_name]['type']
+            spot_price = spec.get(actual_node_name,{}).get('aws',{}).get('spot_price',0)
         except KeyError as e:
             raise ValueError('Cannot find instance type for "{0}" in cluster spec'.format(actual_node_name))
 
-        success = self._cluster.add_nodes(num_nodes, instance_type, actual_node_name)
+        success = self._cluster.add_nodes(num_nodes, instance_type, actual_node_name, spot_price)
 
         if success:
             self._logger.info('{0} nodes of type "{1}" added'.format(num_nodes, actual_node_name))
@@ -112,10 +113,11 @@ class ClusterBuilder(object):
             return False, 'Error removing nodes', None
         try:
             instance_type = spec[actual_node_name]['type']
+            spot_price = spec.get(actual_node_name,{}).get('aws',{}).get('spot_price',0)
         except KeyError as e:
             raise ValueError('Cannot find instance type for "{0}" in cluster spec'.format(actual_node_name))
 
-        num_removed = self._cluster.rm_nodes(num_nodes, actual_node_name)
+        num_removed = self._cluster.rm_nodes(num_nodes, actual_node_name, spot_price)
 
         if num_removed < 0:
             message = 'An error occured when removing nodes'
