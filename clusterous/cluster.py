@@ -308,31 +308,79 @@ class AWSCluster(Cluster):
         else:
             conn = connection
 
-        # Get instances
+        # Normal instances
         instance_filters = { 'tag:{0}'.format(defaults.instance_tag_key):
                         [cluster_name],
                         'instance-state-name': ['running', 'pending', 'stopping', 'shutting-down']
                         }
         instance_list = conn.get_only_instances(filters=instance_filters)
-        return instance_list
+
+        # Spot instances
+        spot_instance_list = []
+        for spot_request in self._get_spot_requests(conn):
+            if spot_request.get('instance_id'):
+                spot_instance_list.append({'instance_id': spot_request.get('instance_id'),
+                                          'instance_type': spot_request.get('instance_type'),
+                                          defaults.instance_node_type_tag_key: spot_request.get(defaults.instance_node_type_tag_key)
+                                          })
+        return instance_list, spot_instance_list
 
     def _get_node_instances(self, conn, node_name):
         """
         Get only instances matching given node name (e.g. "worker")
         """
+        # Normal instances
         name_tag = defaults.node_name_format.format(self.cluster_name, node_name)
         instance_filters = { 'tag:Name': [name_tag],
                         'instance-state-name': ['running', 'pending', 'stopping']
                         }
         instance_list = conn.get_only_instances(filters=instance_filters)
-        return instance_list
+        
+        # Spot instances
+        spot_instance_list = []
+        for spot_request in self._get_spot_requests(conn):
+            if (spot_request.get('instance_id') and 
+                spot_request.get(defaults.instance_node_type_tag_key) == node_name):
+                spot_instance_list.append({'instance_id': spot_request.get('instance_id'),
+                                           'request_id': spot_request.get('request_id')})
+
+        return instance_list, spot_instance_list
+
+    def _get_spot_requests(self, connection=None):
+        """
+        Get sport requests for the current cluster, 
+        returns a dictionary
+        """
+        if not connection:
+            conn = boto.ec2.connect_to_region(self._config['region'],
+                        aws_access_key_id=self._config['access_key_id'],
+                        aws_secret_access_key=self._config['secret_access_key'])
+            if not conn:
+                raise ClusterException('Cannot connect to AWS')
+        else:
+            conn = connection
+
+        spot_requests = []
+        for spot_request in conn.get_all_spot_instance_requests(filters={'state': ['open', 'active']}):
+            tags = spot_request.tags.copy()
+            if tags.get(defaults.instance_tag_key) == self.cluster_name:
+                spot_requests.append({'request_id': spot_request.id,
+                                      'instance_type': tags.get('instance_type',''),
+                                      defaults.instance_node_type_tag_key: tags.get(defaults.instance_node_type_tag_key,''),
+                                      'price': spot_request.price,
+                                      'instance_id': spot_request.instance_id if spot_request.instance_id else None,
+                                      'request_type': spot_request.type,
+                                      'state': spot_request.state,
+                                      'status': spot_request.status.code
+                                      })
+        return spot_requests
 
     def _cluster_is_up(self):
         """
         Returns true if the cluster has instances actually running on AWS
         """
         try:
-            instance_list = self._get_instances(self.cluster_name)
+            instance_list, _ = self._get_instances(self.cluster_name)
         except socket.error as e:
             # Probably connection problem
             raise ClusterException(e)
@@ -388,7 +436,7 @@ class AWSCluster(Cluster):
 
 
     def get_central_logging_ip(self):
-        instances = self._get_instances(self.cluster_name)
+        instances, _ = self._get_instances(self.cluster_name)
         ip = None
         for instance in instances:
             if defaults.central_logging_name_format.format(self.cluster_name) in instance.tags['Name']:
@@ -847,7 +895,8 @@ class AWSCluster(Cluster):
                 raise ClusterException('Cannot connect to AWS')
     
             # Check if cluster by this name is already running
-            if self._get_instances(cluster_name, connection=conn):
+            instances, _ = self._get_instances(cluster_name, connection=conn)
+            if instances:
                 self._logger.error('A cluster by the name "{0}" is already running, cannot start'.format(cluster_name))
                 raise ClusterException('Another cluster by the same name is running')
     
@@ -1002,7 +1051,7 @@ class AWSCluster(Cluster):
             # Loop through node groups and launch all
             self._logger.info('Starting all nodes')
             node_tags_and_res = []
-            for num_nodes, instance_type, node_tag in nodes_info:
+            for num_nodes, instance_type, node_tag, spot_price in nodes_info:
                 node_block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
                 node_root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
                 node_block_devices['/dev/sda1'] = node_root_vol
@@ -1012,24 +1061,44 @@ class AWSCluster(Cluster):
                                 'central_logging_level': logging_level
                                 }
                 user_data = self._get_user_data(playbook = "configure_nodes.yml", vars = ansible_vars)
-                res = conn.run_instances(ami_ids['node'], 
-                                         min_count=num_nodes, 
-                                         max_count=num_nodes,
-                                         key_name=c['key_pair'], 
-                                         instance_type=instance_type,
-                                         block_device_map=node_block_devices, 
-                                         subnet_id=private_subnet.id, 
-                                         security_group_ids=[private_security_group.id],
-                                         user_data=user_data
-                                         )
-                node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag),
-                            defaults.instance_node_type_tag_key: node_tag}
-                node_tags_and_res.append((node_tag, node_tags, res.instances))
+                if spot_price:
+                    requests = [conn.request_spot_instances(spot_price, 
+                                                            ami_ids['node'], 
+                                                            type='persistent',
+                                                            count=num_nodes, 
+                                                            key_name=c['key_pair'], 
+                                                            instance_type=instance_type,
+                                                            block_device_map=node_block_devices, 
+                                                            subnet_id=private_subnet.id, 
+                                                            security_group_ids=[private_security_group.id],
+                                                            user_data=user_data)]
+                    # Tagging spot requests
+                    for request in requests:
+                        for req in request:
+                            t = req.tags.copy()
+                            t.update(self._clusterous_tag())
+                            t.update({defaults.instance_node_type_tag_key: node_tag, 
+                                      'instance_type': instance_type})
+                            req.add_tags(t)
+                else:
+                    res = conn.run_instances(ami_ids['node'], 
+                                             min_count=num_nodes, 
+                                             max_count=num_nodes,
+                                             key_name=c['key_pair'], 
+                                             instance_type=instance_type,
+                                             block_device_map=node_block_devices, 
+                                             subnet_id=private_subnet.id, 
+                                             security_group_ids=[private_security_group.id],
+                                             user_data=user_data
+                                             )
+                    node_tags = {'Name': defaults.node_name_format.format(cluster_name, node_tag),
+                                defaults.instance_node_type_tag_key: node_tag}
+                    node_tags_and_res.append((node_tag, node_tags, res.instances))
     
-            # Tag all nodes
-            nodes = {}
-            if node_tags_and_res:
-                nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
+                    # Tag nodes
+                    nodes = {}
+                    if node_tags_and_res:
+                        nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
 
             # Any errors that occur up until this point cannot cleanly be recovered from by destroy
         except KeyboardInterrupt as e:
@@ -1110,7 +1179,7 @@ class AWSCluster(Cluster):
         return True
 
     def _get_controller_private_ip(self):
-        instances = self._get_instances(self.cluster_name)
+        instances, _ = self._get_instances(self.cluster_name)
         ip = None
         for instance in instances:
             if defaults.controller_name_format.format(self.cluster_name) in instance.tags['Name']:
@@ -1118,7 +1187,7 @@ class AWSCluster(Cluster):
                 break
         return ip
 
-    def add_nodes(self, num_nodes, instance_type, node_name):
+    def add_nodes(self, num_nodes, instance_type, node_name, spot_price=0):
         success = False
         self._logger.info('Creating {0} "{1}" nodes'.format(num_nodes, node_name))
 
@@ -1138,44 +1207,74 @@ class AWSCluster(Cluster):
         vpc = self._get_vpc(vpc_conn)
         private_subnet = self._create_subnet(vpc_conn, vpc, 'private-subnet')
         private_security_group = self._create_private_sg(vpc_conn, vpc, "private-sg")
+        node_block_devices = boto.ec2.blockdevicemapping.BlockDeviceMapping(conn)
+        node_root_vol = boto.ec2.blockdevicemapping.BlockDeviceType(connection=conn, delete_on_termination=True, volume_type='gp2')
+        node_block_devices['/dev/sda1'] = node_root_vol
         ansible_vars = {'controller_ip': self._get_controller_private_ip(), 
                         'node_group_name': node_name,
                         'central_logging_ip': logging_vars.get('central_logging_ip',''), 
                         'central_logging_level': logging_vars.get('central_logging_level','')
                         }
         user_data = self._get_user_data(playbook = "configure_nodes.yml", vars = ansible_vars)
-        res = conn.run_instances(ami_ids['node'], 
-                                 min_count=num_nodes, 
-                                 max_count=num_nodes,
-                                 key_name=c['key_pair'], 
-                                 instance_type=instance_type,
-                                 subnet_id=private_subnet.id, 
-                                 security_group_ids=[private_security_group.id],
-                                 user_data=user_data)
-        node_tags = {'Name': defaults.node_name_format.format(self.cluster_name, node_name),
-                    defaults.instance_node_type_tag_key: node_name}
-        node_tags_and_res = [(node_name, node_tags, res.instances)]
-        nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
-        self._logger.info('Waiting for nodes to start...')
+        if spot_price:
+            requests = [conn.request_spot_instances(spot_price, 
+                                                    ami_ids['node'], 
+                                                    type='persistent',
+                                                    count=num_nodes, 
+                                                    key_name=c['key_pair'], 
+                                                    instance_type=instance_type,
+                                                    block_device_map=node_block_devices, 
+                                                    subnet_id=private_subnet.id, 
+                                                    security_group_ids=[private_security_group.id],
+                                                    user_data=user_data)]
+            # Tagging spot requests
+            for request in requests:
+                for req in request:
+                    t = req.tags.copy()
+                    t.update(self._clusterous_tag())
+                    t.update({defaults.instance_node_type_tag_key: node_name, 
+                              'instance_type': instance_type})
+                    req.add_tags(t)
+            
+        else:
+            res = conn.run_instances(ami_ids['node'], 
+                                     min_count=num_nodes, 
+                                     max_count=num_nodes,
+                                     key_name=c['key_pair'], 
+                                     instance_type=instance_type,
+                                     subnet_id=private_subnet.id, 
+                                     security_group_ids=[private_security_group.id],
+                                     user_data=user_data)
+            node_tags = {'Name': defaults.node_name_format.format(self.cluster_name, node_name),
+                        defaults.instance_node_type_tag_key: node_name}
+            node_tags_and_res = [(node_name, node_tags, res.instances)]
+            nodes = self._wait_and_tag_instance_reservations(node_tags_and_res)
+            self._logger.info('Waiting for nodes to start...')
         return True
 
-    def rm_nodes(self, num_nodes, node_name):
+    def rm_nodes(self, num_nodes, node_name, spot_price=0):
         c = self._config
         conn = boto.ec2.connect_to_region(c['region'], aws_access_key_id=c['access_key_id'],
                                             aws_secret_access_key=c['secret_access_key'])
         if not conn:
             raise ClusterException('Cannot connect to AWS')
 
-
-        instance_list = self._get_node_instances(conn, node_name)
-
+        instance_list, spot_instance_list = self._get_node_instances(conn, node_name)
         ids_to_remove = []
-
-        for i in instance_list:
-            if len(ids_to_remove) < num_nodes:
-                ids_to_remove.append(i.id)
-            else:
-                break
+        spot_requests_to_cancel = []
+        if spot_price:
+            for i in spot_instance_list:
+                if len(ids_to_remove) < num_nodes:
+                    ids_to_remove.append(i.get('instance_id'))
+                    spot_requests_to_cancel.append(i.get('request_id'))
+                else:
+                    break
+        else:
+            for i in instance_list:
+                if len(ids_to_remove) < num_nodes:
+                    ids_to_remove.append(i.id)
+                else:
+                    break
 
         actual_num_to_remove = len(ids_to_remove)
         if actual_num_to_remove == 0:
@@ -1188,6 +1287,9 @@ class AWSCluster(Cluster):
         self._logger.info('Removing {0} nodes of type "{1}"...'.format(actual_num_to_remove, node_name))
 
         success = self._terminate_instances_and_wait(conn, ids_to_remove)
+        if spot_requests_to_cancel:
+            for request_id in spot_requests_to_cancel:
+                conn.cancel_spot_instance_requests(request_id, dry_run=False)
 
         if success:
             return actual_num_to_remove
@@ -1259,11 +1361,18 @@ class AWSCluster(Cluster):
                         shared_volume = v
 
         # Delete instances
-        num_instances = len(instance_list)
+        instance_list, spot_instance_list = self._get_instances(self.cluster_name, connection=conn)
         instances = [ i.id for i in instance_list ]
+        for i in spot_instance_list:
+            instances.append(i.get('instance_id'))
+
+        # Cancel spot requests
+        for spot_request in self._get_spot_requests(conn):
+            cancelled_spot_instance = conn.cancel_spot_instance_requests(spot_request.get('request_id'), dry_run=False)
+
         if instances:
             resource_terminated = True
-            self._logger.info('Terminating {0} instances'.format(num_instances))
+            self._logger.info('Terminating {0} instances'.format(len(instances)))
             self._terminate_instances_and_wait(conn, instances)
 
         # Delete shared volume
@@ -1552,7 +1661,7 @@ class AWSCluster(Cluster):
         Sets a working cluster
         """
         # Getting cluster info
-        instances = self._get_instances(self.cluster_name)
+        instances, _ = self._get_instances(self.cluster_name)
         nat_ip = None
         cluster_name = None
         for instance in instances:
@@ -1584,7 +1693,7 @@ class AWSCluster(Cluster):
         controller_info = {}
         central_logging_info = {}
         nat_info = {}
-        instances = self._get_instances(self.cluster_name)
+        instances, spot_instances = self._get_instances(self.cluster_name)
 
         for instance in instances:
             node_name = instance.tags[defaults.instance_node_type_tag_key]
@@ -1620,13 +1729,26 @@ class AWSCluster(Cluster):
                 else:
                     nodes_info[node_name]['count'] += 1
 
+        for instance in spot_instances:
+            node_name = instance.get(defaults.instance_node_type_tag_key)
+            if node_name not in nodes_info:
+                nodes_info[node_name] = {
+                                    'type': instance.get('instance_type'),
+                                    'count': 1
+                }
+            else:
+                nodes_info[node_name]['count'] += 1
+
+        spot_requests_info = self._get_spot_requests()
+
         info = {
                 'cluster_name': self.cluster_name,
-                'instance_count': len(instances),
+                'instance_count': len(instances) + len(spot_instances),
                 'nodes': nodes_info,
                 'controller': controller_info,
                 'central_logging': central_logging_info,
-                'nat': nat_info
+                'nat': nat_info,
+                'spot_requests': spot_requests_info
         }
 
         return info

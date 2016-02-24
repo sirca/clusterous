@@ -430,6 +430,29 @@ class CLIParser(object):
         print
         print tabulate.tabulate(nodes_table, headers=nodes_headers, tablefmt='plain')
 
+        spot_requests_headers = map(terminalio.boldify, 
+                                    ['Node Name', 'Instance Type', 'Bid Price', 'State', 'Status', 'Count'])
+        if info['spot_requests']:
+            print '\n', terminalio.boldify('Spot Requests')
+            unique_list = {}
+            for req in info['spot_requests']:
+                k = '{0}|{1}|{2}|{3}|{4}'.format(req.get(defaults.instance_node_type_tag_key), 
+                                req.get('instance_type'), 
+                                req.get('price'),
+                                req.get('state'), 
+                                req.get('status'))
+                if k not in unique_list:
+                    unique_list[k] = 1
+                else:
+                    unique_list[k] += 1
+
+            spot_requests_table = []
+            for k, count in unique_list.iteritems():
+                line = k.split('|')
+                line.append(count)
+                spot_requests_table.append(line)
+            print tabulate.tabulate(spot_requests_table, headers=spot_requests_headers, tablefmt='plain')
+
         # Print shared volume info
         if info['shared_volume']:
             print '\n', terminalio.boldify('Shared Volume')
