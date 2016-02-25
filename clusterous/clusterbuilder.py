@@ -37,7 +37,7 @@ class ClusterBuilder(object):
         self._logger.debug('Cluster params={0}'.format(cluster_spec))
         nodes_info = []
         for name, params in cluster_spec.iteritems():
-            nodes_info.append((params['count'], params['type'], name, params.get('aws',{}).get('spot_price',0)))
+            nodes_info.append((name, params))
 
         try:
             self._cluster.init_cluster(cluster_name, cluster_spec, nodes_info, logging_system_level,
@@ -89,13 +89,12 @@ class ClusterBuilder(object):
         if not is_valid:
             return False, 'Error adding nodes', None
 
-        try:
-            instance_type = spec[actual_node_name]['type']
-            spot_price = spec.get(actual_node_name,{}).get('aws',{}).get('spot_price',0)
-        except KeyError as e:
+        if spec[actual_node_name]['type']:
+            params = spec[actual_node_name]
+        else:
             raise ValueError('Cannot find instance type for "{0}" in cluster spec'.format(actual_node_name))
 
-        success = self._cluster.add_nodes(num_nodes, instance_type, actual_node_name, spot_price)
+        success = self._cluster.add_nodes(num_nodes, actual_node_name, params)
 
         if success:
             self._logger.info('{0} nodes of type "{1}" added'.format(num_nodes, actual_node_name))
@@ -111,13 +110,13 @@ class ClusterBuilder(object):
         is_valid, actual_node_name = self._validate_node_name(spec, node_name)
         if not is_valid:
             return False, 'Error removing nodes', None
-        try:
-            instance_type = spec[actual_node_name]['type']
-            spot_price = spec.get(actual_node_name,{}).get('aws',{}).get('spot_price',0)
-        except KeyError as e:
+
+        if spec[actual_node_name]['type']:
+            params = spec[actual_node_name]
+        else:
             raise ValueError('Cannot find instance type for "{0}" in cluster spec'.format(actual_node_name))
 
-        num_removed = self._cluster.rm_nodes(num_nodes, actual_node_name, spot_price)
+        num_removed = self._cluster.rm_nodes(num_nodes, actual_node_name, params)
 
         if num_removed < 0:
             message = 'An error occured when removing nodes'
