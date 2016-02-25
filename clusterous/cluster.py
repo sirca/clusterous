@@ -1054,7 +1054,12 @@ class AWSCluster(Cluster):
                                 }
                 user_data = self._get_user_data(playbook = "configure_nodes.yml", vars = ansible_vars)
                 if spot_price:
-                    requests = [conn.request_spot_instances(spot_price, 
+                    actual_price = spot_price
+                    if '%' in spot_price:
+                        for h in conn.get_spot_price_history(instance_type ='m3.medium', max_results=1):
+                            actual_price = round(h.price * float(spot_price.replace('%','')),6)
+
+                    requests = [conn.request_spot_instances(actual_price, 
                                                             ami_ids['node'], 
                                                             type='persistent',
                                                             count=num_nodes, 
@@ -1209,7 +1214,13 @@ class AWSCluster(Cluster):
                         }
         user_data = self._get_user_data(playbook = "configure_nodes.yml", vars = ansible_vars)
         if spot_price:
-            requests = [conn.request_spot_instances(spot_price, 
+            if spot_price:
+                actual_price = spot_price
+                if '%' in spot_price:
+                    for h in conn.get_spot_price_history(instance_type ='m3.medium', max_results=1):
+                        actual_price = round(h.price * float(spot_price.replace('%','')),6)
+
+            requests = [conn.request_spot_instances(actual_price, 
                                                     ami_ids['node'], 
                                                     type='persistent',
                                                     count=num_nodes, 
