@@ -208,7 +208,6 @@ class EnvironmentFile(object):
                             'attach_volume': (False, True),
                             'docker_network': (False, 'BRIDGE'),
                             'ports': (False, ''),
-                            'network': (False, ''),
                             'count': (False, 1),
                             'depends': (False, '')
                             }

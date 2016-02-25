@@ -20,4 +20,4 @@ ssh -i ~/.ssh/bdkd-sirca.pem root@54.153.136.62 -L 8081:127.0.0.1:8081 # elk
 # Mesos UI
 On browser open: http://localhost:5050
 ssh -i ~/.ssh/bdkd-sirca.pem ubuntu@52.62.198.180 -p 22000 -L 5050:127.0.0.1:5050 # mesos
-ssh -i ~/.ssh/bdkd-sirca.pem root@52.63.72.106 -p 22000 -L 8080:127.0.0.1:8080 # marathon
+ssh -i ~/.ssh/bdkd-sirca.pem ubuntu@52.63.72.106 -p 22000 -L 8080:127.0.0.1:8080 # marathon
