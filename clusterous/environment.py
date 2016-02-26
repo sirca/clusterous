@@ -50,7 +50,7 @@ class Environment(object):
 
         # Get cluster info and validate resources
         self._logger.debug('Preparing to launch...')
-        mesos_data = self._get_mesos_data(mesos_wait_time)
+        mesos_data = self._get_mesos_data()
         cluster_info = self._process_mesos_data(mesos_data)
 
         component_resources = self._calculate_resources(env_file.spec, cluster_info)
@@ -226,15 +226,32 @@ class Environment(object):
 
         return hostname
 
-    def _get_mesos_data(self, mesos_wait_time):
+    def _get_mesos_data(self):
         """
         Queries Mesos API and obtains information about cluster. Returns raw Mesos data
         """
-        time.sleep(mesos_wait_time)
         mesos_data = None
+
+        num_tries = 0
+        found_all_attributes = False
+        
         with self._cluster.make_controller_tunnel(defaults.mesos_port) as tunnel:
-            r = requests.get('http://localhost:{0}/master/state.json'.format(tunnel.local_port))
-            mesos_data = r.json()
+            while num_tries <= 12:
+                r = requests.get('http://localhost:{0}/master/state.json'.format(tunnel.local_port))
+                mesos_data = r.json()
+                attribute_missing = False
+                for host in mesos_data.get('slaves', {}):
+                    if 'name' not in host.get('attributes', {}):
+                        attribute_missing = True
+                        break
+                if not attribute_missing:
+                    found_all_attributes = True
+                    break
+                time.sleep(5)
+                num_tries += 1
+
+        if not found_all_attributes or num_tries > 12:
+            raise self.LaunchError('Could not obtain cluster information from Mesos: {0}'.format(mesos_data))
 
         return mesos_data
 
