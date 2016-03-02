@@ -86,13 +86,11 @@ Replace `mycluster` with an appropriate name (e.g. `bob-cluster` or `physics-clu
 
 The above parameters will instruct Clusterous to create a cluster of the default master/worker type, all running AWS `t2.micro` nodes. In the default master/worker architecture, there is always 1 master and any number of workers. For the sake of demonstration, we will have 2 workers for now.
 
-Save the file with the appropriate `.yml` extension.
-
 Create the cluster by entering:
 
     clusterous create mycluster.yml
 
-Where `mycluster.yml` is the name of your cluster parameters file.
+Where `mycluster.yml` is the name of the cluster parameters file you created.
 
 Clusterous display some progress output on the screen as it creates and configures the cluster on your AWS account. The creation takes a few minutes, after which Clusterous will return you to the command prompt.
 
@@ -103,7 +101,7 @@ Once the `create` command finishes, run the `status` command to get an overview 
 This should output something resembling the following:
 
 ```
-balramcluster has 5 instances running, including nat and controller
+mycluster has 5 instances running, including nat and controller
 Uptime:     9 minutes
 
 Controller
@@ -120,7 +118,7 @@ Shared Volume
 19G available
 ```
 
-The `status` command shows your, amongst aother things, the number and types of nodes running on your cluster. Note the special `Controller` and `NAT` instances: these are part of each cluster and assist in the networking and management of the cluster, and you can safely ignore them for now.
+The `status` command shows you, amongst other things, the number and types of nodes running on your cluster. Note the special `Controller` and `NAT` instances: these are part of each cluster and assist in the networking and management of the cluster, and you can safely ignore them for now.
 
 You now have a working Clusterous cluster running on AWS.
 

@@ -29,15 +29,15 @@ Clusterous is:
 
 ## Overview of other features
 
-**Shared volume**: Every Clusterous has a data volume accessible to all nodes via NFS. The shared volume can be used for storing application configuration, parameters, results, etc.
+**Shared volume**: Every cluster has a data volume accessible to all nodes via NFS. The shared volume can be used for storing application configuration, parameters, results, etc.
 
 **Scalable clusters**: Once launched, you can easily add and remove workers from your cluster. Your application will automatically scale to use the available resources.
 
 **Reusable, redistributable environments**: To run your Docker-based application on Clusterous for the first time, create an environment file. The environment file can then be reused as many times as necessary. They can also be shared, allowing others to easily spin up their own cluster running your code.
 
-**Logging system**: Clusters can optionally have a central logging system accessible via a web-based Kibana interface. The logging system can be used for debugging and diagnosing problems.
+**Logging system**: Clusters can optionally have a central logging system accessible via a web-based interface. The logging system can be used for debugging and diagnosing problems.
 
-**Multiple configurations**: If you run on multiple AWS regions or use multiple accounts, you can easily easily manage and switch between configuration profiles.
+**Multiple configurations**: If you run on multiple AWS regions or use multiple accounts, you can easily manage and switch between configuration profiles.
 
 
 ## Background reading
@@ -49,4 +49,4 @@ Since Clusterous uses Docker to run your application, you need to be able to cre
 ## About
 Clusterous is developed by [SIRCA](http://www.sirca.org.au) as part of the Big Data Knowledge Discovery (BDKD) project funded by [SIEF](http://www.sief.org.au/).
 
-It is written in Python 2.7 and is open source under the MIT license. Full source code is available [on GitHub](https://github.com/sirca/clusterous).
+It is written in Python 2.7 and is open source under the Apache 2 license. Full source code is available [on GitHub](https://github.com/sirca/clusterous).
