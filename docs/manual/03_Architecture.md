@@ -7,7 +7,7 @@ Here we are describing (at very high level) the components of a **default cluste
 Components:
 * **Client:** It represents your laptop or desktop with Clusterous command-line tool installed.
  
-* **Amazon Web Services (AWS):** In the diagram it represents the **default cluster** running on AWS cloud platform. Clusterous hides the complexity of launching, configuring and managing virtual machines.
+* **Amazon Web Services:** In the diagram it represents the **default cluster** running on AWS cloud platform.
 
 * **Master:** It represents a virtual machine running your application inside a Docker container. Regarding what is running inside the Docker container is up to you. For example you could have a main program that prepares the data, sends the jobs to the workers and then collecting the results. Perhaps you could have a queueing system where your main program submmits the jobs to the queue and the workers gets from it, processes and write the results to the shared volume.
 
