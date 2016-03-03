@@ -1,24 +1,27 @@
 # Architecture
 
-Here we are describing (at very high level) the components of a **default cluster** created by Cluserous.
+The below diagram shows an overview of a typical Clusterous cluster.
 
-![Clusterous Default Cluster Diagram](misc/Clusterous_Default_Cluster.png)
+![Clusterous Default Cluster Diagram](images/Clusterous_Architecture.png)
 
-Components:
-* **Client:** It represents your laptop or desktop with Clusterous command-line tool installed.
- 
-* **Amazon Web Services:** In the diagram it represents the **default cluster** running on AWS cloud platform.
+The **client** represents your laptop or desktop with Clusterous installed. You create and operate the cluster from the client machine. Once configured, you use the Clusterous command-line tool to create a cluster in the **Amazon Web Services** cloud.
 
-* **Master:** It represents a virtual machine running your application inside a Docker container. Regarding what is running inside the Docker container is up to you. For example you could have a main program that prepares the data, sends the jobs to the workers and then collecting the results. Perhaps you could have a queueing system where your main program submmits the jobs to the queue and the workers gets from it, processes and write the results to the shared volume.
+Your **client** machine creates the cluster with the help of the public AWS API; communication with the cluster itself is achieved via encrypted SSH tunnels.
 
-* **Workers:** It represents one or many virtual machines running your application inside Docker containers. Again, what is inside the Docker container is up to you. In the scenario that you use a queueing system here your code could get a job from the queue, process it and write the result to the shared volume.
+The **master** and **worker** nodes in the diagram represent the AWS virtual machines on which your application runs. This layout represents Clusterous' default cluster architecture which consists of one master node and any number of **worker** nodes.
 
-* **Shared Volume:** By default comes with a shared volume of 20GB. You could change the size upto 16TB as of the time of writing. This shared volume is under "/home/data" and your application have Read/Write access.
+A typical cluster application would run some central logic and a job queue on the master node. The main computation work is done by a number of worker processes that run on the worker nodes. Clusterous also allows you to customise this architecture based on your application's needs: for example you may have multiple groups of workers, or multiple masters.
 
-* **NAT Gateway:** It provides the security for the cluster. All communication between your laptop/desktop and the cluster is via secure connections (SSH/SSH tunnels) using your AWS security file. All virtual machines running iside the cluster are isoleted from the world.
+In all cases, your application code and the associated libraries and OS environment run inside a **Docker container**. Docker allows you to easily package your software along with its operating environment, such that you can test your application on your local machine and then deploy it to the cluster without making further modifications.
 
-* **Cluster Controller:** It is kind of "the brain" of the cluster. It know how many virtual machines are available, how much RAM or how many CPUs are available or used on the whole cluster. It is responsable for scheduling/deploying your applications on the cluster (master and nodes) and responding accordingly when adding or removing virtual machines.
+Each cluster has its own **shared volume**, which is a virtual hard drive accessible to all machines via NFS. By default, the shared volume is 20GB in size, but sizes up to 16TB are supported. The shared volume is based on AWS' [Elastic Block Store](https://aws.amazon.com/ebs/) (EBS) feature.
 
-* **Central Logging:** It is a web-based central logging system within the cluster. You could use it for debugging or diagnosing problems on your applications. By default it is an **optional** component.
+You may chose to build your own Docker images on the Cluster, in which case they are stored in the **Docker Images** S3 bucket. Unlike all the other cluster resources, the S3 bucket is global to all clusters you create. When setting up Clusterous for first use, you are given the option to either create a new bucket or use an existing one. The shared nature makes it possible to persist your images between cluster runs, and to share the same images with colleagues.
 
-* **Docker Images:** It represents the storage for your Docker images. Currently is stored in a S3 bucket. Everytime you use a Docker image, Clusterous checks if that image is alredy present then uses it otherwise creates one and stores here.
+In addition to the above, each cluster has a number of components that play a supporting role in the running of your application.
+
+The **NAT Gateway** helps isolate your cluster behind a private network, allowing scalability and providing security. It acts as the sole gateway to the outside internet. In normal usage, you do not have to directly interact with the NAT gateway.
+
+The **Cluster Controller** acts as the "brains" of the cluster. It helps manage the application virtual machines and their resources, and is responsible for deploying your Docker containers to the cluster nodes. The Controller is also responsible for making the shared volume available across the cluster and for building private Docker images. You do not have to directly interact with the Controller as it functions behind the scenes.
+
+The **Central Logging** system is an optional component that can be enabled at cluster creation. It provides a way to access logging data via a web-based interface and is useful for diagnosing or debugging problems in your application.
