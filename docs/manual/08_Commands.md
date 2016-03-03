@@ -1,49 +1,127 @@
 # Commands
+Clusterous is a command line tool to manage virtual machines on Amazon Web Services (AWS).
 
-## Configuration
-``clusterous setup``
+## Synopsis
+`` clusterous [options] <command> [<subcommand>] [parameters]``
 
-``clusterous profile``
+Optonal parameters are shown in square brackets.
 
-## Cluster
-``clusterous create``
+### Options
+``--help``: Provides information about Clusterous commands.
 
-``clusterous status``
+``--verbose``: Displays verbose debug output while running the requested command.
 
-``clusterous workon``
+``--version``: Displays the version Clusterous.
 
-``clusterous add-nodes``
+### Configuration related
+Commands related to Clusterous configuration.
 
-``clusterous rm-nodes``
+##### ``clusterous setup``
 
-``clusterous destroy``
+Launches an interactive wizard to configure Clusterous.
 
-## Enviroment
-``clusterous run``
+Example:
+```
+$ clusterous setup
+Welcome to Clusterous setup
+    This guide will help you create a new configuration profile for
+    using Clusterous with Amazon Web Services
 
-``clusterous connect``
+    Clusterous needs your AWS account's access keys
+* AWS Access Key ID: _
+```
+---
+##### ``clusterous profile``
 
-``clusterous quit``
+List, switch between, show or remove configuration profiles
+```
+$ clusterous profile --help
+usage: clusterous profile [-h] {rm,use,ls,show} ...
+subcommands:
+    ls              Show list of current profiles
+    use             Switch to using another profile
+    show            Show contents of a profile
+    rm              Remove a profil
+```
 
-## Files
-``clusterous ls``
+Example:
+```
+$ clusterous profile ls
+Current Profile: default
 
-``clusterous put``
+Other Profiles
+us-east-1
+```
 
-``clusterous get``
+---
+### Cluster related
+Commands related to cluster management.
 
-``clusterous rm``
+##### ``clusterous create``
 
-## Share volume
-``clusterous ls-volumes``
+Creates a cluster and run any specified environment.
 
-``clusterous rm-volume``
+```
+$ clusterous create --help
+arguments:
+  profile_file  File containing cluster creation parameters
 
-## Docker images
-``clusterous build-image``
+optional arguments:
+  --no-run      Do not run environment
+```
 
-``clusterous image-info``
+Example:
+```
+$ cat mycluster.yml
+cluster_name: mycluster
+parameters:
+    master_instance_type: t2.micro
+    worker_instance_type: t2.micro
+    worker_count: 2
 
-## Central logging
-``clusterous logging``
+$ clusterous create mycluster.yml
+Using profile default
+Creating cluster...
+...
+```
 
+---
+
+##### ``clusterous status``
+
+##### ``clusterous workon``
+
+##### ``clusterous add-nodes``
+
+##### ``clusterous rm-nodes``
+
+##### ``clusterous destroy``
+
+### Enviroment related
+##### ``clusterous run``
+
+##### ``clusterous connect``
+
+##### ``clusterous quit``
+
+### Files related
+##### ``clusterous ls``
+
+##### ``clusterous put``
+
+##### ``clusterous get``
+
+##### ``clusterous rm``
+
+### Share volume related
+##### ``clusterous ls-volumes``
+
+##### ``clusterous rm-volume``
+
+### Docker images related
+##### ``clusterous build-image``
+
+##### ``clusterous image-info``
+
+### Central logging related
+##### ``clusterous logging``
