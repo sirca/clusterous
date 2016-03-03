@@ -9,7 +9,7 @@ The target users for Clusterous are scientists, data scientists and anyone else 
 
 Clusterous takes the form of a command-line tool, and is currently supported on Linux and Mac OS X (the clusters themselves run Linux). After installing Clusterous and configuring it with your AWS account credentials, you run the command to create a cluster, which is depicted in the following diagram.
 
-**[picture]**
+![Clusterous Default Cluster Diagram](images/Clusterous_Architecture.png)
 
 Once the cluster is created, you can have your application deployed. Clusterous uses Docker to deploy and run applications, allowing you to avoid all the compatibility and dependency headaches one would typically face when deploying code to another machine.
 
