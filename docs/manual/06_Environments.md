@@ -227,7 +227,6 @@ There are some requirements to be aware of for Clusterous applications:
 
 If you port a popular framework to run on Clusterous, it may be best to leave your own code out of the environment itself. A lot of the power of Clusterous environments comes from reusability, so a general purpose environment may be useful to many people.
 
-
 ## IPython example
 A more sophisticated example is available under `subprojects/environments/ipython-lite`. This example runs a configured IPython Parallel environment, and includes three different intercommunicating components and a number of configuration files.
 
