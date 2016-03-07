@@ -122,7 +122,7 @@ The `status` command shows you, amongst other things, the number and types of no
 
 You now have a working Clusterous cluster running on AWS.
 
-Next, we will run an example application on the cluster. In Clusterous, an "environment" refers to a Docker based application, along with any associated configuration and data. The Clusterous source repository has a couple of example environments, one of which we will use. Download the `subprojects/environments` directory, within which you will find the `ipython-lite` directory containing the `ipython.yml` file. Take note of the location. The `ipython-lite` environment will run [IPython Parallel](http://ipyparallel.readthedocs.org/en/stable/), which combines the popular IPython web-based Python notebook (now known as Jupyter) with a parallel compute framework.
+Next, we will run an example application on the cluster. In Clusterous, an "environment" refers to a Docker based application, along with any associated configuration and data. The [Clusterous source repository](https://github.com/sirca/clusterous/) has a couple of example environments, one of which we will use. Download the `subprojects/environments` directory, within which you will find the `ipython-lite` directory containing the `ipython.yml` file. Take note of the location. The `ipython-lite` environment will run [IPython Parallel](http://ipyparallel.readthedocs.org/en/stable/), which combines the popular IPython web-based Python notebook (now known as Jupyter) with a parallel compute framework.
 
 Use the `run` command to launch the environment on the current running cluster. To launch, use the following (substituting the appropriate file path):
 
