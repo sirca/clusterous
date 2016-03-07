@@ -49,4 +49,4 @@ Since Clusterous uses Docker to run your application, you need to be able to cre
 ## About
 Clusterous is developed by [SIRCA](http://www.sirca.org.au) as part of the Big Data Knowledge Discovery (BDKD) project funded by [SIEF](http://www.sief.org.au/).
 
-It is written in Python 2.7 and is open source under the Apache 2 license. Full source code is available [on GitHub](https://github.com/sirca/clusterous).
+It is written in Python 2.7 and is open source under the Apache License (2.0). Full source code is available [on GitHub](https://github.com/sirca/clusterous).
