@@ -41,7 +41,7 @@ Clusterous is:
 
 
 ## Background reading
-Before getting started with Clusterous, you need to be familiar with the basics of [AWS](https://aws.amazon.com) and with [Docker](https://www.docker.com/what-docker). In the case of AWS, Clusterous uses the [EC2](https://aws.amazon.com/ec2/) service to run the virtual machines. Read up on concepts such as AWS Regions and the different EC2 instance types. When creating a cluster, you will chose what types of EC2 instances you will use.
+Before getting started with Clusterous, you need to be familiar with the basics of [AWS](https://aws.amazon.com) and with [Docker](https://www.docker.com/what-docker). In the case of AWS, Clusterous uses the [EC2](https://aws.amazon.com/ec2/) service to run the virtual machines. [Read up on concepts](A02_AWS.md) such as AWS Regions and the different EC2 instance types. When creating a cluster, you will chose what types of EC2 instances you will use.
 
 Since Clusterous uses Docker to run your application, you need to be able to create and run your own Docker containers and images. If you are new to Docker, start with installing and using Docker on your machine (there are step-by-step guides [for Linux](https://docs.docker.com/linux/) and [OS X](https://docs.docker.com/mac/)).
 
@@ -49,4 +49,4 @@ Since Clusterous uses Docker to run your application, you need to be able to cre
 ## About
 Clusterous is developed by [SIRCA](http://www.sirca.org.au) as part of the Big Data Knowledge Discovery (BDKD) project funded by [SIEF](http://www.sief.org.au/).
 
-It is written in Python 2.7 and is open source under the Apache 2 license. Full source code is available [on GitHub](https://github.com/sirca/clusterous).
+It is written in Python 2.7 and is open source under the Apache License (2.0). Full source code is available [on GitHub](https://github.com/sirca/clusterous).

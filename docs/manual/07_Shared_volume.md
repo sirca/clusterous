@@ -16,7 +16,7 @@ By default, the shared volume is 20GB. You may customise this at cluster creatio
 
 In the following cluster parameters file, we set the shared volume to 40GB:
 
-```
+```yaml
 cluster_name: mycluster
 shared_volume_size: 40
 parameters:
@@ -98,7 +98,7 @@ To reuse one of the above volumes in a new cluster, you need to specify the volu
 
 In the cluster parameters file, use the `shared_volume_id` field. For example, the below parameters file would attach the volume `vol-12345667` to the newly created cluster:
 
-```
+```yaml
 $ cat mycluster.yml
 cluster_name: mycluster
 shared_volume_id: vol-12345667
