@@ -11,7 +11,7 @@
 7. [Shared volume](07_Shared_volume.md)
 8. [Central logging](08_Central_logging.md)
 
-Appendix
+### Appendices
 1. [Commands reference](A01_Commands_reference.md)
 2. [Amazon Web Services](A02_AWS.md)
 3. [Docker](A03_Docker.md)
