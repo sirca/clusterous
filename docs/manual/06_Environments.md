@@ -12,7 +12,7 @@ You do not need to create your own environment file if you can instead use an ex
 If none of the existing environments suit you, or if you need to customise an existing environent, you need to understand environment files.
 
 ## Prerequisites
-This guide assumes you are familiar with Docker and have already made your application run in a Docker container in a test environment. Refer to Appendix [TODO: LINK] for information on getting started with Docker.
+This guide assumes you are familiar with Docker and have already made your application run in a Docker container in a test environment. Refer to [Appendix 3](A03_Docker.md) for information on getting started with Docker.
 
 ## Background
 In order to deploy an parallel compute application on to a compute cluster, a number of actions must take place. They including many or all of the following:
@@ -188,7 +188,7 @@ To run the environment once your cluster has started, use the `run` command, pas
 $ clusterous run subprojects/environments/basic-python/basic-python-env.yml
 ```
 
-The first time you run this example, Clusterous may have to build the Docker image, which may take several few minutes. The build process can be speeded by using the `controller_instance_type` in the cluster parameters file (See Chapter 5 [TODO:LINK]).
+The first time you run this example, Clusterous may have to build the Docker image, which may take several few minutes. The build process can be speeded by using the `controller_instance_type` in the cluster parameters file (See [Chapter 5](05_Create_and_destroy.md).
 
 Additionally, there will be a few minute's wait when deploying the applications while the nodes download the newly built Docker image from the cluster's repository. Note that on subsequent runs on the same cluster, this delay doesn't happen as the nodes will be able to use a cached copy of the image.
 
