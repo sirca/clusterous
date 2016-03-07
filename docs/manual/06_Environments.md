@@ -222,16 +222,11 @@ The workflow for running your application on Clusterous would typically follow a
 
 There are some requirements to be aware of for Clusterous applications:
 
-- If a component opens a network port, it must be within the range 1024-65535. If your application uses other ports, you need to be able to customise it to use one within this range.
+- If a component opens a network port, it must be in the range 1024-65535. If your application uses other ports, you need to be able to customise it to use one within this range.
 - The shared volume is automatically mounted on /home/data on all containers. If you need to place configuration files or input data on the shared volume, you need to be able to tell your application where to find them.
 
 If you port a popular framework to run on Clusterous, it may be best to leave your own code out of the environment itself. A lot of the power of Clusterous environments comes from reusability, so a general purpose environment may be useful to many people.
 
-## Running the Docker application in Clusterous
-There are two things to keep in mind when making your application run correctly in a Clusterous cluster.
-
-- 
-- All Clusterous clusters have a dedicated "shared volume", which is an NFS volume accessible to all nodes. This volume is mounted in /home/data, and is typically used for launch scripts, common configuration files and so on, as well as for your application's input/output data.
 
 ## IPython example
 A more sophisticated example is available under `subprojects/environments/ipython-lite`. This example runs a configured IPython Parallel environment, and includes three different intercommunicating components and a number of configuration files.
