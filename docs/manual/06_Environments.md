@@ -4,8 +4,14 @@ Clusterous is designed around Docker, which is a technology and suite of tools f
 
 This document is a guide to running your Docker-based cluster application on a Clusterous cluster.
 
-## Prerequisites
+## Do you need to create an environment file?
+An environment file is a script that tells Clusterous how to deploy a multi-part Docker-based cluster application.
 
+You do not need to create your own environment file if you can instead use an existing one. For example, if you just want to use IPython Parallel via the IPython notebook, you can use the IPython Parallel environment that the Clusterous team has already developed: just add your own code and data. Similarly, other users may have developed Clusterous environments for other parallel compute frameworks; it may be possible to just run them and copy your code/data over to the cluster.
+
+If none of the existing environments suit you, or if you need to customise an existing environent, you need to understand environment files.
+
+## Prerequisites
 This guide assumes you are familiar with Docker and have already made your application run in a Docker container in a test environment. Refer to Appendix [TODO: LINK] for information on getting started with Docker.
 
 ## Background
@@ -16,20 +22,7 @@ In order to deploy an parallel compute application on to a compute cluster, a nu
 - running all the Docker containers correctly, across all the nodes in the cluster, with each using the appropriate resources, etc.
 - a connection between the client machine and the cluster; if your application has a web based interface (e.g. the Jupyter notebook) or any other kind of external interface, you need to be able to easily access it
 
-The Clusterous Environment file feature provides an easy way to achieve all of the above with a single step.
-
-
-
-Once you have made your application run inside a Docker container, you need to provide Clusterous a way of deploying it on to the cluster. This is done by means of an environment file that describes how to do so.
-
-An environment file is a special YAML file that provides Clusterous instructions to build the Docker images for your application, copy files to the cluster, run containers correctly, and create an SSH tunnel if necessary.
-
-## Running the Docker application in Clusterous
-There are two things to keep in mind when making your application run correctly in a Clusterous cluster.
-
-- 
-- All Clusterous clusters have a dedicated "shared volume", which is an NFS volume accessible to all nodes. This volume is mounted in /home/data, and is typically used for launch scripts, common configuration files and so on, as well as for your application's input/output data.
-
+The Clusterous "environment file" feature provides an easy way to achieve all of the above with a single step.
 
 ## Environment files
 An environment file is a special YAML format file that you write, allowing you to deploy and run your application on the cluster in a single step.
@@ -218,6 +211,27 @@ Upon confirmation, Clusterous will kill the running container processes and dest
 
 To stop the cluster itself, use the `destroy` command.
 
+## Preparing your application for Clusterous
+The first step to running your application on Clusterous is determining its architecture. Cluster applications tend to have multiple parts, whether they use existing frameworks (such as IPython Parallel) or use a custom-built one. Once you have determined the different parts (components), you need to run each component of the application in its own Docker container.
+
+The workflow for running your application on Clusterous would typically follow a similar pattern:
+
+- Place your application's components in Docker containers
+- Run the containers on your personal machine, ensuring that they run individually and can communicate with each other. This test run would of course be a scaled-down version of the cluster application (fewer workers)
+- Write the environment file for your application in order to run it on the cluster
+
+There are some requirements to be aware of for Clusterous applications:
+
+- If a component opens a network port, it must be within the range 1024-65535. If your application uses other ports, you need to be able to customise it to use one within this range.
+- The shared volume is automatically mounted on /home/data on all containers. If you need to place configuration files or input data on the shared volume, you need to be able to tell your application where to find them.
+
+If you port a popular framework to run on Clusterous, it may be best to leave your own code out of the environment itself. A lot of the power of Clusterous environments comes from reusability, so a general purpose environment may be useful to many people.
+
+## Running the Docker application in Clusterous
+There are two things to keep in mind when making your application run correctly in a Clusterous cluster.
+
+- 
+- All Clusterous clusters have a dedicated "shared volume", which is an NFS volume accessible to all nodes. This volume is mounted in /home/data, and is typically used for launch scripts, common configuration files and so on, as well as for your application's input/output data.
 
 ## IPython example
 A more sophisticated example is available under `subprojects/environments/ipython-lite`. This example runs a configured IPython Parallel environment, and includes three different intercommunicating components and a number of configuration files.
