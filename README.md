@@ -1,4 +1,4 @@
-# Clusterous
+# Clusterous: Easy Cluster Computing with Docker and AWS
 Clusterous is a easy-to-use command line tool for cluster computing on AWS. It allows you to create and manage a cluster on AWS and deploy your software in the form of Docker containers. It is aimed at scientists and researchers who want the on-demand compute power that AWS offers, but don't have the necessary time or technical expertise.
 
 Clusterous is currently under active development. While it is currently usable, it should be regarded as pre-release software. The latest release is 0.5.0. 
@@ -6,7 +6,7 @@ Clusterous is currently under active development. While it is currently usable, 
 Requires Linux or OS X and Python 2.7.
 
 # Get started
-[Start with the Introduction](docs/manual/01_Introduction.md) of the user manual to get a good overview of what Clusterous is.
+[Start with the Introduction](docs/manual/01_Introduction.md) of the user manual for an overview of Clusterous.
 
 Next, use the [Quick start guide](docs/manual/02_Quick_start.md) to get started using Clusterous.
 
