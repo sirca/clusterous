@@ -44,7 +44,7 @@ And you should see Clusterous' help output. Like a typical Unix command line too
 ## Configuring
 Clusterous creates clusters on your own AWS account, so before you start using Clusterous, you need provide your AWS credentials and run the interactive Clusterous setup wizard.
 
-The AWS keys are in the form of an Access Key ID and Secret Access Key, and are provided to you by AWS when you create an IAM user in your AWS account. You may refer to this manual's guide [TODO: LINK] to preparing your AWS account for use. Your AWS credentials will typically look something like:
+The AWS keys are in the form of an Access Key ID and Secret Access Key, and are provided to you by AWS when you create an IAM user in your AWS account. You may refer to [this manual's guide](A02_AWS.md) to preparing your AWS account for use. Your AWS credentials will typically look something like:
 
     Access Key ID: AKIAIOSFODNN7EXAMPLE
     Secret Access Key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY

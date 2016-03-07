@@ -50,20 +50,20 @@ parameters:
     worker_count: 3
 ```
 
-The `environment_file` field allows you to run your environment on cluster creation. Simply specify a relative (or absolute) path to the YAML environment file, and Clusterous will automatically run the environment after the cluster starts up. This avoids the need for running the `run` command separately. Environments are described in full detail in Chapter 6 [TODO: LINK].
+The `environment_file` field allows you to run your environment on cluster creation. Simply specify a relative (or absolute) path to the YAML environment file, and Clusterous will automatically run the environment after the cluster starts up. This avoids the need for running the `run` command separately. Environments are described in full detail in [Chapter 6](06_Environments.md).
 
-The `central_logging_level` field enables the logging system, useful for debugging problems. The logging system consists of a special dedicated virtual machine in your cluster that collects log messages from the cluster and makes them accessing via a web GUI. The number refers to the logging level; `1` means that only application logs are collected (i.e. if your application logs via syslog), `2` additionally enables collection of logs from system services. To view the logs, use `clusterous logging`. The logging system is described in detail in Chapter 8 [TODO: LINK].
+The `central_logging_level` field enables the logging system, useful for debugging problems. The logging system consists of a special dedicated virtual machine in your cluster that collects log messages from the cluster and makes them accessing via a web GUI. The number refers to the logging level; `1` means that only application logs are collected (i.e. if your application logs via syslog), `2` additionally enables collection of logs from system services. To view the logs, use `clusterous logging`. The logging system is described in detail in [Chapter 8](08_Central_logging.md).
 
 The `controller_instance_type` field allows you to specify a custom cluster type for the Controller, which is the dedicated Clusterous node manages the cluster. You may typically need a more powerful node if you are building very large Docker images on the cluster. On AWS, the default Controller type is a t2.small.
 
 The `shared_volume_size` field lets you specify a custom size for the cluster shared volume in gigabytes (e.g. `60` means 60 GB). The default value is 20.
 
-The `shared_volume_id` field lets you specify a custom shared volume, instead of having Clusterous create a new one. This feature is described in detail in Chapter 6 [TODO: LINK].
+The `shared_volume_id` field lets you specify a custom shared volume, instead of having Clusterous create a new one. This feature is described in detail in [Chapter 7](07_Shared_volume.md).
 
 ## `destroy`
 The `destroy` command terminates all nodes in the cluster and cleans up the AWS resources created when the `create` command was run. By default, the shared volume is also destroyed, permanently deleting all files on it.
 
-The `destroy` command also supports the `--leave-shared-volume` and `--force-delete-shared-volume` fields, which offer flexibility with the shared volume. These features are described in Chapter 6 [TODO: LINK].
+The `destroy` command also supports the `--leave-shared-volume` and `--force-delete-shared-volume` fields, which offer flexibility with the shared volume. These features are described in Chapter 6 [Chapter 7](07_Shared_volume.md).
 
 ## `workon`
 Clusterous doesn't currently support working with and managing multiple clusters from the same machine. However, it is sometimes useful to be able to create a cluster using one machine and then work on it from a second machine.
