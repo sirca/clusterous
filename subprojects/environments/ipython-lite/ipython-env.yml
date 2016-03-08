@@ -7,35 +7,35 @@ environment:    # change to "application"?
     - "ipython/"
   image:
     - dockerfile: "image/"   # location of Dockerfile to build associated Docker image
-      image_name: "ipython-lite"
+      image_name: "ipython-lite-v3"
 
   components:
     controller:     # name of the application component
       machine: master   # machine on which the component will be run (mesos attribute)
       cpu: auto    # mesos/marathon CPU (Docker's CPU arg)
-      image: "registry:5000/ipython-lite"   # docker image
+      image: "registry:5000/ipython-lite-v3"   # docker image
       cmd: "/bin/bash /home/data/ipython/launch_scripts/01_ipcontroller.sh"
       attach_volume: yes    # (optional, default is yes) Whether to mount shared storage to container
-      ports: 2000,2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,2011
+      docker_network: host
 
     notebook:
       machine: master
       depends: controller   # Marathon constrait; launch only after controller is running
       cpu: auto
-      image: "registry:5000/ipython-lite"
+      image: "registry:5000/ipython-lite-v3"
       cmd: "/bin/bash /home/data/ipython/launch_scripts/03_ipnotebook.sh"
-      ports: 8888:8888
+      ports: 8889:8889
 
     engine:
       machine: worker
       depends: controller   # Marathon constrait; launch only after controller is running
       cpu: 0.5
       count: auto    # (default: 1) "auto" means as deploy as many as possible given available machines
-      image: "registry:5000/ipython-lite"
+      image: "registry:5000/ipython-lite-v3"
       cmd: "/bin/bash /home/data/ipython/launch_scripts/02_ipengine.sh"
 
   expose_tunnel:      # create an ssh tunnel
-    service: 8888:notebook:8888    # source port 8888 on master to 8888 on localhost
+    service: 8889:notebook:8889    # source port 8888 on master to 8888 on localhost
     message: |
           The IPython engines may take up to 30 seconds to become available.
           The connection file is located at:
