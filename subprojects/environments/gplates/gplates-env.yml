@@ -4,12 +4,12 @@ environment:
     - "files/"
   image:
     - dockerfile: "docker/gplates/"
-      image_name: "gplates_v6"
+      image_name: "gplates_v8"
   components:
     notebook:
       machine: master
       cpu: auto
-      image: registry:5000/gplates_v6
+      image: registry:5000/gplates_v8
       cmd: "/home/data/files/config/launch_ipython.sh"
       ports: "8887:8887"
   expose_tunnel:
