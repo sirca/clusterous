@@ -32,12 +32,15 @@ RUN pip install ipyparallel
 RUN apt-get install -y python-mpltoolkits.basemap
 
 # Install non-linear optimisation package, with options to import into python
-ADD nlopt-2.4.2.tar.bz2 /tmp/
-RUN cd /tmp/nlopt-2.4.2; \
+RUN cd /tmp; \
+    wget http://ab-initio.mit.edu/nlopt/nlopt-2.4.2.tar.gz -O nlopt-2.4.2.tar.gz; \
+    tar zxvf nlopt-2.4.2.tar.gz; \
+    cd nlopt-2.4.2; \
     ./configure --enable-shared; \
     make; \ 
     make install; \
-    rm -fr /tmp/nlopt-2.4.2
+    cd /tmp; \
+    rm -fr nlopt-2.4.2*
 
 # Set python path to find pygplates and nlopt
 RUN export PYTHONPATH=${PYTHONPATH}:/usr/lib
@@ -46,9 +49,12 @@ RUN export LD_LIBRARY_PATH=/usr/local/lib
 RUN apt-get install -y cmake
 
 # Pygplates Python package
-ADD gplates-1.5.0-unixsrc.tar.bz2 /tmp
-RUN cd tmp/gplates-1.5.0; \
+RUN cd /tmp; \
+    wget http://sourceforge.net/projects/gplates/files/gplates/1.5/gplates-1.5.0-unixsrc.tar.bz2/download -O gplates-1.5.0-unixsrc.tar.bz2; \
+    tar xvf gplates-1.5.0-unixsrc.tar.bz2; \
+    cd gplates-1.5.0; \
     cmake . ;\
     make -j4 pygplates; \
     mv bin/pygplates.so /usr/local/lib/python2.7/dist-packages/; \
-    rm -fr tmp/gplates-1.5.0
+    cd /tmp; \
+    rm -fr gplates-1.5.0*
