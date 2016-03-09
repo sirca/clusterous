@@ -1243,26 +1243,27 @@ class AWSCluster(Cluster):
             self._terminate_instances_and_wait(conn, instances)
 
         # Delete shared volume
-        volumes = conn.get_all_volumes(filters={'tag:Attached':self.cluster_name})
-        if volumes:
-            byo_volume = True if volumes else False
-            if byo_volume:
-                shared_volume = volumes[0]
-                shared_volume.remove_tags({'Attached': self.cluster_name})
-            else:
-                volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
-                shared_volume = volumes[0]
-    
-            if leave_shared_volume:
-                self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
-            else:
-                if force_delete_shared_volume or not byo_volume:
-                    if shared_volume.delete():
-                        self._logger.info('Shared volume "{0}" has been deleted'.format(shared_volume.id))
+        attached_volumes = conn.get_all_volumes(filters={'tag:Attached':self.cluster_name})
+        if attached_volumes:
+            for volume in attached_volumes:
+                if force_delete_shared_volume:
+                    if volume.delete():
+                        self._logger.info('Shared volume "{0}" has been deleted'.format(volume.id))
                     else:
-                        self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, shared_volume.id))
+                        self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, volume.id))
                 else:
-                    self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
+                    volume.remove_tags({'Attached': self.cluster_name})
+                    self._logger.info('Leaving shared volume "{0}"'.format(volume.id))
+        else:
+            volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
+            for volume in volumes:
+                if leave_shared_volume:
+                    self._logger.info('Leaving shared volume "{0}"'.format(volume.id))
+                else:
+                    if volume.delete():
+                        self._logger.info('Shared volume "{0}" has been deleted'.format(volume.id))
+                    else:
+                        self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, volume.id))
 
         # Delete security group
         sg = conn.get_all_security_groups(filters={'tag:Name':'{0}-public-sg'.format(self.cluster_name),
