@@ -1387,7 +1387,7 @@ class AWSCluster(Cluster):
                     if shared_volume.delete():
                         self._logger.info('Shared volume "{0}" has been deleted'.format(shared_volume.id))
                     else:
-                        self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, volume.id))
+                        self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, shared_volume.id))
                 else:
                     shared_volume.remove_tags({'Attached': self.cluster_name})
                     self._logger.info('Leaving shared volume "{0}"'.format(shared_volume.id))
