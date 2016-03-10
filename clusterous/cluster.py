@@ -622,19 +622,31 @@ class AWSCluster(Cluster):
             raise ClusterException('Unable to establish SSH connection to NAT instance')
 
 
-        cmd = 'sudo iptables -t nat -A PREROUTING -p tcp --dport {0} -j DNAT --to-destination {1}:22'.format(
-             defaults.nat_ssh_port_forwarding, controller_private_ip)
+        retry = 0
+        while True:
+            cmd = 'sudo iptables -t nat -A PREROUTING -p tcp --dport {0} -j DNAT --to-destination {1}:22'.format(
+                 defaults.nat_ssh_port_forwarding, controller_private_ip)
+            stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
+            output = '\n'.join(stdout.readlines())
+            errors = '\n'.join(stderr.readlines())
+            if errors:
+                self._logger.error('NAT port forwarding error: {0}'.format(errors))
+                self._logger.error('NAT port forwarding ouput text: {0}'.format(output))
+                raise ClusterException('Error setting up port forwarding on NAT')
+    
+            # Checking if iptables rule was applied
+            cmd = 'sudo iptables --table nat --list | grep "^DNAT.*to:{0}:22"'.format(controller_private_ip)
+            stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
+            output = '\n'.join(stdout.readlines())
+            errors = '\n'.join(stderr.readlines())
+            if output:
+                break
 
-        # Exec command remotely
-        stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
+            retry += 1
+            if retry > 3:
+                raise ClusterException('Error setting up port forwarding on NAT')
 
-        output = '\n'.join(stdout.readlines())
-        errors = '\n'.join(stderr.readlines())
-
-        if errors:
-            self._logger.error('NAT port forwarding error: {0}'.format(errors))
-            self._logger.error('NAT port forwarding ouput text: {0}'.format(output))
-            raise ClusterException('Error setting up port forwarding on NAT')
+            time.sleep(5)
 
         ssh.close()
 
