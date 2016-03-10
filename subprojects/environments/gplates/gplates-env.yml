@@ -4,16 +4,14 @@ environment:
     - "files/"
   image:
     - dockerfile: "docker/gplates/"
-      image_name: "gplates-v1"
-    - dockerfile: "docker/ipython/"
-      image_name: "bdkd:gplates_ipython_v2"
+      image_name: "gplates_v8"
   components:
     notebook:
       machine: master
       cpu: auto
-      image: registry:5000/bdkd:gplates_ipython_v2
+      image: registry:5000/gplates_v8
       cmd: "/home/data/files/config/launch_ipython.sh"
-      ports: "31888:8888"
+      ports: "8887:8887"
   expose_tunnel:
-    service: 31888:notebook:31888
+    service: 8887:notebook:8887
     message: "To access IPythno Notebook, use this URL: {url}"
