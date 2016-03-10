@@ -1244,8 +1244,7 @@ class AWSCluster(Cluster):
                     if v.tags.get('Attached'):
                         shared_volume = v
                         byo_volume = True
-
-                    if v.tags.get(defaults.instance_tag_key):
+                    elif v.tags.get(defaults.instance_tag_key):
                         shared_volume = v
 
         # Delete instances
