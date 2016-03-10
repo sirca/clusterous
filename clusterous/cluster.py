@@ -1516,7 +1516,7 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(cmd)
         output_content = stdout.read()
         if 'cannot access' in stderr.read():
-            message = "Folder '{0}' does not exists.".format(remote_path)
+            message = "Folder '{0}' does not exist".format(remote_path)
             return (False, message)
 
         return (True, output_content)
@@ -1534,7 +1534,7 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(cmd)
         output_content = stdout.read()
         if 'cannot access' in stderr.read():
-            message = "Folder '{0}' does not exists.".format(remote_path)
+            message = "Folder '{0}' does not exist".format(remote_path)
             return (False, message)
 
         cmd = "rm -fr '{0}'".format(remote_path)
