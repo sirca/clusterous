@@ -360,12 +360,12 @@ class Clusterous(object):
         """
         List available shared volumes left behind from destroyed cluster
         """
-        cl = self.make_cluster_object(cluster_name_required=False)
+        cl = self.make_cluster_object(cluster_name_required=False, cluster_must_be_running=False)
         return (True, cl.ls_volumes())
 
     def rm_volume(self, volume_id):
         """
         Deletes a shared volume left behind from destroyed cluster
         """
-        cl = self.make_cluster_object(cluster_name_required=False)
+        cl = self.make_cluster_object(cluster_name_required=False, cluster_must_be_running=False)
         return cl.rm_volume(volume_id)
