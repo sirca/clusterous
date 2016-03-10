@@ -1483,7 +1483,7 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(cmd)
         output_content = stdout.read()
         if 'cannot access' in stderr.read():
-            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            message = "Folder '{0}' does not exists.".format(remote_path)
             return (False, message)
 
         return (True, output_content)
@@ -1501,7 +1501,7 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(cmd)
         output_content = stdout.read()
         if 'cannot access' in stderr.read():
-            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            message = "Folder '{0}' does not exists.".format(remote_path)
             return (False, message)
 
         cmd = "rm -fr '{0}'".format(remote_path)
@@ -1509,7 +1509,7 @@ class AWSCluster(Cluster):
         output_content = stdout.read()
         # TODO: More error checking may need to be added
         if 'cannot access' in stderr.read():
-            message = "Error: Failed to delete folder '{0}'.".format(remote_path)
+            message = "Failed to delete folder '{0}'.".format(remote_path)
             return (False, message)
 
         return (True, '')
