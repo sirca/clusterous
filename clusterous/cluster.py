@@ -637,7 +637,6 @@ class AWSCluster(Cluster):
             cmd = 'sudo iptables --table nat --list | grep "^DNAT.*to:{0}:22"'.format(controller_private_ip)
             stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
             output = '\n'.join(stdout.readlines())
-            errors = '\n'.join(stderr.readlines())
             if output:
                 break
 
