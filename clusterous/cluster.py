@@ -1441,7 +1441,7 @@ class AWSCluster(Cluster):
                                    hosts_file=os.path.expanduser(defaults.current_nat_ip_file))
         vars_file.close()
         self._logger.debug('Finished sync folder')
-        return (True, 'Ok')
+        return (True, '')
 
 
     def sync_get(self, local_path, remote_path):
@@ -1464,7 +1464,7 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(cmd)
         output_content = stdout.read()
         if 'cannot access' in stderr.read():
-            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            message = "Folder '{0}' does not exist.".format(remote_path)
             return (False, message)
 
         src_path = remote_path
@@ -1481,7 +1481,7 @@ class AWSCluster(Cluster):
                                    hosts_file=os.path.expanduser(defaults.current_nat_ip_file))
         vars_file.close()
         self._logger.debug('Finished sync folder')
-        return (True, 'Ok')
+        return (True, '')
 
     def ls(self, remote_path):
         """
@@ -1494,7 +1494,7 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(cmd)
         output_content = stdout.read()
         if 'cannot access' in stderr.read():
-            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            message = "Folder '{0}' does not exist".format(remote_path)
             return (False, message)
 
         return (True, output_content)
@@ -1512,7 +1512,7 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(cmd)
         output_content = stdout.read()
         if 'cannot access' in stderr.read():
-            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            message = "Folder '{0}' does not exist".format(remote_path)
             return (False, message)
 
         cmd = "rm -fr '{0}'".format(remote_path)
@@ -1520,10 +1520,10 @@ class AWSCluster(Cluster):
         output_content = stdout.read()
         # TODO: More error checking may need to be added
         if 'cannot access' in stderr.read():
-            message = "Error: Failed to delete folder '{0}'.".format(remote_path)
+            message = "Failed to delete folder '{0}'.".format(remote_path)
             return (False, message)
 
-        return (True, 'Ok')
+        return (True, '')
 
 
     def workon(self):
@@ -1703,14 +1703,14 @@ class AWSCluster(Cluster):
                 self._logger.debug(message)
                 return (False, message)
 
-        return (True, 'Ok')
+        return (True, '')
 
     def connect_to_central_logging(self):
         """
         Creates an SSH tunnel to the logging system
         """
         if not self.get_central_logging_ip():
-            message = 'No logging system has been set'
+            message = 'No logging system exists'
             return (True, message)
 
         central_logging_port = defaults.central_logging_port
@@ -1718,7 +1718,7 @@ class AWSCluster(Cluster):
         success = self.create_permanent_tunnel_to_controller(central_logging_port, central_logging_port)
 
         if not success:
-            message = 'Failed create tunnel to centralized logging system'
+            message = 'Failed to create tunnel to central logging system'
             self._logger.debug(message)
             return (False, message)
 

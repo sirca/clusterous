@@ -247,7 +247,8 @@ class CLIParser(object):
         app = self._init_clusterous_object(args)
         cl = app.make_cluster_object(cluster_must_be_running=False)
         if not args.no_prompt:
-            prompt_str = 'This will destroy the cluster {0}. All data on the cluster will be deleted. Continue (y/n)? '.format(cl.cluster_name)
+            shared_volume = 'The shared volume will not be deleted and will remain on your account' if args.leave_shared_volume else 'All data on the cluster will be deleted'
+            prompt_str = 'This will destroy the cluster {0}. {1}. Continue (y/n)? '.format(cl.cluster_name, shared_volume)
             cont = raw_input(prompt_str)
             if cont.lower() != 'y' and cont.lower() != 'yes':
                 print 'Doing nothing'
@@ -336,8 +337,10 @@ class CLIParser(object):
     def _rm(self, args):
         app = self._init_clusterous_object(args)
         success, message = app.rm(remote_path = args.remote_path)
-        print message
-        return 0 if success else 1
+        if not success:
+            print message
+            return 1
+        return 0
 
     def _scale_nodes(self, args, action):
         if not action in ['add', 'rm']:
