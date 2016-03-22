@@ -64,6 +64,7 @@
     - roles/mesos_dns
     - roles/docker
     - roles/ansible
+    - roles/api
 
 # Stop here if do_not_bake is set
 - hosts: localhost
