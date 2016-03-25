@@ -1,8 +1,10 @@
+import time
+
 import json
 import requests
 import marathon
 
-class RunEnvironment(object):
+class ScaleEnvironment(object):
     mesos_url = 'http://localhost:5050/master/state.json'
     marathon_url = 'http://localhost:8080'
     def __init__(self):
@@ -11,7 +13,7 @@ class RunEnvironment(object):
     def _update_slave_info(self, slave_info=None):
         if slave_info:
             self._mesos_slaves = slave_info
-        else:    
+        else:
             self._mesos_slaves = self._get_mesos_slave_info()
 
     def _get_mesos_slave_info(self):
@@ -42,7 +44,7 @@ class RunEnvironment(object):
             removed_list = list(original_hosts_set - new_hosts_set)
             if removed_list:
                 removed[group] = removed_list
-             
+
 
         added = {}
         for group, hosts in self._mesos_slaves.iteritems():
@@ -78,7 +80,7 @@ class RunEnvironment(object):
 
     def scale_all_apps(self):
         latest_slave_info = self._get_mesos_slave_info()
-        
+
         added, removed = self._get_changed_slaves(latest_slave_info)
 
         apps = self._get_marathon_apps()
@@ -95,7 +97,7 @@ class RunEnvironment(object):
         # for each group, get appropriate app and calculations, scale accordingly
         for group, hosts in added.iteritems():
             for app in apps.get(group, {}):
-                instances_per_host = app['instance_count'] / len(self._mesos_slaves[group]) 
+                instances_per_host = app['instance_count'] / len(self._mesos_slaves[group])
                 num_to_add = instances_per_host * len(hosts)
                 client.scale_app(app['app_id'], delta = num_to_add, force=True)
                 print "scaling up {0} by {1}".format(app['app_id'], num_to_add)
@@ -111,13 +113,3 @@ class RunEnvironment(object):
                         print "WARNING, no actual tasks killed?!"
 
         self._update_slave_info(latest_slave_info)
-
-
-import time
-
-def autoscale_loop():
-    e = RunEnvironment()
-
-    while True:
-        e.scale_all_apps()
-        time.sleep(5)
