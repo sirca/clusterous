@@ -7,8 +7,7 @@ import marathon
 from marathon.models.container import MarathonContainer
 from marathon.models.constraint import MarathonConstraint
 
-import ScaleEnvironment
-
+from scaleenvironment import ScaleEnvironment
 
 def validate_env(environment_info):
     return True

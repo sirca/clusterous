@@ -1350,7 +1350,7 @@ class AWSCluster(Cluster):
             raise ClusterException('Cannot connect to AWS')
         
         resource_terminated = False
-        instance_list = self._get_instances(self.cluster_name, connection=conn)
+        instance_list, spot_instance_list = self._get_instances(self.cluster_name, connection=conn)
         
         # Get shared volume ID
         shared_volume = None
@@ -1366,7 +1366,6 @@ class AWSCluster(Cluster):
                         shared_volume = v
 
         # Delete instances
-        instance_list, spot_instance_list = self._get_instances(self.cluster_name, connection=conn)
         instances = [ i.id for i in instance_list ]
         for i in spot_instance_list:
             instances.append(i.get('instance_id'))
