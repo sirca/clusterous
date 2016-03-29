@@ -31,8 +31,7 @@ def environment():
         runner.start()
         return 'accepted\n', 202
 
-
 if __name__ == "__main__":
     runner = None
     delete_event = threading.Event()
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=999)
