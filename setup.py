@@ -21,6 +21,13 @@ extra = {'scripts': ['bin/clusterous']}
 setup(name='clusterous',
       version=__version__,
       packages=['clusterous'],
+      description = 'Clusterous is a cluster computing tool to deploy Docker containers on AWS',
+      author = 'SIRCA',
+      author_email = 'lolo.fernandez@sirca.org.au',
+      url = 'https://github.com/sirca/clusterous',
+      download_url = 'https://github.com/sirca/clusterous/releases/download/v0.5.0/clusterous-0.5.0.tar.gz',
+      keywords = ['clusterous', 'docker', 'aws'],
+      classifiers = [],
       package_data={'clusterous': [
                         'scripts/ansible/*.yml',
                         'scripts/ansible/hosts',
@@ -34,3 +41,4 @@ setup(name='clusterous',
                         'tabulate', 'netaddr'],
       **extra
       )
+
