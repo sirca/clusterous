@@ -1,5 +1,19 @@
 # Clusterous changelog 
 
+## Version 0.6.0
+
+This version has a number of bug fixes.
+
+* Updated documentation
+* Updated PyGPlates enviroment
+* Making output messages consistent
+* Published package to PyPi
+* Fixed IPython parallel enviroment example
+* Fixed the shared volume deletion
+* Fixed port forwarding issue on controller
+* Fixed intermitent cluster creation failure
+
+
 ## Version 0.5.0
 
 This version has a number of improvements and bug fixes. A notable feature is the setup wizard, which interactively guides you through configuring Clusterous. Additionally, there is a working Spark example environment and support for running in other AWS regions.
