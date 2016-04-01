@@ -25,7 +25,7 @@ setup(name='clusterous',
       author = 'SIRCA',
       author_email = 'lolo.fernandez@sirca.org.au',
       url = 'https://github.com/sirca/clusterous',
-      download_url = 'https://github.com/sirca/clusterous/releases/download/v0.5.0/clusterous-0.5.0.tar.gz',
+      download_url = 'https://github.com/sirca/clusterous/releases/download/v0.6.0/clusterous-0.6.0.tar.gz',
       keywords = ['clusterous', 'docker', 'aws'],
       classifiers = [],
       package_data={'clusterous': [
@@ -35,10 +35,9 @@ setup(name='clusterous',
                         'scripts/*.sh',
                         'scripts/*.yml'
                     ]},
-      install_requires=['pyyaml', 'pytest', 'mock', 'paramiko', 'ecdsa',
+      install_requires=['pyyaml', 'pytest', 'mock', 'paramiko', 'ecdsa', 'futures', 
                         'botocore', 'boto', 'boto3', 'ansible', 'requests',
                         'marathon', 'sshtunnel', 'python-dateutil',
                         'tabulate', 'netaddr'],
       **extra
       )
-
