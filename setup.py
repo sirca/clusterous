@@ -35,8 +35,8 @@ setup(name='clusterous',
                         'scripts/*.sh',
                         'scripts/*.yml'
                     ]},
-      install_requires=['pyyaml', 'pytest', 'mock', 'paramiko',
-                        'boto', 'boto3', 'ansible', 'requests',
+      install_requires=['pyyaml', 'pytest', 'mock', 'paramiko', 'ecdsa',
+                        'botocore', 'boto', 'boto3', 'ansible', 'requests',
                         'marathon', 'sshtunnel', 'python-dateutil',
                         'tabulate', 'netaddr'],
       **extra
