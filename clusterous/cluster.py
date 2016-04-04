@@ -621,19 +621,30 @@ class AWSCluster(Cluster):
             raise ClusterException('Unable to establish SSH connection to NAT instance')
 
 
-        cmd = 'sudo iptables -t nat -A PREROUTING -p tcp --dport {0} -j DNAT --to-destination {1}:22'.format(
-             defaults.nat_ssh_port_forwarding, controller_private_ip)
+        retry = 0
+        while True:
+            cmd = 'sudo iptables -t nat -A PREROUTING -p tcp --dport {0} -j DNAT --to-destination {1}:22'.format(
+                 defaults.nat_ssh_port_forwarding, controller_private_ip)
+            stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
+            output = '\n'.join(stdout.readlines())
+            errors = '\n'.join(stderr.readlines())
+            if errors:
+                self._logger.error('NAT port forwarding error: {0}'.format(errors))
+                self._logger.error('NAT port forwarding ouput text: {0}'.format(output))
+                raise ClusterException('Error setting up port forwarding on NAT')
+    
+            # Checking if iptables rule was applied
+            cmd = 'sudo iptables --table nat --list | grep "^DNAT.*to:{0}:22"'.format(controller_private_ip)
+            stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
+            output = '\n'.join(stdout.readlines())
+            if output:
+                break
 
-        # Exec command remotely
-        stdin, stdout, stderr = ssh.exec_command(cmd, get_pty=True)
+            retry += 1
+            if retry > 3:
+                raise ClusterException('Error setting up port forwarding on NAT')
 
-        output = '\n'.join(stdout.readlines())
-        errors = '\n'.join(stderr.readlines())
-
-        if errors:
-            self._logger.error('NAT port forwarding error: {0}'.format(errors))
-            self._logger.error('NAT port forwarding ouput text: {0}'.format(output))
-            raise ClusterException('Error setting up port forwarding on NAT')
+            time.sleep(5)
 
         ssh.close()
 
@@ -1222,9 +1233,22 @@ class AWSCluster(Cluster):
             raise ClusterException('Cannot connect to AWS')
         
         resource_terminated = False
+        instance_list = self._get_instances(self.cluster_name, connection=conn)
+        
+        # Get shared volume ID
+        shared_volume = None
+        byo_volume = False
+        for i in instance_list:
+            if i.tags.get(defaults.instance_node_type_tag_key) == defaults.controller_name_tag_value:
+                volumes = conn.get_all_volumes(filters={'attachment.instance-id': [i.id]})
+                for v in volumes:
+                    if v.tags.get('Attached'):
+                        shared_volume = v
+                        byo_volume = True
+                    elif v.tags.get(defaults.instance_tag_key):
+                        shared_volume = v
 
         # Delete instances
-        instance_list = self._get_instances(self.cluster_name, connection=conn)
         num_instances = len(instance_list)
         instances = [ i.id for i in instance_list ]
         if instances:
@@ -1233,26 +1257,24 @@ class AWSCluster(Cluster):
             self._terminate_instances_and_wait(conn, instances)
 
         # Delete shared volume
-        volumes = conn.get_all_volumes(filters={'tag:Attached':self.cluster_name})
-        if volumes:
-            byo_volume = True if volumes else False
+        if shared_volume:
             if byo_volume:
-                shared_volume = volumes[0]
-                shared_volume.remove_tags({'Attached': self.cluster_name})
-            else:
-                volumes = conn.get_all_volumes(filters={'tag:{0}'.format(defaults.instance_tag_key):self.cluster_name})
-                shared_volume = volumes[0]
-    
-            if leave_shared_volume:
-                self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
-            else:
-                if force_delete_shared_volume or not byo_volume:
+                if force_delete_shared_volume:
                     if shared_volume.delete():
                         self._logger.info('Shared volume "{0}" has been deleted'.format(shared_volume.id))
                     else:
                         self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, shared_volume.id))
                 else:
-                    self._logger.info('Shared volume "{0}" has not been deleted'.format(shared_volume.id))
+                    shared_volume.remove_tags({'Attached': self.cluster_name})
+                    self._logger.info('Leaving shared volume "{0}"'.format(shared_volume.id))
+            else:
+                if leave_shared_volume:
+                    self._logger.info('Leaving shared volume "{0}"'.format(shared_volume.id))
+                else:
+                    if shared_volume.delete():
+                        self._logger.debug('Shared volume "{0}" has been deleted'.format(shared_volume.id))
+                    else:
+                        self._logger.error('Unable to delete volume in {0}: {1}'.format(self.cluster_name, shared_volume.id))
 
         # Delete security group
         sg = conn.get_all_security_groups(filters={'tag:Name':'{0}-public-sg'.format(self.cluster_name),
@@ -1430,7 +1452,7 @@ class AWSCluster(Cluster):
                                    hosts_file=os.path.expanduser(defaults.current_nat_ip_file))
         vars_file.close()
         self._logger.debug('Finished sync folder')
-        return (True, 'Ok')
+        return (True, '')
 
 
     def sync_get(self, local_path, remote_path):
@@ -1453,7 +1475,7 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(cmd)
         output_content = stdout.read()
         if 'cannot access' in stderr.read():
-            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            message = "Folder '{0}' does not exist.".format(remote_path)
             return (False, message)
 
         src_path = remote_path
@@ -1470,7 +1492,7 @@ class AWSCluster(Cluster):
                                    hosts_file=os.path.expanduser(defaults.current_nat_ip_file))
         vars_file.close()
         self._logger.debug('Finished sync folder')
-        return (True, 'Ok')
+        return (True, '')
 
     def ls(self, remote_path):
         """
@@ -1483,7 +1505,7 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(cmd)
         output_content = stdout.read()
         if 'cannot access' in stderr.read():
-            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            message = "Folder '{0}' does not exist".format(remote_path)
             return (False, message)
 
         return (True, output_content)
@@ -1501,7 +1523,7 @@ class AWSCluster(Cluster):
         stdin, stdout, stderr = ssh.exec_command(cmd)
         output_content = stdout.read()
         if 'cannot access' in stderr.read():
-            message = "Error: Folder '{0}' does not exists.".format(remote_path)
+            message = "Folder '{0}' does not exist".format(remote_path)
             return (False, message)
 
         cmd = "rm -fr '{0}'".format(remote_path)
@@ -1509,10 +1531,10 @@ class AWSCluster(Cluster):
         output_content = stdout.read()
         # TODO: More error checking may need to be added
         if 'cannot access' in stderr.read():
-            message = "Error: Failed to delete folder '{0}'.".format(remote_path)
+            message = "Failed to delete folder '{0}'.".format(remote_path)
             return (False, message)
 
-        return (True, 'Ok')
+        return (True, '')
 
 
     def workon(self):
@@ -1692,14 +1714,14 @@ class AWSCluster(Cluster):
                 self._logger.debug(message)
                 return (False, message)
 
-        return (True, 'Ok')
+        return (True, '')
 
     def connect_to_central_logging(self):
         """
         Creates an SSH tunnel to the logging system
         """
         if not self.get_central_logging_ip():
-            message = 'No logging system has been set'
+            message = 'No logging system exists'
             return (True, message)
 
         central_logging_port = defaults.central_logging_port
@@ -1707,7 +1729,7 @@ class AWSCluster(Cluster):
         success = self.create_permanent_tunnel_to_controller(central_logging_port, central_logging_port)
 
         if not success:
-            message = 'Failed create tunnel to centralized logging system'
+            message = 'Failed to create tunnel to central logging system'
             self._logger.debug(message)
             return (False, message)
 

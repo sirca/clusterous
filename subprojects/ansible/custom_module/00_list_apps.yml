@@ -1,9 +1,0 @@
----
-- name: list apps
-  hosts: all
-  user: root
-  sudo: yes
-  gather_facts: no
-  tasks:
-    - name: lists apps running on marathon
-      marathon: state=list-apps

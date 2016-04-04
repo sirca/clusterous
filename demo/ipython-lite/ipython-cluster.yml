@@ -1,0 +1,6 @@
+cluster_name: ippcluster
+controller_instance_type: c3.large
+parameters:
+    master_instance_type: c3.large
+    worker_instance_type: c3.large
+    worker_count: 2

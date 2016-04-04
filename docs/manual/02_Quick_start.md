@@ -24,14 +24,10 @@ If you do have pip installed, you will pip's version number. If not, install pip
 Make sure you use `pip2` to install Clusterous.
 
 ### Clusterous
-To install Clusterous, you need to obtain the .tar.gz installation package file. A copy of `clusterous-0.5.0.tar.gz`can be found on [Clusterous' GitHub releases page](https://github.com/sirca/clusterous/releases) under "Downloads". Alternatively, use the [direct download link for Clusterous 0.5.0](https://github.com/sirca/clusterous/releases/download/v0.5.0/clusterous-0.5.0.tar.gz).
+Install Clusterous using the following command.
 
-Once you have downloaded the installer, change to the directory where you downloaded it (or copy the installer to your current directory) and install Clusterous using the following command.
+    sudo pip install clusterous
 
-    sudo pip install clusterous-v0.5.0.tar.gz
-
-Note that pip requires the file to be zipped. Do not extract the installer file into a directory.
-    
 
 ### Verify
 
