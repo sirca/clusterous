@@ -1,9 +1,0 @@
-cluster_name: laseripp
-#central_logging_level: 2
-#environment_file: gplates-env.yml
-#shared_volume_size: 40
-#controller_instance_type: c3.large
-parameters:
-    master_instance_type: t2.small
-    worker_instance_type: c3.large
-    worker_count: 3
