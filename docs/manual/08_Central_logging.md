@@ -20,7 +20,7 @@ parameters:
 The `central_logging_level` accepts two possible values: `1` or `2`. If set to `1`, only application level logs are collected. If set to `2`, all system level logs are included. A setting of `1` is usually adequate for diagnosing problems with Clusterous applications.
 
 ## Logging to the central logging system
-To send logs from your application to the central logging system, you must first have `rsyslog` installed inside yur Docker container. Add `*.* @central-logging:5514` to `/etc/rsyslog.conf` inside your container and restart the rsyslog service. An example is available in  theClusterous repository under `subprojects/environments/central-logging-sample` folder.
+To send logs from your application to the central logging system, you must first have `rsyslog` installed inside yur Docker container. Add `*.* @central-logging:5514` to `/etc/rsyslog.conf` inside your container and restart the rsyslog service. An example is available in  theClusterous repository under `demo/central-logging-sample` folder.
 
 ## Accessing the web interface
 Once your cluster has been created with a centralised logging, use the `logging` command to access it. The `logging` command creates an SSH tunnel between your machine and the logging instance on your cluster, and presents you with the URL to access it. Opening the URL in your web browser gives you the logging system's UI, which allows you to search and filter the logs, customise the views, create charts and more. The UI is powered by Kibana, and you can find more information [here](https://www.elastic.co/products/kibana).

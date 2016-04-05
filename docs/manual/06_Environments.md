@@ -29,7 +29,7 @@ An environment file is a special YAML format file that you write, allowing you t
 
 The environment file is passed to the `run` command to run the environment on the current cluster. Alternatively, it can be specified in the cluster parameters file, such that the environment is run as soon as the cluster is created.
 
-We will work through what goes into an environment file by means of an example. We will use the basic-python example available under (https://github.com/sirca/clusterous/tree/master/subprojects/environments/basic-python). This environment runs a simple 2-part Python application that displays a web page.
+We will work through what goes into an environment file by means of an example. We will use the basic-python example available under (https://github.com/sirca/clusterous/tree/master/demo/basic-python). This environment runs a simple 2-part Python application that displays a web page.
 
 The following is the contents of the heavily annotated basic-python-env.yml environment file:
 
@@ -180,12 +180,12 @@ It is also possible to expose multiple tunnels under `expose_tunnel` by using a 
 
 ## Launching
 
-The above example (with all associated files) is available in the Clusterous source under `subprojects/environments/basic-python`.
+The above example (with all associated files) is available in the Clusterous source under `demo/basic-python`.
 
 To run the environment once your cluster has started, use the `run` command, passing in the environment file. For example:
 
 ```
-$ clusterous run subprojects/environments/basic-python/basic-python-env.yml
+$ clusterous run demo/basic-python/basic-python-env.yml
 ```
 
 The first time you run this example, Clusterous may have to build the Docker image, which may take several few minutes. The build process can be speeded by using the `controller_instance_type` in the cluster parameters file (See [Chapter 5](05_Create_and_destroy.md).
@@ -229,7 +229,7 @@ If you port a popular framework to run on Clusterous, it may be best to leave yo
 
 
 ## IPython example
-A more sophisticated example is available under `subprojects/environments/ipython-lite`. This example runs a configured IPython Parallel environment, and includes three different intercommunicating components and a number of configuration files.
+A more sophisticated example is available under `demo/ipython-lite`. This example runs a configured IPython Parallel environment, and includes three different intercommunicating components and a number of configuration files.
 
 ## Custom clusters
 By default, the cluster launched by Clusterous has a standard master/worker architecture, consisting of 1 master node and `n` worker nodes. While this suits a wide range of applications, there are many cases where a more complex or sophisticated layout is necessary. Clusterous allows defining custom cluster architectures via the environment file.
