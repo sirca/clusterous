@@ -21,4 +21,4 @@ py.test
 ## Licensing
 Clusterous is available under the Apache License (2.0). See the LICENSE.md file.
 
-Copyright NICTA 2015.
+Copyright Data61 2016.

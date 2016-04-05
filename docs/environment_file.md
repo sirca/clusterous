@@ -155,12 +155,12 @@ It is also possible to expose multiple tunnels under `expose_tunnel` by using a 
 
 ## Launching
 
-The above example (with all associated files) is available in the Clusterous source under `subprojects/environments/basic_demo`.
+The above example (with all associated files) is available in the Clusterous source under `demo/basic-python`.
 
 To run the environment once your cluster has started, use the `run` command, passing in the environment file. For example:
 
 ```
-$ clusterous run subprojects/environments/basic_demo/basic_env.yml
+$ clusterous run demo/basic-python/basic-python-env.yml
 ```
 
 The optional `--verbose` switch can be used to show more information about what is happening.
@@ -188,7 +188,7 @@ To stop the cluster itself, use the `destroy` command.
 
 
 ## IPython example
-A more sophisticated example is available under `subprojects/environments/ipython-lite`. This example runs a configured IPython Parallel environment, and includes three different intercommunicating components and a number of configuration files.
+A more sophisticated example is available under `demo/ipython-lite`. This example runs a configured IPython Parallel environment, and includes three different intercommunicating components and a number of configuration files.
 
 ## Custom clusters
 By default, the cluster launched by Clusterous has a standard master/worker architecture, consisting of 1 master node and `n` worker nodes. While this suits a wide range of applications, there are many cases where a more complex or sophisticated layout is necessary. Clusterous allows defining custom cluster architectures via the environment file.
