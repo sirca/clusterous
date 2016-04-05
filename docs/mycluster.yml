@@ -2,7 +2,7 @@ cluster_name: <your cluster name here>
 #controller_instance_type: t2.medium
 #shared_volume_size: 60
 #central_logging_level: 0
-#environment_file: subprojects/environments/ipython-lite/ipython.yml
+#environment_file: demo/ipython-lite/ipython-env.yml
 #shared_volume_id: vol-12d32ad8
 parameters:
     master_instance_type: t2.micro
