@@ -1,5 +1,10 @@
 # Clusterous changelog 
 
+## Version 1.0.0
+
+Clusterous has reach its most stable version. It has been tested thoroughly on differents scenarios and differents.
+
+
 ## Version 0.6.0
 
 This version has a number of bug fixes.
