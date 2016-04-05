@@ -39,7 +39,7 @@ There are a number of advanced options when creating a cluster. The following ex
 
 ```yaml
 cluster_name: mycluster
-environment_file: subprojects/environments/ipython-lite/ipython.yml
+environment_file: demo/ipython-lite/ipython.yml
 central_logging_level: 2
 controller_instance_type: t2.medium
 shared_volume_size: 60
