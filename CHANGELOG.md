@@ -2,7 +2,7 @@
 
 ## Version 1.0.0
 
-Clusterous has reach its most stable version. It has been tested thoroughly on differents scenarios and differents.
+Clusterous has reach its most stable version. It has been tested thoroughly on differents scenarios.
 
 
 ## Version 0.6.0
