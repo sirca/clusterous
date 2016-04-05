@@ -55,6 +55,7 @@ Open source projects:
 - [Ansible](https://github.com/ansible/ansible)
     
 # Licensing
+
 Clusterous is available under the Apache License (2.0). See the [LICENSE](LICENSE.md) file.
 
 Copyright Data61 2016.
