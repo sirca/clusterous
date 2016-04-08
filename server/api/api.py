@@ -8,7 +8,7 @@ import environmentrunner
 
 app = Flask(__name__)
 
-@app.route('/v1/environment', methods=['GET', 'POST'])
+@app.route('/v1/environment', methods=['GET', 'POST', 'DELETE'])
 def environment():
     global runner
     global delete_event
@@ -20,6 +20,8 @@ def environment():
             return 'environment already running\n', 409
 
         env_data = request.json
+        if not env_data:
+            return 'Invalid data\n', 400
 
         data_valid = environmentrunner.validate_env(env_data)
 
@@ -29,7 +31,12 @@ def environment():
 
         runner = Thread(target=environmentrunner.launch_environment, args=(env_data, app.logger, delete_event))
         runner.start()
-        return 'accepted\n', 202
+        return 'POST -> accepted\n', 202
+   
+    elif request.method == "DELETE":
+        delete_event.set()
+        #runner = None # Pending -> How to kill/stop the runner Thread?
+        return 'DELETE -> accepted\n', 202
 
 if __name__ == "__main__":
     runner = None

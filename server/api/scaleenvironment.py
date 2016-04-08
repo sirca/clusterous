@@ -17,7 +17,7 @@ class ScaleEnvironment(object):
             self._mesos_slaves = self._get_mesos_slave_info()
 
     def _get_mesos_slave_info(self):
-        r = requests.get(RunEnvironment.mesos_url)
+        r = requests.get(self.mesos_url)
         raw =  r.json()
         r.close()
 
@@ -61,7 +61,7 @@ class ScaleEnvironment(object):
         """
         Return Marathon apps grouped by node group
         """
-        client = marathon.MarathonClient(RunEnvironment.marathon_url)
+        client = marathon.MarathonClient(self.marathon_url)
 
         app_info = {}
         for app in client.list_apps():
@@ -93,7 +93,7 @@ class ScaleEnvironment(object):
         if not added and not removed:
             print "Nothing to add or remove"
 
-        client = marathon.MarathonClient(RunEnvironment.marathon_url)
+        client = marathon.MarathonClient(self.marathon_url)
         # for each group, get appropriate app and calculations, scale accordingly
         for group, hosts in added.iteritems():
             for app in apps.get(group, {}):

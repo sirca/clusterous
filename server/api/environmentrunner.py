@@ -13,12 +13,11 @@ def validate_env(environment_info):
     return True
 
 
-def launch_environment(environment_info, logger):
+def launch_environment(environment_info, logger, delete_event):
     # start launch_thread
     # print dir(environment_info)
-    runner = EnvironmentRunner(logger)
+    runner = EnvironmentRunner(logger, delete_event)
     runner.start(environment_info)
-
 
 mesos_state_url = 'http://localhost:5050/master/state.json'
 marathon_url = 'http://localhost:8080'
@@ -37,20 +36,55 @@ class EnvironmentRunner:
         resources = self._calculate_resources(environment_info, cluster_info)
         print resources
         success = self._launch_components(environment_info, resources)
-        scaler = ScaleEnvironment.ScaleEnvironment()
+        scaler = ScaleEnvironment()
         while True:
             self._logger.debug('Looping')
             # Check if delete environment message sent, wait up to 10 seconds
             if self._delete_event.wait(10):
                 self._logger.info('Received delete event, stopping application')
-                self._stop_all_apps()
-                break
+                if self._stop_all_apps():
+                    break
             time.sleep(10)
             scaler.scale_all_apps()
 
 
     def _stop_all_apps(self):
-        pass
+        """
+        Destroy any running Marathon applications
+        """
+        client = marathon.MarathonClient(servers=marathon_url, timeout=600)
+        app_list = client.list_apps()
+
+        if not app_list:
+            self._logger.info('No application to destroy')
+            return True
+
+        component_count = len(app_list)
+
+        for app in app_list:
+            client.delete_app(app.id, force=True)
+
+        self._logger.debug('Sent delete requests, will wait until all destroyed')
+
+        start_time = time.time()
+        elapsed_time = 0
+        all_destroyed = False
+
+        while elapsed_time < 60:
+            app_list = client.list_apps()
+            if not app_list:
+                all_destroyed = True
+                self._logger.debug('All apps destroyed')
+                break
+            time.sleep(2)
+            elapsed_time = time.time() - start_time
+
+        # If timed out without destroying
+        if not all_destroyed:
+            self._logger.warn('Could not delete all applications')
+            return False
+
+        return True
 
     def _get_cluster_info(self):
         """

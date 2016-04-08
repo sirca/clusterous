@@ -92,7 +92,10 @@ class Environment(object):
                     raise self.LaunchError(message)
 
             # Do the final checks and perform actual launch
-            success = self._launch_components(env_file.spec, component_resources, marathon_tunnel)
+            # WIP: This spec should be passed to the API
+            print 'env_file.spec->', env_file.spec.get('environment',{})
+            success = True
+            #success = self._launch_components(env_file.spec, component_resources, marathon_tunnel)
         else:
             self._logger.info('Environment already running, not launching anything')
             success = True
