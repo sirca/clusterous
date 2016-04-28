@@ -60,11 +60,11 @@ class AWSSetup:
                 WizardIO.out('This guide will help you create a new configuration profile for using Clusterous with Amazon Web Services', indent=2)
 
             config = {}
-            
+
             WizardIO.new_para()
             WizardIO.out("Clusterous needs your AWS account's access keys", indent=2, bold=True)
             results = self._enter_aws_keys(config)
-            
+
             if results['status'] == 'success':
                 WizardIO.out('Credentials validated')
             else:
@@ -120,7 +120,7 @@ class AWSSetup:
             results = self._enter_profile_name(aws_config)
 
             if not results['status'] == 'success':
-                return self._quit_setup() 
+                return self._quit_setup()
 
             aws_config.add_profile(results['value'], config)
 
@@ -190,7 +190,7 @@ class AWSSetup:
                 if results['value'] == 'e':
                     WizardIO.new_para()
                     WizardIO.out('There are {0} available VPCs on your account in this region'.format(len(vpc_list)), indent=2)
-                
+
                     # Tabulate list
                     vpc_headers = map(terminalio.boldify, ['VPC ID', 'VPC Name'])
                     table = tabulate.tabulate(vpc_list, headers=vpc_headers, tablefmt='plain')
@@ -222,7 +222,7 @@ class AWSSetup:
                     return False    # bad selection
 
         return id_obtained
-        
+
 
     # No retries
     def _enter_new_vpc(self, c):
@@ -268,7 +268,7 @@ class AWSSetup:
     def _enter_or_select_key_pair(self, c):
         key_pair_list = AWSConfig.get_all_key_pairs(c['access_key_id'], c['secret_access_key'],
                                                     c['region'])
-        
+
         key_pair_obtained = False
         if not key_pair_list:
             WizardIO.out('There are currently no Key Pairs in this region', indent=2)
@@ -340,7 +340,7 @@ class AWSSetup:
             c['key_pair'] = key_pair_name
             c['key_file'] = full_path
 
-        return True            
+        return True
 
 
     @_retry_input
@@ -374,7 +374,7 @@ class AWSSetup:
 
         bucket_obtained = False
         if not bucket_list:      # no buckets on account
-            success = self._enter_new_bucket()
+            success = self._enter_new_bucket(c)
             if not success:
                 WizardIO.out('S3 bucket creation failed: create one manually or contact your administrator', error=True)
             else:
@@ -415,15 +415,16 @@ class AWSSetup:
                         bucket_obtained = True
                     done = True
                 else:
-                    return False        # bad selection                    
+                    return False        # bad selection
 
         return bucket_obtained
 
     # No retries
     def _enter_new_bucket(self, c):
-        WizardIO.out("Enter a name for a new S3 bucket. Note that bucket names aren't specfic to a region")
-        WizardIO.out("In fact, bucket names are global across Amazon, so it's best to give it a well qualified name")
-        WizardIO.out('e.g. "myorg-myproject-clusterous". The bucket contents will be private')
+        WizardIO.new_para()
+        WizardIO.out("Enter a name for a new S3 bucket. Note that bucket names aren't specfic to a region", indent=2)
+        WizardIO.out("In fact, bucket names are global across Amazon, so it's best to give it a well qualified name", indent=2)
+        WizardIO.out('e.g. "myorg-myproject-clusterous". The bucket contents will be private', indent=2)
         bucket_name = WizardIO.ask('Enter an S3 bucket name:')
 
         success, message = AWSConfig.create_s3_bucket(c['access_key_id'], c['secret_access_key'], c['region'], bucket_name)
@@ -460,7 +461,7 @@ class AWSSetup:
 
         # Ensure that profile name isn't in use, and is valid
         valid = not aws_config.is_profile_name_in_use(profile_name)
-        
+
         retval = {'status': 'fail', 'message': '', 'value': ''}
         if not valid:
             retval['status'] = 'fail'
@@ -485,4 +486,3 @@ class AWSSetup:
             retval['value'] = selection
 
         return retval
-
