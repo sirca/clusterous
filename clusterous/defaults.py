@@ -75,8 +75,8 @@ central_logging_port = 8081
 nat_ssh_port_forwarding = 22000
 
 # How many seconds to wait for all Marathon applications to reach "started" state
-# Currently 30 minutes
-app_launch_start_timeout = 1800
+# Currently 90 minutes
+app_launch_start_timeout = 5400
 
 app_destroy_timeout = 60
 
