@@ -30,7 +30,7 @@ import marathon
 
 CLUSTEROUS_CONFIG_FILE = '~/.clusterous.yml'
 E2E_CLUSTER_NAME = 'e2etestcluster'
-E2E_PROFILE_FILE = 'data/test-cluster.yml'
+E2E_CLUSTER_FILE = 'data/test-cluster.yml'
 E2E_ENVIRONMENT_FILE = 'data/cluster-envs/basic-python-env.yml'
 
 MSG_NOT_WORKING_CLUSTER = 'No working cluster has been set'
@@ -80,21 +80,25 @@ class TestClusterousE2ETest:
             self._cluster_destroy()
     
         # Create cluster
-        rc, stdout, stderr = self._cli_run('create {0}'.format(E2E_PROFILE_FILE))
+        rc, stdout, stderr = self._cli_run('create {0}'.format(E2E_CLUSTER_FILE))
         assert rc == 0
         assert 'Cluster "{0}" created'.format(E2E_CLUSTER_NAME) in stderr
         assert self._cluster_running() == True
+
+        # Check tunnel
+        f = urllib2.urlopen('http://localhost:8888/')
+        assert f.getcode() == 200
         
     def test_cannot_create_cluster_on_running_cluster(self):
         # Check if cluster is running
         assert self._cluster_running(), 'Cluster not running'
     
         # Create cluster
-        rc, stdout, stderr = self._cli_run('create {0}'.format(E2E_PROFILE_FILE))
+        rc, stdout, stderr = self._cli_run('create {0}'.format(E2E_CLUSTER_FILE))
         assert rc == 1
         assert 'A cluster by the name "{0}" is already running, cannot start'.format(E2E_CLUSTER_NAME) in stderr
   
-    def test_cluster_instances_on_running_cluster_with_default_profile(self):
+    def test_cluster_instances_on_running_cluster(self):
         # Check if cluster is running
         assert self._cluster_running(), 'Cluster not running'
            
@@ -105,7 +109,7 @@ class TestClusterousE2ETest:
         assert 'mastert2.micro1' in rc_trim
         assert 'workert2.micro1' in rc_trim
             
-    def test_cluster_status_on_running_cluster_with_default_profile(self):
+    def test_cluster_status_on_running_cluster(self):
         assert self._cluster_running(), 'Cluster not running'
         rc, stdout, stderr = self._cli_run('status')
         assert rc == 0
@@ -113,19 +117,6 @@ class TestClusterousE2ETest:
         assert 'Node Name' in stdout and '[controller]' in stdout and '[nat]' in stdout
         assert 'Shared Volume' in stdout and 'used of 20G' in stdout
     
-    def test_cluster_run_on_running_cluster_with_default_profile(self):
-        # Check if cluster is running
-        assert self._cluster_running(), 'Cluster not running'
-         
-        # Run environment
-        rc, stdout, stderr = self._cli_run('run {0}'.format(E2E_ENVIRONMENT_FILE))
-        assert rc == 0, 'Fail to run environment'
-        assert (('Launched' in stderr and 'components' in stderr) or ('Environment already' in stderr ))
- 
-        # Checking tunnel
-        f = urllib2.urlopen('http://localhost:8888/')
-        assert f.getcode() == 200
-  
     def test_number_of_running_components_on_running_cluster(self):
         # Check if cluster is running
         assert self._cluster_running(), 'Cluster not running'
@@ -146,7 +137,7 @@ class TestClusterousE2ETest:
         assert components['master'] == 1
         assert components['engine'] == 2
    
-    def test_cluster_quit_on_running_cluster_with_default_profile(self):
+    def test_cluster_quit_on_running_cluster(self):
         # Check if cluster is running
         assert self._cluster_running(), 'Cluster not running'
 
@@ -155,7 +146,23 @@ class TestClusterousE2ETest:
         assert rc == 0
         assert 'applications successfully destroyed' in stderr or 'No application to destroy' in stderr
 
-    def test_cluster_add_nodes_on_running_cluster_with_default_profile(self):
+    def test_cluster_run_env_on_running_cluster(self):
+        # Check if cluster is running
+        assert self._cluster_running(), 'Cluster not running'
+
+        # Run environment
+        rc, stdout, stderr = self._cli_run('run {0}'.format(E2E_ENVIRONMENT_FILE))
+        assert rc == 0, 'Fail to run environment'
+        assert (('Launched' in stderr and 'components' in stderr) or ('Environment already' in stderr ))
+
+        # Checking tunnel
+        f = urllib2.urlopen('http://localhost:8888/')
+        assert f.getcode() == 200
+
+        # Quit again
+        rc, stdout, stderr = self._cli_run('quit --confirm')
+
+    def test_cluster_add_nodes_on_running_cluster(self):
         # Check if cluster is running
         assert self._cluster_running(), 'Cluster not running'
            
@@ -176,7 +183,7 @@ class TestClusterousE2ETest:
         # Checking node added
         assert (num_instances_before + 1) == num_instances_after
   
-    def test_cluster_rm_nodes_on_running_cluster_with_default_profile(self):
+    def test_cluster_rm_nodes_on_running_cluster(self):
         # Check if cluster is running
         assert self._cluster_running(), 'Cluster not running'
            
@@ -242,11 +249,11 @@ class TestClusterousE2ETest:
         rc, stdout, stderr = self._cli_run('ls')
         return rc == 0 and MSG_NOT_WORKING_CLUSTER in stderr
 
-    def test_invalid_profile_file_on_destroyed_cluster(self):
+    def test_invalid_params_file_on_destroyed_cluster(self):
         # Check if not running cluster
         assert self._no_cluster_running(), 'Cluster running'
 
         # Create cluster
         rc, stdout, stderr = self._cli_run('create data/test-cluster-bad.yml')
         assert rc == 1
-        return rc == 1 and 'Error in profile file' in stderr
+        return rc == 1 and 'Error in cluster parameters file' in stderr

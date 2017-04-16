@@ -142,14 +142,10 @@ class Clusterous(object):
         try:
             if profile['environment_file']:
                 env_file = EnvironmentFile(profile['environment_file'], profile['parameters'], profile_file)
-
-            # If necessary, obtain cluster spec
-            if not env_file or (not env_file.spec['cluster']):
-                default_file_path = defaults.get_script(defaults.default_cluster_def_filename)
-                cluster_env_file = EnvironmentFile(default_file_path, profile['parameters'])
-                cluster_spec = cluster_env_file.spec['cluster']
             else:
-                cluster_spec = env_file.spec['cluster']
+                env_file = EnvironmentFile.get_default_cluster_environment_file(profile['parameters'])
+
+            cluster_spec = env_file.spec['cluster']
 
         except environmentfile.UnknownValue as e:
             # If unknown value found, probably an error in the profile (i.e. user params)
@@ -180,7 +176,7 @@ class Clusterous(object):
 
         message = ''
         # Run environment if environment file is available
-        if env_file:
+        if env_file.spec['environment']:
             self._logger.info('Running environment...')
             try:
                 env = environment.Environment(cl)
@@ -198,7 +194,7 @@ class Clusterous(object):
         cl = self.make_cluster_object()
 
         try:
-            env_file = EnvironmentFile(environment_file)
+            env_file = EnvironmentFile(environment_file, validate_params=False)
             env = environment.Environment(cl)
             success, message = env.launch_from_spec(env_file)
         except environmentfile.EnvironmentSpecError as e:
