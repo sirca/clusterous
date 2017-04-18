@@ -116,3 +116,7 @@
     - name: Restart rsyslog
       service: name=rsyslog state=restarted
       when: central_logging_level > 1
+
+    # API
+    - copy: src=../../api.py dest=/home/ubuntu/{{ remote_host_scripts_dir }}/api.py
+    - service: name=clusterous_api state=started
